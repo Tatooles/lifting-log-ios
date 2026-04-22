@@ -296,3 +296,9 @@ Currently missing or not explicitly provided:
 
 - The project will be created from scratch in the workspace because no existing iOS project is present
 - The workspace is not currently a Git repository, so the requested spec commit cannot be created unless version control is initialized
+
+## Implemented Assumptions
+
+- The profile screen ships as a polished placeholder because no profile comp was supplied
+- History detail screens were inferred from the history list rows and implemented as native placeholder drill-down views
+- SF Symbols and simple native shapes were used where no custom icon assets were provided

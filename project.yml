@@ -1,0 +1,53 @@
+name: LiftingLog
+options:
+  bundleIdPrefix: com.kevintatooles
+settings:
+  base:
+    SWIFT_VERSION: 6.0
+    IPHONEOS_DEPLOYMENT_TARGET: 17.0
+targets:
+  LiftingLog:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: LiftingLog
+    settings:
+      base:
+        PRODUCT_NAME: LiftingLog
+        PRODUCT_BUNDLE_IDENTIFIER: com.kevintatooles.LiftingLog
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        SUPPORTS_MACCATALYST: NO
+        TARGETED_DEVICE_FAMILY: 1
+    scheme:
+      testTargets:
+        - LiftingLogTests
+        - LiftingLogUITests
+  LiftingLogTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: LiftingLogTests
+    dependencies:
+      - target: LiftingLog
+    settings:
+      base:
+        PRODUCT_NAME: LiftingLogTests
+        GENERATE_INFOPLIST_FILE: YES
+  LiftingLogUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: LiftingLogUITests
+    dependencies:
+      - target: LiftingLog
+    settings:
+      base:
+        PRODUCT_NAME: LiftingLogUITests
+        GENERATE_INFOPLIST_FILE: YES
