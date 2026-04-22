@@ -1,6 +1,10 @@
 # macOS
 .DS_Store
 
+# Git worktrees
+.worktrees/
+worktrees/
+
 # Xcode user data
 xcuserdata/
 *.xcuserstate
