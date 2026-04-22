@@ -1,0 +1,53 @@
+import SwiftUI
+
+struct ExerciseHistoryRow: View {
+    let item: ExerciseHistoryItem
+    let showsDivider: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 14) {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(AppTheme.accentMuted)
+                    .frame(width: 56, height: 56)
+                    .overlay {
+                        Image(systemName: "dumbbell.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(AppTheme.accentBright)
+                    }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.name)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text("Last: \(item.lastPerformedLabel)")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+
+                Spacer()
+
+                Text("×\(item.completionCount)")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(AppTheme.surfaceMuted)
+                    .clipShape(Capsule())
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(AppTheme.textTertiary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+
+            if showsDivider {
+                Rectangle()
+                    .fill(AppTheme.border)
+                    .frame(height: 1)
+                    .padding(.leading, 16)
+            }
+        }
+    }
+}
