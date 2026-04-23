@@ -23,6 +23,11 @@ struct WorkoutHeaderView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
+            .background(AppTheme.surfaceMuted)
+            .overlay(
+                Capsule()
+                    .stroke(AppTheme.borderStrong)
+            )
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
@@ -31,6 +36,7 @@ struct WorkoutHeaderView: View {
                     Text("\(completedSets)/\(totalSets)")
                 }
                 .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AppTheme.textSecondary)
 
                 ProgressView(value: progressValue)
                     .tint(AppTheme.accentBright)
@@ -40,15 +46,21 @@ struct WorkoutHeaderView: View {
             Button(action: onFinish) {
                 Text("Finish")
                     .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Color.white)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 10)
+                    .background(
+                        Capsule()
+                            .fill(AppTheme.accentGradient)
+                            .shadow(color: AppTheme.accentGlow, radius: 14, y: 6)
+                    )
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, AppTheme.shellPadding)
         .padding(.top, 6)
         .padding(.bottom, 7)
-        .background(.ultraThinMaterial.opacity(0.88))
+        .background(.ultraThinMaterial.opacity(0.92))
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(AppTheme.border)

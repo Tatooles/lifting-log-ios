@@ -3,6 +3,7 @@ import SwiftUI
 struct WorkoutSessionView: View {
     @Bindable var store: AppStore
     @State private var isFinishSheetPresented = false
+    private let contentBottomPadding: CGFloat = 120
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -58,7 +59,7 @@ struct WorkoutSessionView: View {
             }
             .padding(.horizontal, AppTheme.shellPadding)
             .padding(.top, 8)
-            .padding(.bottom, AppTheme.contentBottomInset)
+            .padding(.bottom, contentBottomPadding)
         }
         .background(AppTheme.subtleBackground.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
