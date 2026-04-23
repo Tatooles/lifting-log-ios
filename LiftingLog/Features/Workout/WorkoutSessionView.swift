@@ -3,7 +3,7 @@ import SwiftUI
 struct WorkoutSessionView: View {
     @Bindable var store: AppStore
     @State private var isFinishSheetPresented = false
-    private let contentBottomPadding: CGFloat = 120
+    private let contentBottomPadding: CGFloat = 96
 
     var body: some View {
         ScrollView(showsIndicators: false) {
