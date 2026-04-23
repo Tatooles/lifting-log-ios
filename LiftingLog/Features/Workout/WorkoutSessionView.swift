@@ -6,14 +6,14 @@ struct WorkoutSessionView: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
                     TextField("Workout Name", text: $store.activeWorkout.name)
-                        .font(.system(size: 34, weight: .bold))
+                        .font(.system(size: 28, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
                         .accessibilityIdentifier("WorkoutTitle")
                     Text(AppTheme.formatDate(store.activeWorkout.date))
-                        .font(.system(size: 17, weight: .medium))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
 
@@ -27,12 +27,12 @@ struct WorkoutSessionView: View {
                     }
                 } label: {
                     Label("Add Exercise", systemImage: "plus")
-                        .font(.system(size: 20, weight: .bold))
+                        .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(AppTheme.accentBright)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 18)
+                        .padding(.vertical, 11)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 22)
+                            RoundedRectangle(cornerRadius: 18)
                                 .stroke(style: StrokeStyle(lineWidth: 1.25, dash: [6, 4]))
                                 .foregroundStyle(AppTheme.accentBright.opacity(0.45))
                         )
@@ -40,25 +40,25 @@ struct WorkoutSessionView: View {
                 .buttonStyle(.plain)
 
                 SurfaceCard {
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 6) {
                         Text("WORKOUT NOTES")
-                            .font(.system(size: 12, weight: .bold))
-                            .tracking(2.4)
+                            .font(.system(size: 10, weight: .bold))
+                            .tracking(1.8)
                             .foregroundStyle(AppTheme.textSecondary)
                         TextField(
                             "How did this session feel? Any PRs or notes for next time...",
                             text: $store.activeWorkout.workoutNotes,
                             axis: .vertical
                         )
-                        .font(.system(size: 18))
+                        .font(.system(size: 15))
                         .foregroundStyle(AppTheme.textPrimary)
-                        .lineLimit(4...6)
+                        .lineLimit(3...5)
                     }
                 }
             }
             .padding(.horizontal, AppTheme.shellPadding)
-            .padding(.top, 18)
-            .padding(.bottom, 120)
+            .padding(.top, 8)
+            .padding(.bottom, AppTheme.contentBottomInset)
         }
         .background(AppTheme.subtleBackground.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)

@@ -12,55 +12,43 @@ struct WorkoutHeaderView: View {
     }
 
     var body: some View {
-        HStack(spacing: 14) {
-            HStack(spacing: 8) {
+        HStack(spacing: 10) {
+            HStack(spacing: 6) {
                 Circle()
                     .fill(AppTheme.accentBright)
-                    .frame(width: 8, height: 8)
+                    .frame(width: 6, height: 6)
                 Text(AppTheme.formatDuration(elapsedSeconds))
-                    .font(.system(size: 18, weight: .bold, design: .rounded).monospacedDigit())
+                    .font(.system(size: 15, weight: .bold, design: .rounded).monospacedDigit())
                     .foregroundStyle(AppTheme.textPrimary)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(AppTheme.surfaceMuted)
-            .overlay(
-                Capsule()
-                    .stroke(AppTheme.borderStrong)
-            )
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Text("Sets")
                     Spacer()
                     Text("\(completedSets)/\(totalSets)")
                 }
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(AppTheme.textSecondary)
+                .font(.system(size: 12, weight: .medium))
 
                 ProgressView(value: progressValue)
                     .tint(AppTheme.accentBright)
-                    .scaleEffect(x: 1, y: 1.3, anchor: .center)
+                    .scaleEffect(x: 1, y: 1.05, anchor: .center)
             }
 
             Button(action: onFinish) {
                 Text("Finish")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(Color.white)
-                    .padding(.horizontal, 26)
-                    .padding(.vertical, 16)
-                    .background(
-                        Capsule()
-                            .fill(AppTheme.accentGradient)
-                            .shadow(color: AppTheme.accentGlow, radius: 18, y: 8)
-                    )
+                    .font(.system(size: 15, weight: .bold))
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, AppTheme.shellPadding)
-        .padding(.top, 10)
-        .padding(.bottom, 14)
-        .background(.ultraThinMaterial.opacity(0.92))
+        .padding(.top, 6)
+        .padding(.bottom, 7)
+        .background(.ultraThinMaterial.opacity(0.88))
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(AppTheme.border)
