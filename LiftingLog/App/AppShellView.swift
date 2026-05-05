@@ -1,7 +1,15 @@
+import SwiftData
 import SwiftUI
 
 struct AppShellView: View {
-    @Bindable var store: AppStore
+    @Environment(\.modelContext) private var modelContext
+    @Bindable var navigationState: AppNavigationState
+    @Bindable var activeWorkoutEngine: ActiveWorkoutEngine
+    @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
+
+    private var activeSession: WorkoutSession? {
+        sessions.first { $0.status == .active }
+    }
 
     var body: some View {
         ZStack {
@@ -9,14 +17,18 @@ struct AppShellView: View {
                 .ignoresSafeArea()
 
             Group {
-                switch store.selectedTab {
+                switch navigationState.selectedTab {
                 case .history:
                     NavigationStack {
-                        HistoryView(store: store)
+                        HistoryView(navigationState: navigationState)
                     }
                 case .workout:
                     NavigationStack {
-                        WorkoutSessionView(store: store)
+                        if let activeSession {
+                            WorkoutSessionView(session: activeSession, engine: activeWorkoutEngine)
+                        } else {
+                            StartWorkoutView(navigationState: navigationState, activeWorkoutEngine: activeWorkoutEngine)
+                        }
                     }
                 case .profile:
                     NavigationStack {
@@ -27,12 +39,15 @@ struct AppShellView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            FloatingTabBar(selection: $store.selectedTab)
+            FloatingTabBar(selection: $navigationState.selectedTab, isWorkoutActive: activeSession != nil)
                 .padding(.horizontal, AppTheme.bottomBarOuterHorizontalPadding)
                 .padding(.top, AppTheme.bottomBarOuterTopPadding)
                 .padding(.bottom, AppTheme.bottomBarOuterBottomPadding)
                 .background(Color.clear)
         }
         .preferredColorScheme(.dark)
+        .task {
+            activeWorkoutEngine.loadActiveSession(context: modelContext)
+        }
     }
 }

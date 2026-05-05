@@ -1,7 +1,11 @@
 import SwiftUI
 
 struct WorkoutHistoryRow: View {
-    let item: WorkoutHistoryItem
+    let session: WorkoutSession
+
+    private var metrics: WorkoutMetrics {
+        WorkoutMetrics(session: session)
+    }
 
     var body: some View {
         SurfaceCard {
@@ -11,16 +15,16 @@ struct WorkoutHistoryRow: View {
                     .frame(width: 4, height: 64)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(item.name)
+                    Text(session.title)
                         .font(.system(size: 19, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
-                    Text(item.dateLabel)
+                    Text(WorkoutFormatters.compactDate(session.startedAt))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(AppTheme.textSecondary)
                     HStack(spacing: 12) {
-                        Label(item.durationLabel, systemImage: "clock")
-                        Text("\(item.exerciseCount) exercises")
-                        Text("\(item.setCount) sets")
+                        Label(AppTheme.formatDuration(metrics.durationSeconds), systemImage: "clock")
+                        Text("\(session.loggedExercises.count) exercises")
+                        Text("\(metrics.totalSetCount) sets")
                     }
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppTheme.textTertiary)

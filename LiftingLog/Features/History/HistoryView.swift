@@ -1,7 +1,17 @@
+import SwiftData
 import SwiftUI
 
 struct HistoryView: View {
-    @Bindable var store: AppStore
+    @Bindable var navigationState: AppNavigationState
+    @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
+
+    private var completedSessions: [WorkoutSession] {
+        sessions.filter { $0.status == .completed }
+    }
+
+    private var exerciseSummaries: [ExerciseHistorySummary] {
+        ExerciseHistorySummary.makeSummaries(from: completedSessions)
+    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -11,14 +21,14 @@ struct HistoryView: View {
                     .foregroundStyle(AppTheme.textPrimary)
                     .accessibilityIdentifier("HistoryTitle")
 
-                Picker("History Mode", selection: $store.historyMode) {
+                Picker("History Mode", selection: $navigationState.historyMode) {
                     ForEach(HistoryMode.allCases) { mode in
                         Text(mode.title).tag(mode)
                     }
                 }
                 .pickerStyle(.segmented)
 
-                switch store.historyMode {
+                switch navigationState.historyMode {
                 case .workouts:
                     workoutContent
                 case .exercises:
@@ -30,29 +40,19 @@ struct HistoryView: View {
         }
         .background(AppTheme.subtleBackground.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
-        .task {
-            await store.loadHistory()
-        }
     }
 
     @ViewBuilder
     private var workoutContent: some View {
-        switch store.workoutHistoryState {
-        case .loading:
-            LoadingStateView(title: "Loading workouts...")
-        case let .empty(message):
-            EmptyStateView(title: "No Workouts Yet", message: message)
-        case let .error(message):
-            ErrorStateView(title: "Couldn't Load Workouts", message: message) {
-                Task { await store.retryHistoryLoad() }
-            }
-        case let .loaded(items):
+        if completedSessions.isEmpty {
+            EmptyStateView(title: "No Workouts Yet", message: "Finished workouts will appear here.")
+        } else {
             VStack(spacing: 10) {
-                ForEach(items) { item in
+                ForEach(completedSessions) { session in
                     NavigationLink {
-                        WorkoutHistoryDetailView(item: item)
+                        WorkoutHistoryDetailView(session: session)
                     } label: {
-                        WorkoutHistoryRow(item: item)
+                        WorkoutHistoryRow(session: session)
                     }
                     .buttonStyle(.plain)
                 }
@@ -62,23 +62,16 @@ struct HistoryView: View {
 
     @ViewBuilder
     private var exerciseContent: some View {
-        switch store.exerciseHistoryState {
-        case .loading:
-            LoadingStateView(title: "Loading exercises...")
-        case let .empty(message):
-            EmptyStateView(title: "No Exercise History", message: message)
-        case let .error(message):
-            ErrorStateView(title: "Couldn't Load Exercises", message: message) {
-                Task { await store.retryHistoryLoad() }
-            }
-        case let .loaded(items):
+        if exerciseSummaries.isEmpty {
+            EmptyStateView(title: "No Exercise History", message: "Completed sets will build exercise history.")
+        } else {
             SurfaceCard(padding: 0) {
                 VStack(spacing: 0) {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    ForEach(Array(exerciseSummaries.enumerated()), id: \.element.id) { index, summary in
                         NavigationLink {
-                            ExerciseHistoryDetailView(item: item)
+                            ExerciseHistoryDetailView(summary: summary)
                         } label: {
-                            ExerciseHistoryRow(item: item, showsDivider: index < items.count - 1)
+                            ExerciseHistoryRow(summary: summary, showsDivider: index < exerciseSummaries.count - 1)
                         }
                         .buttonStyle(.plain)
                     }

@@ -1,8 +1,16 @@
+import SwiftData
 import SwiftUI
 
 struct FinishWorkoutSheet: View {
-    @Bindable var store: AppStore
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    let session: WorkoutSession
+    @Bindable var engine: ActiveWorkoutEngine
+    @State private var showsDiscardConfirmation = false
+
+    private var metrics: WorkoutMetrics {
+        WorkoutMetrics(session: session)
+    }
 
     var body: some View {
         VStack(spacing: 20) {
@@ -15,18 +23,19 @@ struct FinishWorkoutSheet: View {
                 Text("Finish Workout?")
                     .font(.system(size: 26, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
-                Text("Great session — here's your summary")
+                Text("Review your session summary")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary)
             }
 
             HStack(spacing: 10) {
-                summaryCard(title: "Duration", value: AppTheme.formatDuration(store.activeWorkout.elapsedSeconds))
-                summaryCard(title: "Sets Done", value: "\(store.completedSetCount)/\(store.totalSetCount)")
-                summaryCard(title: "Volume", value: "\(store.estimatedCompletedVolume)")
+                summaryCard(title: "Duration", value: AppTheme.formatDuration(metrics.durationSeconds))
+                summaryCard(title: "Sets Done", value: "\(metrics.completedSetCount)/\(metrics.totalSetCount)")
+                summaryCard(title: "Volume", value: WorkoutFormatters.number(metrics.completedVolume))
             }
 
             Button {
+                try? engine.finishWorkout(session, context: modelContext)
                 dismiss()
             } label: {
                 Text("Save Workout")
@@ -38,18 +47,37 @@ struct FinishWorkoutSheet: View {
                     .clipShape(RoundedRectangle(cornerRadius: 18))
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("SaveWorkoutButton")
 
             Button("Keep Going") {
                 dismiss()
             }
             .font(.system(size: 16, weight: .medium))
             .foregroundStyle(AppTheme.textSecondary)
+            .accessibilityIdentifier("KeepGoingButton")
+
+            Button(role: .destructive) {
+                showsDiscardConfirmation = true
+            } label: {
+                Text("Discard Workout")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppTheme.accentBright)
+            }
             .padding(.bottom, 8)
         }
         .padding(.horizontal, 20)
         .background(AppTheme.surface)
-        .presentationDetents([.height(330)])
+        .presentationDetents([.height(390)])
         .presentationCornerRadius(28)
+        .alert("Discard Workout?", isPresented: $showsDiscardConfirmation) {
+            Button("Discard", role: .destructive) {
+                try? engine.discardWorkout(session, context: modelContext)
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will hide the active workout from history.")
+        }
     }
 
     private func summaryCard(title: String, value: String) -> some View {

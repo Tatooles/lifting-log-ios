@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FloatingTabBar: View {
     @Binding var selection: AppTab
+    let isWorkoutActive: Bool
 
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
@@ -30,11 +31,11 @@ struct FloatingTabBar: View {
             }
         } label: {
             VStack(spacing: 4) {
-                Image(systemName: tab.symbolName)
+                Image(systemName: tab.symbolName(isWorkoutActive: isWorkoutActive))
                     .font(.system(size: AppTheme.bottomBarIconSize, weight: selection == tab ? .semibold : .regular))
                     .foregroundStyle(selection == tab ? AppTheme.accentBright : AppTheme.textSecondary)
 
-                Text(tab.title)
+                Text(tab.title(isWorkoutActive: isWorkoutActive))
                     .font(.system(size: AppTheme.bottomBarLabelSize, weight: selection == tab ? .semibold : .medium))
                     .foregroundStyle(selection == tab ? AppTheme.accentBright : AppTheme.textSecondary)
                     .lineLimit(1)

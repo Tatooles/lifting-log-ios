@@ -1,7 +1,24 @@
+import SwiftData
 import SwiftUI
 
 struct ExerciseHistoryDetailView: View {
-    let item: ExerciseHistoryItem
+    let summary: ExerciseHistorySummary
+    @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
+
+    private var recentSets: [(Date, LoggedExercise, LoggedSet)] {
+        sessions
+            .filter { $0.status == .completed }
+            .flatMap { session in
+                session.sortedLoggedExercises.flatMap { loggedExercise in
+                    loggedExercise.sortedSets
+                        .filter { set in
+                            set.isCompleted && matches(loggedExercise)
+                        }
+                        .map { (session.startedAt, loggedExercise, $0) }
+                }
+            }
+            .sorted { $0.0 > $1.0 }
+    }
 
     var body: some View {
         ScrollView {
@@ -17,9 +34,9 @@ struct ExerciseHistoryDetailView: View {
                                     .foregroundStyle(AppTheme.accentBright)
                             }
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(item.name)
+                            Text(summary.name)
                                 .font(.system(size: 24, weight: .bold))
-                            Text("Last performed \(item.lastPerformedLabel)")
+                            Text("Last performed \(summary.lastPerformedLabel)")
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundStyle(AppTheme.textSecondary)
                         }
@@ -28,11 +45,28 @@ struct ExerciseHistoryDetailView: View {
 
                 SurfaceCard {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("History Summary")
+                        Text("Completed Sets")
                             .font(.system(size: 16, weight: .bold))
-                        Text("Completed \(item.completionCount) tracked sets across recent workouts. This detail screen is a native placeholder inferred from the history list state.")
+                        Text("\(summary.completedSetCount) tracked sets across completed workouts.")
                             .font(.system(size: 14))
                             .foregroundStyle(AppTheme.textSecondary)
+                    }
+                }
+
+                ForEach(Array(recentSets.enumerated()), id: \.offset) { _, entry in
+                    SurfaceCard {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(WorkoutFormatters.compactDate(entry.0))
+                                    .font(.system(size: 15, weight: .bold))
+                                Text(entry.1.exerciseSnapshotName)
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(AppTheme.textSecondary)
+                            }
+                            Spacer()
+                            Text("\(entry.2.weight.map(WorkoutFormatters.number) ?? "-") x \(entry.2.reps.map(String.init) ?? "-")")
+                                .font(.system(size: 16, weight: .bold))
+                        }
                     }
                 }
             }
@@ -40,7 +74,15 @@ struct ExerciseHistoryDetailView: View {
             .padding(.bottom, AppTheme.contentBottomInset)
         }
         .background(AppTheme.subtleBackground.ignoresSafeArea())
-        .navigationTitle(item.name)
+        .navigationTitle(summary.name)
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func matches(_ loggedExercise: LoggedExercise) -> Bool {
+        if let exerciseID = summary.exerciseID {
+            return loggedExercise.exercise?.id == exerciseID
+        }
+
+        return loggedExercise.exerciseSnapshotName.caseInsensitiveCompare(summary.name) == .orderedSame
     }
 }

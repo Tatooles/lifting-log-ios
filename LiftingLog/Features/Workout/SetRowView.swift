@@ -1,10 +1,11 @@
+import SwiftData
 import SwiftUI
 
 struct SetRowView: View {
-    @Bindable var store: AppStore
-    let exerciseID: UUID
-    let set: ExerciseSet
+    @Environment(\.modelContext) private var modelContext
+    let set: LoggedSet
     let index: Int
+    @Bindable var engine: ActiveWorkoutEngine
 
     var body: some View {
         HStack(spacing: 10) {
@@ -15,39 +16,39 @@ struct SetRowView: View {
 
             numericField(
                 placeholder: "lbs",
-                text: Binding(
-                    get: { set.weight },
-                    set: { store.updateSetWeight(exerciseID: exerciseID, setID: set.id, value: $0) }
-                ),
+                text: weightBinding,
                 keyboard: .numberPad
             )
 
             numericField(
                 placeholder: "reps",
-                text: Binding(
-                    get: { set.reps },
-                    set: { store.updateSetReps(exerciseID: exerciseID, setID: set.id, value: $0) }
-                ),
+                text: repsBinding,
                 keyboard: .numberPad
             )
 
             numericField(
                 placeholder: "RPE",
-                text: Binding(
-                    get: { set.rpe },
-                    set: { store.updateSetRPE(exerciseID: exerciseID, setID: set.id, value: $0) }
-                ),
+                text: rpeBinding,
                 keyboard: .decimalPad
             )
 
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) {
-                    store.toggleSetDone(exerciseID: exerciseID, setID: set.id)
+                    try? engine.toggleSetCompletion(set, context: modelContext)
                 }
             } label: {
-                Image(systemName: set.isDone ? "checkmark.circle.fill" : "circle")
+                Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 26, weight: .regular))
-                    .foregroundStyle(set.isDone ? AppTheme.accentBright : AppTheme.borderStrong)
+                    .foregroundStyle(set.isCompleted ? AppTheme.accentBright : AppTheme.borderStrong)
+            }
+            .buttonStyle(.plain)
+
+            Button(role: .destructive) {
+                try? engine.removeSet(set, context: modelContext)
+            } label: {
+                Image(systemName: "minus.circle")
+                    .font(.system(size: 22, weight: .regular))
+                    .foregroundStyle(AppTheme.textTertiary)
             }
             .buttonStyle(.plain)
         }
@@ -71,5 +72,32 @@ struct SetRowView: View {
                     .stroke(AppTheme.borderStrong)
             )
             .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var weightBinding: Binding<String> {
+        Binding(
+            get: { set.weight.map(WorkoutFormatters.number) ?? "" },
+            set: { value in
+                try? engine.updateSet(set, weight: Double(value), reps: set.reps, rpe: set.rpe, context: modelContext)
+            }
+        )
+    }
+
+    private var repsBinding: Binding<String> {
+        Binding(
+            get: { set.reps.map(String.init) ?? "" },
+            set: { value in
+                try? engine.updateSet(set, weight: set.weight, reps: Int(value), rpe: set.rpe, context: modelContext)
+            }
+        )
+    }
+
+    private var rpeBinding: Binding<String> {
+        Binding(
+            get: { set.rpe.map(WorkoutFormatters.number) ?? "" },
+            set: { value in
+                try? engine.updateSet(set, weight: set.weight, reps: set.reps, rpe: Double(value), context: modelContext)
+            }
+        )
     }
 }

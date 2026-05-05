@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ExerciseHistoryRow: View {
-    let item: ExerciseHistoryItem
+    let summary: ExerciseHistorySummary
     let showsDivider: Bool
 
     var body: some View {
@@ -17,17 +17,17 @@ struct ExerciseHistoryRow: View {
                     }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(item.name)
+                    Text(summary.name)
                         .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(AppTheme.textPrimary)
-                    Text("Last: \(item.lastPerformedLabel)")
+                    Text("Last: \(summary.lastPerformedLabel)")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
 
                 Spacer()
 
-                Text("×\(item.completionCount)")
+                Text("x\(summary.completedSetCount)")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(AppTheme.textSecondary)
                     .padding(.horizontal, 12)

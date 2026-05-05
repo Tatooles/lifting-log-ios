@@ -1,49 +1,62 @@
+import SwiftData
 import SwiftUI
 
 struct ExerciseCardView: View {
-    @Bindable var store: AppStore
-    let exercise: WorkoutExercise
+    @Environment(\.modelContext) private var modelContext
+    let loggedExercise: LoggedExercise
+    @Bindable var engine: ActiveWorkoutEngine
+    @State private var isCollapsed = false
 
     var body: some View {
         SurfaceCard(padding: 0) {
             VStack(spacing: 0) {
                 Button {
                     withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
-                        store.toggleExerciseCollapsed(exercise.id)
+                        isCollapsed.toggle()
                     }
                 } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "chevron.down")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(AppTheme.textSecondary)
-                            .rotationEffect(.degrees(exercise.isCollapsed ? -90 : 0))
+                            .rotationEffect(.degrees(isCollapsed ? -90 : 0))
 
-                        Text(exercise.name)
+                        Text(loggedExercise.exerciseSnapshotName)
                             .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(AppTheme.textPrimary)
 
                         Spacer()
 
-                        Text("\(exercise.sets.filter(\.isDone).count)/\(exercise.sets.count)")
+                        let completedSetCount = loggedExercise.sets.filter(\.isCompleted).count
+                        Text("\(completedSetCount)/\(loggedExercise.sets.count)")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(exercise.sets.allSatisfy(\.isDone) ? AppTheme.accentBright : AppTheme.textSecondary)
+                            .foregroundStyle(loggedExercise.sets.allSatisfy(\.isCompleted) && !loggedExercise.sets.isEmpty ? AppTheme.accentBright : AppTheme.textSecondary)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                             .background(AppTheme.surfaceMuted)
                             .clipShape(Capsule())
+
+                        Button(role: .destructive) {
+                            try? engine.removeLoggedExercise(loggedExercise, context: modelContext)
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
+                        .buttonStyle(.plain)
                     }
                     .padding(16)
                 }
                 .buttonStyle(.plain)
 
-                if !exercise.isCollapsed {
+                if !isCollapsed {
                     VStack(spacing: 14) {
                         HStack(spacing: 10) {
                             Color.clear.frame(width: 18)
                             columnHeader("LBS")
                             columnHeader("REPS")
                             columnHeader("RPE")
-                            Color.clear.frame(width: 28)
+                            Color.clear.frame(width: 54)
                         }
                         .padding(.horizontal, 16)
                         .padding(.bottom, 10)
@@ -55,15 +68,15 @@ struct ExerciseCardView: View {
                         }
 
                         VStack(spacing: 12) {
-                            ForEach(Array(exercise.sets.enumerated()), id: \.element.id) { index, set in
-                                SetRowView(store: store, exerciseID: exercise.id, set: set, index: index)
+                            ForEach(Array(loggedExercise.sortedSets.enumerated()), id: \.element.id) { index, set in
+                                SetRowView(set: set, index: index, engine: engine)
                                     .padding(.horizontal, 16)
                             }
                         }
 
                         Button {
                             withAnimation(.spring(response: 0.26, dampingFraction: 0.85)) {
-                                store.addSet(to: exercise.id)
+                                _ = try? engine.addSet(to: loggedExercise, context: modelContext)
                             }
                         } label: {
                             Label("Add Set", systemImage: "plus")
@@ -83,8 +96,8 @@ struct ExerciseCardView: View {
                         TextField(
                             "Exercise notes...",
                             text: Binding(
-                                get: { exercise.notes },
-                                set: { store.updateExerciseNotes(exerciseID: exercise.id, notes: $0) }
+                                get: { loggedExercise.notes },
+                                set: { try? engine.updateExerciseNotes($0, loggedExercise: loggedExercise, context: modelContext) }
                             ),
                             axis: .vertical
                         )
