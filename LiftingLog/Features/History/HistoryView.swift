@@ -5,9 +5,9 @@ struct HistoryView: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 14) {
                 Text("History")
-                    .font(.system(size: 42, weight: .bold))
+                    .font(.system(size: 34, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .accessibilityIdentifier("HistoryTitle")
 
@@ -26,7 +26,7 @@ struct HistoryView: View {
                 }
             }
             .padding(AppTheme.shellPadding)
-            .padding(.bottom, 120)
+            .padding(.bottom, AppTheme.contentBottomInset)
         }
         .background(AppTheme.subtleBackground.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
@@ -47,7 +47,7 @@ struct HistoryView: View {
                 Task { await store.retryHistoryLoad() }
             }
         case let .loaded(items):
-            VStack(spacing: 12) {
+            VStack(spacing: 10) {
                 ForEach(items) { item in
                     NavigationLink {
                         WorkoutHistoryDetailView(item: item)

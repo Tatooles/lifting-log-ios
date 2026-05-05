@@ -4,55 +4,45 @@ struct FloatingTabBar: View {
     @Binding var selection: AppTab
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 0) {
+        HStack(alignment: .center, spacing: 0) {
             tabButton(for: .history)
-            tabButton(for: .workout, isCenter: true)
+            tabButton(for: .workout)
             tabButton(for: .profile)
         }
-        .padding(.horizontal, 10)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
+        .padding(.horizontal, AppTheme.bottomBarInnerHorizontalPadding)
+        .padding(.vertical, AppTheme.bottomBarInnerVerticalPadding)
+        .frame(minHeight: AppTheme.bottomBarMinHeight)
         .background(
-            RoundedRectangle(cornerRadius: 34)
+            RoundedRectangle(cornerRadius: AppTheme.bottomBarCornerRadius)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 34)
+                    RoundedRectangle(cornerRadius: AppTheme.bottomBarCornerRadius)
                         .stroke(Color.white.opacity(0.12))
                 )
-                .shadow(color: .black.opacity(0.25), radius: 24, y: 12)
+                .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
         )
     }
 
-    @ViewBuilder
-    private func tabButton(for tab: AppTab, isCenter: Bool = false) -> some View {
+    private func tabButton(for tab: AppTab) -> some View {
         Button {
             withAnimation(.easeInOut(duration: 0.2)) {
                 selection = tab
             }
         } label: {
-            VStack(spacing: isCenter ? 6 : 8) {
-                if isCenter {
-                    ZStack {
-                        Circle()
-                            .fill(AppTheme.accentGradient)
-                            .frame(width: 68, height: 68)
-                            .shadow(color: AppTheme.accentGlow, radius: 18, y: 8)
-                        Image(systemName: tab.symbolName)
-                            .font(.system(size: 30, weight: .semibold))
-                            .foregroundStyle(Color.white)
-                    }
-                    .offset(y: -6)
-                } else {
-                    Image(systemName: tab.symbolName)
-                        .font(.system(size: 28, weight: .light))
-                        .foregroundStyle(selection == tab ? AppTheme.accentBright : AppTheme.textSecondary)
-                }
+            VStack(spacing: 4) {
+                Image(systemName: tab.symbolName)
+                    .font(.system(size: AppTheme.bottomBarIconSize, weight: selection == tab ? .semibold : .regular))
+                    .foregroundStyle(selection == tab ? AppTheme.accentBright : AppTheme.textSecondary)
 
                 Text(tab.title)
-                    .font(.system(size: 12, weight: selection == tab ? .semibold : .medium))
-                    .foregroundStyle(isCenter ? AppTheme.accentBright : (selection == tab ? AppTheme.accentBright : AppTheme.textSecondary))
+                    .font(.system(size: AppTheme.bottomBarLabelSize, weight: selection == tab ? .semibold : .medium))
+                    .foregroundStyle(selection == tab ? AppTheme.accentBright : AppTheme.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
+            .frame(minHeight: 56)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(identifier(for: tab))

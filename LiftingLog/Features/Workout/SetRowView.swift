@@ -7,11 +7,11 @@ struct SetRowView: View {
     let index: Int
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Text("\(index + 1)")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(AppTheme.textTertiary)
-                .frame(width: 20)
+                .frame(width: 18)
 
             numericField(
                 placeholder: "lbs",
@@ -46,7 +46,7 @@ struct SetRowView: View {
                 }
             } label: {
                 Image(systemName: set.isDone ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 30, weight: .regular))
+                    .font(.system(size: 26, weight: .regular))
                     .foregroundStyle(set.isDone ? AppTheme.accentBright : AppTheme.borderStrong)
             }
             .buttonStyle(.plain)
@@ -61,15 +61,15 @@ struct SetRowView: View {
         TextField(placeholder, text: text)
             .keyboardType(keyboard)
             .multilineTextAlignment(.center)
-            .font(.system(size: 18, weight: .semibold, design: .rounded))
+            .font(.system(size: 16, weight: .semibold, design: .rounded))
             .foregroundStyle(AppTheme.textPrimary)
-            .padding(.vertical, 14)
+            .padding(.vertical, 12)
             .frame(maxWidth: .infinity)
             .background(AppTheme.surfaceStrong)
             .overlay(
-                RoundedRectangle(cornerRadius: 18)
+                RoundedRectangle(cornerRadius: 16)
                     .stroke(AppTheme.borderStrong)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }

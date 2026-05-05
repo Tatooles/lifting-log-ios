@@ -32,6 +32,7 @@ struct WorkoutSessionView: View {
                         .foregroundStyle(AppTheme.accentBright)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
+                        .frame(minHeight: 44)
                         .overlay(
                             RoundedRectangle(cornerRadius: 18)
                                 .stroke(style: StrokeStyle(lineWidth: 1.25, dash: [6, 4]))
@@ -53,7 +54,7 @@ struct WorkoutSessionView: View {
                         )
                         .font(.system(size: 15))
                         .foregroundStyle(AppTheme.textPrimary)
-                        .lineLimit(3...5)
+                        .lineLimit(4...6)
                     }
                 }
             }

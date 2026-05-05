@@ -3,23 +3,23 @@ import SwiftUI
 struct ProfileView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 14) {
                 Text("Profile")
-                    .font(.system(size: 42, weight: .bold))
+                    .font(.system(size: 34, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .accessibilityIdentifier("ProfileTitle")
 
                 SurfaceCard {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 6) {
                         Text("Kevin")
-                            .font(.system(size: 28, weight: .bold))
+                            .font(.system(size: 24, weight: .bold))
                         Text("Mock athlete profile")
-                            .font(.system(size: 17, weight: .medium))
+                            .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(AppTheme.textSecondary)
                     }
                 }
 
-                HStack(spacing: 12) {
+                HStack(spacing: 10) {
                     statCard(title: "Workouts", value: "28")
                     statCard(title: "Exercises", value: "14")
                     statCard(title: "PRs", value: "6")
@@ -34,7 +34,7 @@ struct ProfileView: View {
                 }
             }
             .padding(AppTheme.shellPadding)
-            .padding(.bottom, 120)
+            .padding(.bottom, AppTheme.contentBottomInset)
         }
         .background(AppTheme.subtleBackground.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
@@ -42,11 +42,11 @@ struct ProfileView: View {
 
     private func statCard(title: String, value: String) -> some View {
         SurfaceCard {
-            VStack(spacing: 6) {
+            VStack(spacing: 4) {
                 Text(value)
-                    .font(.system(size: 26, weight: .bold))
+                    .font(.system(size: 22, weight: .bold))
                 Text(title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary)
             }
             .frame(maxWidth: .infinity)
@@ -61,6 +61,6 @@ struct ProfileView: View {
             Text(value)
                 .foregroundStyle(AppTheme.textSecondary)
         }
-        .font(.system(size: 18, weight: .medium))
+        .font(.system(size: 16, weight: .medium))
     }
 }

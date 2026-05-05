@@ -28,9 +28,9 @@ struct AppShellView: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             FloatingTabBar(selection: $store.selectedTab)
-                .padding(.horizontal, 18)
-                .padding(.top, 6)
-                .padding(.bottom, 10)
+                .padding(.horizontal, AppTheme.bottomBarOuterHorizontalPadding)
+                .padding(.top, AppTheme.bottomBarOuterTopPadding)
+                .padding(.bottom, AppTheme.bottomBarOuterBottomPadding)
                 .background(Color.clear)
         }
         .preferredColorScheme(.dark)

@@ -49,6 +49,7 @@ struct WorkoutHeaderView: View {
                     .foregroundStyle(Color.white)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 10)
+                    .frame(minHeight: 44)
                     .background(
                         Capsule()
                             .fill(AppTheme.accentGradient)

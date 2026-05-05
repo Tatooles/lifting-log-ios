@@ -4,7 +4,7 @@ struct SurfaceCard<Content: View>: View {
     let padding: CGFloat
     @ViewBuilder var content: Content
 
-    init(padding: CGFloat = 16, @ViewBuilder content: () -> Content) {
+    init(padding: CGFloat = 14, @ViewBuilder content: () -> Content) {
         self.padding = padding
         self.content = content()
     }
