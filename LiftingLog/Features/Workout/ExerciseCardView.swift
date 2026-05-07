@@ -4,7 +4,9 @@ import SwiftUI
 struct ExerciseCardView: View {
     @Environment(\.modelContext) private var modelContext
     let loggedExercise: LoggedExercise
+    let exerciseIndex: Int
     @Bindable var engine: ActiveWorkoutEngine
+    var focusedField: FocusState<WorkoutField?>.Binding
     @State private var isCollapsed = false
 
     var body: some View {
@@ -48,6 +50,7 @@ struct ExerciseCardView: View {
                     .padding(16)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("ExerciseHeader-\(exerciseIndex)")
 
                 if !isCollapsed {
                     VStack(spacing: 14) {
@@ -69,14 +72,22 @@ struct ExerciseCardView: View {
 
                         VStack(spacing: 12) {
                             ForEach(Array(loggedExercise.sortedSets.enumerated()), id: \.element.id) { index, set in
-                                SetRowView(set: set, index: index, engine: engine)
+                                SetRowView(
+                                    set: set,
+                                    exerciseIndex: exerciseIndex,
+                                    index: index,
+                                    engine: engine,
+                                    focusedField: focusedField
+                                )
                                     .padding(.horizontal, 16)
                             }
                         }
 
                         Button {
                             withAnimation(.spring(response: 0.26, dampingFraction: 0.85)) {
-                                _ = try? engine.addSet(to: loggedExercise, context: modelContext)
+                                if let set = try? engine.addSet(to: loggedExercise, context: modelContext) {
+                                    focusedField.wrappedValue = .setWeight(set.id)
+                                }
                             }
                         } label: {
                             Label("Add Set", systemImage: "plus")
@@ -91,6 +102,7 @@ struct ExerciseCardView: View {
                                 )
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("AddSetButton-\(exerciseIndex)")
                         .padding(.horizontal, 16)
 
                         TextField(
@@ -103,6 +115,7 @@ struct ExerciseCardView: View {
                         )
                         .font(.system(size: 16))
                         .foregroundStyle(AppTheme.textPrimary)
+                        .focused(focusedField, equals: .exerciseNotes(loggedExercise.id))
                         .padding(14)
                         .frame(minHeight: 92, alignment: .topLeading)
                         .background(AppTheme.surfaceMuted)

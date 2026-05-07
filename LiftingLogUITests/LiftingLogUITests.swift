@@ -34,9 +34,79 @@ final class LiftingLogUITests: XCTestCase {
         XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
     }
 
+    @MainActor
+    func testAddingExerciseAndSetMovesFocusAndKeyboardCanBeDismissed() {
+        let app = makeApp()
+        app.launch()
+
+        app.buttons["StartBlankWorkoutButton"].tap()
+        XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
+
+        app.buttons["AddExerciseButton"].tap()
+        XCTAssertTrue(app.navigationBars["Add Exercise"].waitForExistence(timeout: 3))
+        app.buttons["Bench Press, Strength • Barbell • Chest"].tap()
+
+        let firstWeightField = app.textFields["SetWeightField-0-0"]
+        XCTAssertTrue(firstWeightField.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3))
+
+        app.buttons["DismissKeyboardButton"].tap()
+        XCTAssertFalse(app.keyboards.firstMatch.waitForExistence(timeout: 1))
+
+        firstWeightField.tap()
+        firstWeightField.typeText("185")
+        app.buttons["AddSetButton-0"].tap()
+
+        let secondWeightField = app.textFields["SetWeightField-0-1"]
+        XCTAssertTrue(secondWeightField.waitForExistence(timeout: 3))
+        secondWeightField.typeText("195")
+        XCTAssertEqual(secondWeightField.value as? String, "185195")
+    }
+
+    @MainActor
+    func testAddingExerciseScrollsNewExerciseToTop() {
+        let app = makeApp()
+        app.launch()
+
+        app.buttons["StartBlankWorkoutButton"].tap()
+        XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
+
+        addExercise("Back Squat, Strength • Barbell • Quads", in: app)
+        dismissKeyboardIfNeeded(in: app)
+        addExercise("Bench Press, Strength • Barbell • Chest", in: app)
+        dismissKeyboardIfNeeded(in: app)
+        addExercise("Barbell Row, Strength • Barbell • Back", in: app)
+        dismissKeyboardIfNeeded(in: app)
+        addExercise("Biceps Curl, Strength • Dumbbell • Biceps", in: app)
+
+        let addedExerciseHeader = app.buttons["ExerciseHeader-3"]
+        XCTAssertTrue(addedExerciseHeader.waitForExistence(timeout: 3))
+        XCTAssertLessThanOrEqual(addedExerciseHeader.frame.minY, 150)
+    }
+
+    @MainActor
     private func makeApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--uitest-in-memory-store"]
         return app
+    }
+
+    @MainActor
+    private func addExercise(_ exerciseButtonLabel: String, in app: XCUIApplication) {
+        let addButton = app.buttons["AddExerciseButton"]
+        while !addButton.isHittable {
+            app.swipeUp()
+        }
+
+        addButton.tap()
+        XCTAssertTrue(app.navigationBars["Add Exercise"].waitForExistence(timeout: 3))
+        app.buttons[exerciseButtonLabel].tap()
+    }
+
+    @MainActor
+    private func dismissKeyboardIfNeeded(in app: XCUIApplication) {
+        if app.keyboards.firstMatch.waitForExistence(timeout: 1) {
+            app.buttons["DismissKeyboardButton"].tap()
+        }
     }
 }

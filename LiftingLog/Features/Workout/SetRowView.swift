@@ -4,8 +4,10 @@ import SwiftUI
 struct SetRowView: View {
     @Environment(\.modelContext) private var modelContext
     let set: LoggedSet
+    let exerciseIndex: Int
     let index: Int
     @Bindable var engine: ActiveWorkoutEngine
+    var focusedField: FocusState<WorkoutField?>.Binding
 
     var body: some View {
         HStack(spacing: 10) {
@@ -17,19 +19,25 @@ struct SetRowView: View {
             numericField(
                 placeholder: "lbs",
                 text: weightBinding,
-                keyboard: .numberPad
+                keyboard: .numberPad,
+                focusTarget: .setWeight(set.id),
+                accessibilityIdentifier: "SetWeightField-\(exerciseIndex)-\(index)"
             )
 
             numericField(
                 placeholder: "reps",
                 text: repsBinding,
-                keyboard: .numberPad
+                keyboard: .numberPad,
+                focusTarget: .setReps(set.id),
+                accessibilityIdentifier: "SetRepsField-\(exerciseIndex)-\(index)"
             )
 
             numericField(
                 placeholder: "RPE",
                 text: rpeBinding,
-                keyboard: .decimalPad
+                keyboard: .decimalPad,
+                focusTarget: .setRPE(set.id),
+                accessibilityIdentifier: "SetRPEField-\(exerciseIndex)-\(index)"
             )
 
             Button {
@@ -57,13 +65,16 @@ struct SetRowView: View {
     private func numericField(
         placeholder: String,
         text: Binding<String>,
-        keyboard: UIKeyboardType
+        keyboard: UIKeyboardType,
+        focusTarget: WorkoutField,
+        accessibilityIdentifier: String
     ) -> some View {
         TextField(placeholder, text: text)
             .keyboardType(keyboard)
             .multilineTextAlignment(.center)
             .font(.system(size: 16, weight: .semibold, design: .rounded))
             .foregroundStyle(AppTheme.textPrimary)
+            .focused(focusedField, equals: focusTarget)
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity)
             .background(AppTheme.surfaceStrong)
@@ -72,6 +83,7 @@ struct SetRowView: View {
                     .stroke(AppTheme.borderStrong)
             )
             .clipShape(RoundedRectangle(cornerRadius: 16))
+            .accessibilityIdentifier(accessibilityIdentifier)
     }
 
     private var weightBinding: Binding<String> {
