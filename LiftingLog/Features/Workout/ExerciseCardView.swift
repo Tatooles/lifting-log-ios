@@ -17,45 +17,48 @@ struct ExerciseCardView: View {
     var body: some View {
         SurfaceCard(padding: 0) {
             VStack(spacing: 0) {
-                Button {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
-                        isCollapsed.toggle()
-                    }
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .rotationEffect(.degrees(isCollapsed ? -90 : 0))
-
-                        Text(loggedExercise.exerciseSnapshotName)
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundStyle(AppTheme.textPrimary)
-
-                        Spacer()
-
-                        let completedSetCount = loggedExercise.sets.filter(\.isCompleted).count
-                        Text("\(completedSetCount)/\(loggedExercise.sets.count)")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(loggedExercise.sets.allSatisfy(\.isCompleted) && !loggedExercise.sets.isEmpty ? AppTheme.accentBright : AppTheme.textSecondary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(AppTheme.surfaceMuted)
-                            .clipShape(Capsule())
-
-                        Button(role: .destructive) {
-                            try? engine.removeLoggedExercise(loggedExercise, context: modelContext)
-                        } label: {
-                            Image(systemName: "trash")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(AppTheme.textSecondary)
+                HStack(spacing: 12) {
+                    Button {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                            isCollapsed.toggle()
                         }
-                        .buttonStyle(.plain)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(AppTheme.textSecondary)
+                                .rotationEffect(.degrees(isCollapsed ? -90 : 0))
+
+                            Text(loggedExercise.exerciseSnapshotName)
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundStyle(AppTheme.textPrimary)
+
+                            Spacer()
+
+                            let completedSetCount = loggedExercise.sets.filter(\.isCompleted).count
+                            Text("\(completedSetCount)/\(loggedExercise.sets.count)")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(loggedExercise.sets.allSatisfy(\.isCompleted) && !loggedExercise.sets.isEmpty ? AppTheme.accentBright : AppTheme.textSecondary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(AppTheme.surfaceMuted)
+                                .clipShape(Capsule())
+                        }
+                        .contentShape(Rectangle())
                     }
-                    .padding(16)
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("ExerciseHeader-\(exerciseIndex)")
+
+                    Button(role: .destructive) {
+                        try? engine.removeLoggedExercise(loggedExercise, context: modelContext)
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("ExerciseHeader-\(exerciseIndex)")
+                .padding(16)
 
                 if !isCollapsed {
                     VStack(spacing: 14) {
