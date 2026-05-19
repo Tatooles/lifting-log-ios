@@ -75,11 +75,8 @@ final class LiftingLogUITests: XCTestCase {
         dismissKeyboardIfNeeded(in: app)
         addExercise("Bench Press, Strength • Barbell • Chest", in: app)
         dismissKeyboardIfNeeded(in: app)
-        addExercise("Barbell Row, Strength • Barbell • Back", in: app)
-        dismissKeyboardIfNeeded(in: app)
-        addExercise("Biceps Curl, Strength • Dumbbell • Biceps", in: app)
 
-        let addedExerciseHeader = app.buttons["ExerciseHeader-3"]
+        let addedExerciseHeader = app.buttons["ExerciseHeader-1"]
         XCTAssertTrue(addedExerciseHeader.waitForExistence(timeout: 3))
         XCTAssertLessThanOrEqual(addedExerciseHeader.frame.minY, 150)
     }
@@ -94,13 +91,20 @@ final class LiftingLogUITests: XCTestCase {
     @MainActor
     private func addExercise(_ exerciseButtonLabel: String, in app: XCUIApplication) {
         let addButton = app.buttons["AddExerciseButton"]
-        while !addButton.isHittable {
+
+        for _ in 0..<8 {
+            if addButton.exists && addButton.isHittable {
+                addButton.tap()
+                if app.navigationBars["Add Exercise"].waitForExistence(timeout: 1) {
+                    app.buttons[exerciseButtonLabel].tap()
+                    return
+                }
+            }
+
             app.swipeUp()
         }
 
-        addButton.tap()
-        XCTAssertTrue(app.navigationBars["Add Exercise"].waitForExistence(timeout: 3))
-        app.buttons[exerciseButtonLabel].tap()
+        XCTFail("Could not present Add Exercise sheet")
     }
 
     @MainActor

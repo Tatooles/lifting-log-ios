@@ -18,8 +18,9 @@ struct WorkoutSessionView: View {
     @State private var isAddExercisePresented = false
     @State private var pendingFocusedField: WorkoutField?
     @State private var pendingScrollTarget: UUID?
+    @State private var recentlyAddedExerciseID: UUID?
     @FocusState private var focusedField: WorkoutField?
-    private let contentBottomPadding: CGFloat = 96
+    private let contentBottomPadding: CGFloat = 360
 
     var body: some View {
         ScrollViewReader { scrollProxy in
@@ -101,32 +102,62 @@ struct WorkoutSessionView: View {
             .onChange(of: isAddExercisePresented) { _, isPresented in
                 guard !isPresented else { return }
 
-                if let pendingScrollTarget {
-                    self.pendingScrollTarget = nil
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
-                        scrollProxy.scrollTo(pendingScrollTarget, anchor: .top)
+                let scrollTarget = pendingScrollTarget
+                let focusedField = pendingFocusedField
+                pendingScrollTarget = nil
+                self.pendingFocusedField = nil
+                recentlyAddedExerciseID = scrollTarget
+
+                Task { @MainActor in
+                    self.focusedField = focusedField
+
+                    if let scrollTarget {
+                        try? await Task.sleep(for: .milliseconds(350))
+                        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+                            scrollProxy.scrollTo(scrollTarget, anchor: .top)
+                        }
                     }
                 }
+            }
+            .onChange(of: focusedField) { previousField, newField in
+                guard
+                    newField == nil,
+                    Self.isSetField(previousField),
+                    let recentlyAddedExerciseID
+                else { return }
 
-                guard let pendingFocusedField else { return }
-                self.pendingFocusedField = nil
-                DispatchQueue.main.async {
-                    focusedField = pendingFocusedField
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(300))
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+                        scrollProxy.scrollTo(recentlyAddedExerciseID, anchor: .top)
+                    }
+                    self.recentlyAddedExerciseID = nil
+                }
+            }
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        let scrollTarget = recentlyAddedExerciseID
+                        focusedField = nil
+
+                        if let scrollTarget {
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(500))
+                                withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+                                    scrollProxy.scrollTo(scrollTarget, anchor: .top)
+                                }
+                                self.recentlyAddedExerciseID = nil
+                            }
+                        }
+                    }
+                    .font(.system(size: 16, weight: .semibold))
+                    .accessibilityIdentifier("DismissKeyboardButton")
                 }
             }
         }
         .background(AppTheme.subtleBackground.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") {
-                    focusedField = nil
-                }
-                .font(.system(size: 16, weight: .semibold))
-                .accessibilityIdentifier("DismissKeyboardButton")
-            }
-        }
         .sheet(isPresented: $isFinishSheetPresented) {
             FinishWorkoutSheet(session: session, engine: engine)
         }
@@ -154,5 +185,14 @@ struct WorkoutSessionView: View {
                 try? engine.updateWorkoutNotes(newValue, session: session, context: modelContext)
             }
         )
+    }
+
+    private static func isSetField(_ field: WorkoutField?) -> Bool {
+        switch field {
+        case .setWeight, .setReps, .setRPE:
+            return true
+        case .workoutTitle, .workoutNotes, .exerciseNotes, nil:
+            return false
+        }
     }
 }
