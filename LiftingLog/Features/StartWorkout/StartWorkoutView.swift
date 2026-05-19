@@ -60,7 +60,6 @@ struct StartWorkoutView: View {
                 }
             }
             .padding(AppTheme.shellPadding)
-            .padding(.bottom, AppTheme.contentBottomInset)
         }
         .background(AppTheme.subtleBackground.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)

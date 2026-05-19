@@ -12,39 +12,36 @@ struct AppShellView: View {
     }
 
     var body: some View {
-        ZStack {
-            AppTheme.background
-                .ignoresSafeArea()
+        TabView(selection: $navigationState.selectedTab) {
+            NavigationStack {
+                HistoryView(navigationState: navigationState)
+            }
+            .tabItem {
+                Label(AppTab.history.title(isWorkoutActive: activeSession != nil), systemImage: AppTab.history.symbolName(isWorkoutActive: activeSession != nil))
+            }
+            .tag(AppTab.history)
 
-            Group {
-                switch navigationState.selectedTab {
-                case .history:
-                    NavigationStack {
-                        HistoryView(navigationState: navigationState)
-                    }
-                case .workout:
-                    NavigationStack {
-                        if let activeSession {
-                            WorkoutSessionView(session: activeSession, engine: activeWorkoutEngine)
-                        } else {
-                            StartWorkoutView(navigationState: navigationState, activeWorkoutEngine: activeWorkoutEngine)
-                        }
-                    }
-                case .profile:
-                    NavigationStack {
-                        ProfileView()
-                    }
+            NavigationStack {
+                if let activeSession {
+                    WorkoutSessionView(session: activeSession, engine: activeWorkoutEngine)
+                } else {
+                    StartWorkoutView(navigationState: navigationState, activeWorkoutEngine: activeWorkoutEngine)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .tabItem {
+                Label(AppTab.workout.title(isWorkoutActive: activeSession != nil), systemImage: AppTab.workout.symbolName(isWorkoutActive: activeSession != nil))
+            }
+            .tag(AppTab.workout)
+
+            NavigationStack {
+                ProfileView()
+            }
+            .tabItem {
+                Label(AppTab.profile.title(isWorkoutActive: activeSession != nil), systemImage: AppTab.profile.symbolName(isWorkoutActive: activeSession != nil))
+            }
+            .tag(AppTab.profile)
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            FloatingTabBar(selection: $navigationState.selectedTab, isWorkoutActive: activeSession != nil)
-                .padding(.horizontal, AppTheme.bottomBarOuterHorizontalPadding)
-                .padding(.top, AppTheme.bottomBarOuterTopPadding)
-                .padding(.bottom, AppTheme.bottomBarOuterBottomPadding)
-                .background(Color.clear)
-        }
+        .tint(AppTheme.accentBright)
         .preferredColorScheme(.dark)
         .task {
             activeWorkoutEngine.loadActiveSession(context: modelContext)

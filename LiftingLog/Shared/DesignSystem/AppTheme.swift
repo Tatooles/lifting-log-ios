@@ -28,16 +28,6 @@ enum AppTheme {
 
     static let cardCornerRadius: CGFloat = 22
     static let shellPadding: CGFloat = 16
-    static let bottomBarCornerRadius: CGFloat = 28
-    static let bottomBarInnerHorizontalPadding: CGFloat = 12
-    static let bottomBarInnerVerticalPadding: CGFloat = 8
-    static let bottomBarOuterHorizontalPadding: CGFloat = 16
-    static let bottomBarOuterTopPadding: CGFloat = 4
-    static let bottomBarOuterBottomPadding: CGFloat = 8
-    static let bottomBarMinHeight: CGFloat = 74
-    static let bottomBarIconSize: CGFloat = 22
-    static let bottomBarLabelSize: CGFloat = 11
-    static let contentBottomInset: CGFloat = 96
 
     static func formatDuration(_ seconds: Int) -> String {
         WorkoutFormatters.duration(seconds)

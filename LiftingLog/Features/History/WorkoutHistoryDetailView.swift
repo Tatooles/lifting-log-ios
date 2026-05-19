@@ -84,7 +84,6 @@ struct WorkoutHistoryDetailView: View {
                 .buttonStyle(.plain)
             }
             .padding(AppTheme.shellPadding)
-            .padding(.bottom, AppTheme.contentBottomInset)
         }
         .background(AppTheme.subtleBackground.ignoresSafeArea())
         .navigationTitle(session.title)
