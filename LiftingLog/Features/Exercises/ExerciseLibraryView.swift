@@ -6,6 +6,7 @@ struct ExerciseLibraryView: View {
     @Query(sort: \Exercise.name) private var exercises: [Exercise]
     @State private var searchText = ""
     @State private var isCreatingExercise = false
+    @State private var removalErrorMessage: String?
 
     private var filteredExercises: [Exercise] {
         exercises
@@ -29,10 +30,16 @@ struct ExerciseLibraryView: View {
                 }
                 .swipeActions {
                     Button(role: .destructive) {
-                        try? exercise.archiveOrDelete(context: modelContext)
-                        try? modelContext.save()
+                        do {
+                            try exercise.archiveOrDelete(context: modelContext)
+                            try modelContext.save()
+                            removalErrorMessage = nil
+                        } catch {
+                            modelContext.rollback()
+                            removalErrorMessage = error.localizedDescription
+                        }
                     } label: {
-                        Label("Archive", systemImage: "archivebox")
+                        Label("Remove", systemImage: "trash")
                     }
                 }
             }
@@ -52,6 +59,21 @@ struct ExerciseLibraryView: View {
         }
         .navigationDestination(isPresented: $isCreatingExercise) {
             ExerciseEditorView()
+        }
+        .alert(
+            "Couldn't Remove Exercise",
+            isPresented: Binding(
+                get: { removalErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        removalErrorMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(removalErrorMessage ?? "Try removing the exercise again.")
         }
     }
 }
