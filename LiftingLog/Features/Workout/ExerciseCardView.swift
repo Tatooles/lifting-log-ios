@@ -95,10 +95,7 @@ struct ExerciseCardView: View {
                         Button {
                             withAnimation(.spring(response: 0.26, dampingFraction: 0.85)) {
                                 if let set = try? engine.addSet(to: loggedExercise, context: modelContext) {
-                                    if set.weight != nil {
-                                        try? engine.updateSet(set, weight: nil, reps: set.reps, rpe: set.rpe, context: modelContext)
-                                    }
-                                    focusedField.wrappedValue = .setWeight(set.id)
+                                    focusedField.wrappedValue = set.weight == nil ? .setWeight(set.id) : nil
                                 }
                             }
                         } label: {
