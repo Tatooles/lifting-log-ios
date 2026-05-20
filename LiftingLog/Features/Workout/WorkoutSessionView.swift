@@ -120,6 +120,10 @@ struct WorkoutSessionView: View {
                 }
             }
             .onChange(of: focusedField) { previousField, newField in
+                if previousField == .workoutTitle, newField != .workoutTitle {
+                    try? engine.finalizeWorkoutTitle(session, context: modelContext)
+                }
+
                 guard
                     newField == nil,
                     Self.isSetField(previousField),

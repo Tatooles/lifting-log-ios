@@ -127,16 +127,41 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertEqual(metrics.completedVolume, 1000)
     }
 
+    func testUpdatingWorkoutTitleAllowsEmptyDraftWhileEditing() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let engine = ActiveWorkoutEngine()
+        let session = try engine.startBlankWorkout(context: context)
+
+        try engine.updateWorkoutTitle("", session: session, context: context)
+
+        XCTAssertEqual(session.title, "")
+    }
+
+    func testFinalizingWorkoutTitleAppliesDefaultForBlankDraft() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let engine = ActiveWorkoutEngine()
+        let session = try engine.startBlankWorkout(context: context)
+        try engine.updateWorkoutTitle("   ", session: session, context: context)
+
+        try engine.finalizeWorkoutTitle(session, context: context)
+
+        XCTAssertEqual(session.title, "Workout")
+    }
+
     func testFinishingMovesSessionOutOfActiveStateAndIntoHistory() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
         let engine = ActiveWorkoutEngine()
         let session = try engine.startBlankWorkout(context: context, now: Date(timeIntervalSince1970: 100))
+        try engine.updateWorkoutTitle("", session: session, context: context)
 
         try engine.finishWorkout(session, context: context, now: Date(timeIntervalSince1970: 220))
 
         XCTAssertNil(engine.activeSessionID)
         XCTAssertEqual(session.status, .completed)
+        XCTAssertEqual(session.title, "Workout")
         XCTAssertEqual(session.durationSeconds, 120)
         XCTAssertEqual(try activeSessions(in: context).count, 0)
         XCTAssertEqual(try completedSessions(in: context).count, 1)

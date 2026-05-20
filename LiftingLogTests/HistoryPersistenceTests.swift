@@ -48,6 +48,23 @@ final class HistoryPersistenceTests: XCTestCase {
         XCTAssertEqual(summaries.first?.completedSetCount, 1)
     }
 
+    func testExerciseHistorySummaryUsesSnapshotNameAfterExerciseRename() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(name: "Barbell Bench Press", category: .strength, equipment: .barbell, primaryMuscle: "Chest")
+        let session = WorkoutSession(title: "Push", startedAt: .now, status: .completed, source: .blank)
+        let loggedExercise = LoggedExercise(orderIndex: 0, exercise: exercise, exerciseSnapshotName: "Bench Press")
+        loggedExercise.sets = [LoggedSet(orderIndex: 0, weight: 185, reps: 5, rpe: 8, isCompleted: true)]
+        session.loggedExercises = [loggedExercise]
+        context.insert(exercise)
+        context.insert(session)
+        try context.save()
+
+        let summaries = ExerciseHistorySummary.makeSummaries(from: [session])
+
+        XCTAssertEqual(summaries.first?.name, "Bench Press")
+    }
+
     func testStartingFromPastWorkoutDoesNotMutateOriginalPastWorkout() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

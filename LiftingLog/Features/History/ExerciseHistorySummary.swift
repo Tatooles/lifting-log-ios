@@ -31,13 +31,16 @@ struct ExerciseHistorySummary: Identifiable, Hashable {
 
                 if var existing = grouped[key] {
                     existing.completedSetCount += completedSetCount
-                    existing.lastPerformedAt = max(existing.lastPerformedAt, session.startedAt)
+                    if session.startedAt > existing.lastPerformedAt {
+                        existing.lastPerformedAt = session.startedAt
+                        existing.name = loggedExercise.exerciseSnapshotName
+                    }
                     grouped[key] = existing
                 } else {
                     grouped[key] = ExerciseHistorySummary(
                         id: key,
                         exerciseID: exerciseID,
-                        name: loggedExercise.exercise?.name ?? loggedExercise.exerciseSnapshotName,
+                        name: loggedExercise.exerciseSnapshotName,
                         lastPerformedAt: session.startedAt,
                         completedSetCount: completedSetCount
                     )

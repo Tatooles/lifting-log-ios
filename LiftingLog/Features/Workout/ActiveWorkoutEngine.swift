@@ -163,8 +163,13 @@ final class ActiveWorkoutEngine {
     }
 
     func updateWorkoutTitle(_ title: String, session: WorkoutSession, context: ModelContext) throws {
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        session.title = trimmed.isEmpty ? "Workout" : title
+        session.title = title
+        session.touch()
+        try context.save()
+    }
+
+    func finalizeWorkoutTitle(_ session: WorkoutSession, context: ModelContext) throws {
+        applyFinalWorkoutTitle(to: session)
         session.touch()
         try context.save()
     }
@@ -182,6 +187,7 @@ final class ActiveWorkoutEngine {
     }
 
     func finishWorkout(_ session: WorkoutSession, context: ModelContext, now: Date = .now) throws {
+        applyFinalWorkoutTitle(to: session)
         session.status = .completed
         session.endedAt = now
         session.durationSeconds = max(0, Int(now.timeIntervalSince(session.startedAt)))
@@ -221,5 +227,10 @@ final class ActiveWorkoutEngine {
             set.orderIndex = index
             set.touch()
         }
+    }
+
+    private func applyFinalWorkoutTitle(to session: WorkoutSession) {
+        let trimmed = session.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        session.title = trimmed.isEmpty ? "Workout" : trimmed
     }
 }
