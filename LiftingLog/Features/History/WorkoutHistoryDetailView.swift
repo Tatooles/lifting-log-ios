@@ -5,6 +5,7 @@ struct WorkoutHistoryDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     let session: WorkoutSession
+    @State private var deleteErrorMessage: String?
 
     private var metrics: WorkoutMetrics {
         WorkoutMetrics(session: session)
@@ -68,8 +69,14 @@ struct WorkoutHistoryDetailView: View {
 
                 Button(role: .destructive) {
                     modelContext.delete(session)
-                    try? modelContext.save()
-                    dismiss()
+                    do {
+                        try modelContext.save()
+                        deleteErrorMessage = nil
+                        dismiss()
+                    } catch {
+                        modelContext.rollback()
+                        deleteErrorMessage = error.localizedDescription
+                    }
                 } label: {
                     Text("Delete Workout")
                         .font(.system(size: 16, weight: .bold))
@@ -88,6 +95,21 @@ struct WorkoutHistoryDetailView: View {
         .background(AppTheme.subtleBackground.ignoresSafeArea())
         .navigationTitle(session.title)
         .navigationBarTitleDisplayMode(.inline)
+        .alert(
+            "Couldn't Delete Workout",
+            isPresented: Binding(
+                get: { deleteErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        deleteErrorMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(deleteErrorMessage ?? "Try deleting again.")
+        }
     }
 
     private func metricCard(title: String, value: String) -> some View {

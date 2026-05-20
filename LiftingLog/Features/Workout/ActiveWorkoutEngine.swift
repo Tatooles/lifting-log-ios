@@ -192,19 +192,29 @@ final class ActiveWorkoutEngine {
         session.endedAt = now
         session.durationSeconds = max(0, Int(now.timeIntervalSince(session.startedAt)))
         session.touch(now: now)
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
         if activeSessionID == session.id {
             activeSessionID = nil
         }
-        try context.save()
     }
 
     func discardWorkout(_ session: WorkoutSession, context: ModelContext) throws {
         session.status = .discarded
         session.touch()
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
         if activeSessionID == session.id {
             activeSessionID = nil
         }
-        try context.save()
     }
 
     private func currentActiveSession(context: ModelContext) throws -> WorkoutSession? {

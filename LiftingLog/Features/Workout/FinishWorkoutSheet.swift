@@ -7,7 +7,7 @@ struct FinishWorkoutSheet: View {
     let session: WorkoutSession
     @Bindable var engine: ActiveWorkoutEngine
     @State private var showsDiscardConfirmation = false
-    @State private var saveErrorMessage: String?
+    @State private var actionError: WorkoutActionError?
 
     private var metrics: WorkoutMetrics {
         WorkoutMetrics(session: session)
@@ -38,10 +38,10 @@ struct FinishWorkoutSheet: View {
             Button {
                 do {
                     try engine.finishWorkout(session, context: modelContext)
-                    saveErrorMessage = nil
+                    actionError = nil
                     dismiss()
                 } catch {
-                    saveErrorMessage = error.localizedDescription
+                    actionError = WorkoutActionError(title: "Couldn't Save Workout", message: error.localizedDescription)
                 }
             } label: {
                 Text("Save Workout")
@@ -77,28 +77,31 @@ struct FinishWorkoutSheet: View {
         .presentationCornerRadius(28)
         .alert("Discard Workout?", isPresented: $showsDiscardConfirmation) {
             Button("Discard", role: .destructive) {
-                try? engine.discardWorkout(session, context: modelContext)
-                dismiss()
+                do {
+                    try engine.discardWorkout(session, context: modelContext)
+                    actionError = nil
+                    dismiss()
+                } catch {
+                    actionError = WorkoutActionError(title: "Couldn't Discard Workout", message: error.localizedDescription)
+                }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This will hide the active workout from history.")
         }
-        .alert(
-            "Couldn't Save Workout",
-            isPresented: Binding(
-                get: { saveErrorMessage != nil },
-                set: { isPresented in
-                    if !isPresented {
-                        saveErrorMessage = nil
-                    }
-                }
+        .alert(item: $actionError) { actionError in
+            Alert(
+                title: Text(actionError.title),
+                message: Text(actionError.message),
+                dismissButton: .cancel(Text("OK"))
             )
-        ) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(saveErrorMessage ?? "Try saving again.")
         }
+    }
+
+    private struct WorkoutActionError: Identifiable {
+        let id = UUID()
+        let title: String
+        let message: String
     }
 
     private func summaryCard(title: String, value: String) -> some View {
