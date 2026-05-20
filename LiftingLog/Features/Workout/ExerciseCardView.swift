@@ -1,105 +1,140 @@
+import SwiftData
 import SwiftUI
 
 struct ExerciseCardView: View {
-    @Bindable var store: AppStore
-    let exercise: WorkoutExercise
+    @Environment(\.modelContext) private var modelContext
+    let loggedExercise: LoggedExercise
+    let exerciseIndex: Int
+    @Bindable var engine: ActiveWorkoutEngine
+    var focusedField: FocusState<WorkoutField?>.Binding
+    @State private var isCollapsed = false
+    @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
+
+    private var weightUnit: MeasurementUnit {
+        settingsRecords.first?.weightUnit ?? .pounds
+    }
 
     var body: some View {
         SurfaceCard(padding: 0) {
             VStack(spacing: 0) {
-                Button {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
-                        store.toggleExerciseCollapsed(exercise.id)
-                    }
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .rotationEffect(.degrees(exercise.isCollapsed ? -90 : 0))
-
-                        Text(exercise.name)
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundStyle(AppTheme.textPrimary)
-
-                        Spacer()
-
-                        Text("\(exercise.sets.filter(\.isDone).count)/\(exercise.sets.count)")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(exercise.sets.allSatisfy(\.isDone) ? AppTheme.accentBright : AppTheme.textSecondary)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(AppTheme.surfaceMuted)
-                            .clipShape(Capsule())
-                    }
-                    .padding(20)
-                }
-                .buttonStyle(.plain)
-
-                if !exercise.isCollapsed {
-                    VStack(spacing: 16) {
+                HStack(spacing: 12) {
+                    Button {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                            isCollapsed.toggle()
+                        }
+                    } label: {
                         HStack(spacing: 12) {
-                            Color.clear.frame(width: 20)
-                            columnHeader("LBS")
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(AppTheme.textSecondary)
+                                .rotationEffect(.degrees(isCollapsed ? -90 : 0))
+
+                            Text(loggedExercise.exerciseSnapshotName)
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundStyle(AppTheme.textPrimary)
+
+                            Spacer()
+
+                            let completedSetCount = loggedExercise.sets.filter(\.isCompleted).count
+                            Text("\(completedSetCount)/\(loggedExercise.sets.count)")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(loggedExercise.sets.allSatisfy(\.isCompleted) && !loggedExercise.sets.isEmpty ? AppTheme.accentBright : AppTheme.textSecondary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(AppTheme.surfaceMuted)
+                                .clipShape(Capsule())
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("ExerciseHeader-\(exerciseIndex)")
+
+                    Button(role: .destructive) {
+                        try? engine.removeLoggedExercise(loggedExercise, context: modelContext)
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(16)
+
+                if !isCollapsed {
+                    VStack(spacing: 14) {
+                        HStack(spacing: 10) {
+                            Color.clear.frame(width: 18)
+                            columnHeader(weightUnit.fieldLabel)
                             columnHeader("REPS")
                             columnHeader("RPE")
-                            Color.clear.frame(width: 30)
+                            Color.clear.frame(width: 54)
                         }
-                        .padding(.horizontal, 18)
-                        .padding(.bottom, 12)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 10)
                         .overlay(alignment: .bottom) {
                             Rectangle()
                                 .fill(AppTheme.border)
                                 .frame(height: 1)
-                                .padding(.horizontal, 18)
+                                .padding(.horizontal, 16)
                         }
 
-                        VStack(spacing: 14) {
-                            ForEach(Array(exercise.sets.enumerated()), id: \.element.id) { index, set in
-                                SetRowView(store: store, exerciseID: exercise.id, set: set, index: index)
-                                    .padding(.horizontal, 18)
+                        VStack(spacing: 12) {
+                            ForEach(Array(loggedExercise.sortedSets.enumerated()), id: \.element.id) { index, set in
+                                SetRowView(
+                                    set: set,
+                                    exerciseIndex: exerciseIndex,
+                                    index: index,
+                                    engine: engine,
+                                    focusedField: focusedField,
+                                    weightUnit: weightUnit
+                                )
+                                    .padding(.horizontal, 16)
                             }
                         }
 
                         Button {
                             withAnimation(.spring(response: 0.26, dampingFraction: 0.85)) {
-                                store.addSet(to: exercise.id)
+                                if let set = try? engine.addSet(to: loggedExercise, context: modelContext) {
+                                    focusedField.wrappedValue = set.weight == nil ? .setWeight(set.id) : nil
+                                }
                             }
                         } label: {
                             Label("Add Set", systemImage: "plus")
-                                .font(.system(size: 18, weight: .bold))
+                                .font(.system(size: 16, weight: .bold))
                                 .foregroundStyle(AppTheme.accentBright)
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 18)
+                                .padding(.vertical, 14)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 20)
+                                    RoundedRectangle(cornerRadius: 18)
                                         .stroke(style: StrokeStyle(lineWidth: 1.25, dash: [5, 4]))
                                         .foregroundStyle(AppTheme.borderStrong)
                                 )
                         }
                         .buttonStyle(.plain)
-                        .padding(.horizontal, 18)
+                        .accessibilityIdentifier("AddSetButton-\(exerciseIndex)")
+                        .padding(.horizontal, 16)
 
                         TextField(
                             "Exercise notes...",
                             text: Binding(
-                                get: { exercise.notes },
-                                set: { store.updateExerciseNotes(exerciseID: exercise.id, notes: $0) }
+                                get: { loggedExercise.notes },
+                                set: { try? engine.updateExerciseNotes($0, loggedExercise: loggedExercise, context: modelContext) }
                             ),
                             axis: .vertical
                         )
-                        .font(.system(size: 18))
+                        .font(.system(size: 16))
                         .foregroundStyle(AppTheme.textPrimary)
-                        .padding(18)
-                        .frame(minHeight: 110, alignment: .topLeading)
+                        .focused(focusedField, equals: .exerciseNotes(loggedExercise.id))
+                        .padding(14)
+                        .frame(minHeight: 92, alignment: .topLeading)
                         .background(AppTheme.surfaceMuted)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 22)
+                            RoundedRectangle(cornerRadius: 18)
                                 .stroke(AppTheme.border)
                         )
-                        .clipShape(RoundedRectangle(cornerRadius: 22))
-                        .padding(.horizontal, 18)
-                        .padding(.bottom, 18)
+                        .clipShape(RoundedRectangle(cornerRadius: 18))
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 16)
                     }
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
@@ -109,7 +144,7 @@ struct ExerciseCardView: View {
 
     private func columnHeader(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 14, weight: .bold))
+            .font(.system(size: 13, weight: .bold))
             .foregroundStyle(AppTheme.textTertiary)
             .frame(maxWidth: .infinity)
     }

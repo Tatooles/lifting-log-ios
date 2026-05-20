@@ -1,52 +1,102 @@
+import SwiftData
 import SwiftUI
 
 struct ProfileView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
+    @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
+    @Query(sort: \Exercise.name) private var exercises: [Exercise]
+
+    private var settings: UserSettings? {
+        settingsRecords.first
+    }
+
+    private var completedWorkoutCount: Int {
+        sessions.filter { $0.status == .completed }.count
+    }
+
+    private var activeExerciseCount: Int {
+        exercises.filter { !$0.isArchived }.count
+    }
+
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 14) {
                 Text("Profile")
-                    .font(.system(size: 42, weight: .bold))
+                    .font(.system(size: 34, weight: .bold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .accessibilityIdentifier("ProfileTitle")
 
                 SurfaceCard {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 6) {
                         Text("Kevin")
-                            .font(.system(size: 28, weight: .bold))
-                        Text("Mock athlete profile")
-                            .font(.system(size: 17, weight: .medium))
+                            .font(.system(size: 24, weight: .bold))
+                        Text("Offline lifting log")
+                            .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(AppTheme.textSecondary)
                     }
                 }
 
-                HStack(spacing: 12) {
-                    statCard(title: "Workouts", value: "28")
-                    statCard(title: "Exercises", value: "14")
-                    statCard(title: "PRs", value: "6")
+                HStack(spacing: 10) {
+                    statCard(title: "Workouts", value: "\(completedWorkoutCount)")
+                    statCard(title: "Exercises", value: "\(activeExerciseCount)")
+                    statCard(title: "Unit", value: settings?.weightUnit.fieldLabel ?? "--")
                 }
 
                 SurfaceCard {
                     VStack(alignment: .leading, spacing: 14) {
-                        row("Units", value: "Pounds")
+                        row("Units", value: settings?.weightUnit.displayName ?? "Pounds")
                         row("Theme", value: "Dark")
-                        row("Data Source", value: "Mock")
+                        row("Data Source", value: "SwiftData")
                     }
                 }
+
+                if let settings {
+                    NavigationLink {
+                        SettingsView(settings: settings)
+                    } label: {
+                        settingsRow(title: "Settings", systemImage: "gearshape")
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                NavigationLink {
+                    ExerciseLibraryView()
+                } label: {
+                    settingsRow(title: "Exercise Library", systemImage: "dumbbell")
+                }
+                .buttonStyle(.plain)
             }
             .padding(AppTheme.shellPadding)
-            .padding(.bottom, 120)
         }
         .background(AppTheme.subtleBackground.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
+        .task {
+            if settingsRecords.isEmpty {
+                try? SeedDataService.seedIfNeeded(context: modelContext)
+            }
+        }
+    }
+
+    private func settingsRow(title: String, systemImage: String) -> some View {
+        SurfaceCard {
+            HStack {
+                Label(title, systemImage: systemImage)
+                    .font(.system(size: 16, weight: .bold))
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(AppTheme.textTertiary)
+            }
+        }
     }
 
     private func statCard(title: String, value: String) -> some View {
         SurfaceCard {
-            VStack(spacing: 6) {
+            VStack(spacing: 4) {
                 Text(value)
-                    .font(.system(size: 26, weight: .bold))
+                    .font(.system(size: 22, weight: .bold))
                 Text(title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary)
             }
             .frame(maxWidth: .infinity)
@@ -61,6 +111,6 @@ struct ProfileView: View {
             Text(value)
                 .foregroundStyle(AppTheme.textSecondary)
         }
-        .font(.system(size: 18, weight: .medium))
+        .font(.system(size: 16, weight: .medium))
     }
 }

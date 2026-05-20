@@ -26,22 +26,14 @@ enum AppTheme {
         endPoint: .bottom
     )
 
-    static let cardCornerRadius: CGFloat = 26
-    static let shellPadding: CGFloat = 20
+    static let cardCornerRadius: CGFloat = 22
+    static let shellPadding: CGFloat = 16
 
     static func formatDuration(_ seconds: Int) -> String {
-        let hours = seconds / 3600
-        let minutes = (seconds % 3600) / 60
-        let remainder = seconds % 60
-
-        if hours > 0 {
-            return "\(hours):\(String(format: "%02d", minutes)):\(String(format: "%02d", remainder))"
-        }
-
-        return "\(String(format: "%02d", minutes)):\(String(format: "%02d", remainder))"
+        WorkoutFormatters.duration(seconds)
     }
 
     static func formatDate(_ date: Date) -> String {
-        date.formatted(.dateTime.weekday(.wide).month(.wide).day())
+        WorkoutFormatters.date(date)
     }
 }

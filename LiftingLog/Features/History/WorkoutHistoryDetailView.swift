@@ -1,48 +1,122 @@
+import SwiftData
 import SwiftUI
 
 struct WorkoutHistoryDetailView: View {
-    let item: WorkoutHistoryItem
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    let session: WorkoutSession
+    @State private var deleteErrorMessage: String?
+
+    private var metrics: WorkoutMetrics {
+        WorkoutMetrics(session: session)
+    }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 14) {
                 SurfaceCard {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(item.name)
-                            .font(.system(size: 30, weight: .bold))
-                        Text(item.dateLabel)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(session.title)
+                            .font(.system(size: 26, weight: .bold))
+                        Text(WorkoutFormatters.compactDate(session.startedAt))
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(AppTheme.textSecondary)
                     }
                 }
 
-                HStack(spacing: 12) {
-                    metricCard(title: "Duration", value: item.durationLabel)
-                    metricCard(title: "Exercises", value: "\(item.exerciseCount)")
-                    metricCard(title: "Sets", value: "\(item.setCount)")
+                HStack(spacing: 10) {
+                    metricCard(title: "Duration", value: AppTheme.formatDuration(metrics.durationSeconds))
+                    metricCard(title: "Exercises", value: "\(session.loggedExercises.count)")
+                    metricCard(title: "Sets", value: "\(metrics.completedSetCount)")
                 }
 
-                SurfaceCard {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Details")
-                            .font(.system(size: 18, weight: .bold))
-                        Text("Detailed workout screen designs were not provided, so this native summary view is an inferred placeholder for history drill-down.")
-                            .foregroundStyle(AppTheme.textSecondary)
+                metricCard(title: "Volume", value: WorkoutFormatters.number(metrics.completedVolume))
+
+                if !session.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    SurfaceCard {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Notes")
+                                .font(.system(size: 16, weight: .bold))
+                            Text(session.notes)
+                                .font(.system(size: 14))
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
                     }
                 }
+
+                ForEach(session.sortedLoggedExercises) { loggedExercise in
+                    SurfaceCard {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(loggedExercise.exerciseSnapshotName)
+                                .font(.system(size: 18, weight: .bold))
+
+                            ForEach(loggedExercise.sortedSets) { set in
+                                HStack {
+                                    Text("Set \(set.orderIndex + 1)")
+                                    Spacer()
+                                    Text(set.weight.map(WorkoutFormatters.number) ?? "-")
+                                    Text("x")
+                                    Text(set.reps.map(String.init) ?? "-")
+                                    Text(set.isCompleted ? "Done" : "Open")
+                                        .foregroundStyle(set.isCompleted ? AppTheme.accentBright : AppTheme.textSecondary)
+                                }
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(AppTheme.textSecondary)
+                            }
+                        }
+                    }
+                }
+
+                Button(role: .destructive) {
+                    modelContext.delete(session)
+                    do {
+                        try modelContext.save()
+                        deleteErrorMessage = nil
+                        dismiss()
+                    } catch {
+                        modelContext.rollback()
+                        deleteErrorMessage = error.localizedDescription
+                    }
+                } label: {
+                    Text("Delete Workout")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(AppTheme.accentBright)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(AppTheme.accentBright.opacity(0.45))
+                        )
+                }
+                .buttonStyle(.plain)
             }
             .padding(AppTheme.shellPadding)
-            .padding(.bottom, 120)
         }
         .background(AppTheme.subtleBackground.ignoresSafeArea())
-        .navigationTitle(item.name)
+        .navigationTitle(session.title)
         .navigationBarTitleDisplayMode(.inline)
+        .alert(
+            "Couldn't Delete Workout",
+            isPresented: Binding(
+                get: { deleteErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        deleteErrorMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(deleteErrorMessage ?? "Try deleting again.")
+        }
     }
 
     private func metricCard(title: String, value: String) -> some View {
         SurfaceCard {
-            VStack(spacing: 6) {
+            VStack(spacing: 4) {
                 Text(value)
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(size: 20, weight: .bold))
                 Text(title)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary)

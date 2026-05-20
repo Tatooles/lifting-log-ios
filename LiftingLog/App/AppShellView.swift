@@ -1,38 +1,53 @@
+import SwiftData
 import SwiftUI
 
 struct AppShellView: View {
-    @Bindable var store: AppStore
+    @Environment(\.modelContext) private var modelContext
+    @Bindable var navigationState: AppNavigationState
+    @Bindable var activeWorkoutEngine: ActiveWorkoutEngine
+    @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
+
+    private var activeSession: WorkoutSession? {
+        sessions.first { $0.status == .active }
+    }
 
     var body: some View {
-        ZStack {
-            AppTheme.background
-                .ignoresSafeArea()
+        TabView(selection: $navigationState.selectedTab) {
+            NavigationStack {
+                HistoryView(navigationState: navigationState)
+            }
+            .tabItem {
+                Label(AppTab.history.title(isWorkoutActive: activeSession != nil), systemImage: AppTab.history.symbolName(isWorkoutActive: activeSession != nil))
+                    .accessibilityIdentifier(AppTab.history.accessibilityIdentifier)
+            }
+            .tag(AppTab.history)
 
-            Group {
-                switch store.selectedTab {
-                case .history:
-                    NavigationStack {
-                        HistoryView(store: store)
-                    }
-                case .workout:
-                    NavigationStack {
-                        WorkoutSessionView(store: store)
-                    }
-                case .profile:
-                    NavigationStack {
-                        ProfileView()
-                    }
+            NavigationStack {
+                if let activeSession {
+                    WorkoutSessionView(session: activeSession, engine: activeWorkoutEngine)
+                } else {
+                    StartWorkoutView(navigationState: navigationState, activeWorkoutEngine: activeWorkoutEngine)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .tabItem {
+                Label(AppTab.workout.title(isWorkoutActive: activeSession != nil), systemImage: AppTab.workout.symbolName(isWorkoutActive: activeSession != nil))
+                    .accessibilityIdentifier(AppTab.workout.accessibilityIdentifier)
+            }
+            .tag(AppTab.workout)
+
+            NavigationStack {
+                ProfileView()
+            }
+            .tabItem {
+                Label(AppTab.profile.title(isWorkoutActive: activeSession != nil), systemImage: AppTab.profile.symbolName(isWorkoutActive: activeSession != nil))
+                    .accessibilityIdentifier(AppTab.profile.accessibilityIdentifier)
+            }
+            .tag(AppTab.profile)
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            FloatingTabBar(selection: $store.selectedTab)
-                .padding(.horizontal, 18)
-                .padding(.top, 6)
-                .padding(.bottom, 10)
-                .background(Color.clear)
-        }
+        .tint(AppTheme.accentBright)
         .preferredColorScheme(.dark)
+        .task {
+            activeWorkoutEngine.loadActiveSession(context: modelContext)
+        }
     }
 }
