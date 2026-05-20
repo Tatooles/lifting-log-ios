@@ -26,7 +26,11 @@ enum WorkoutFormatters {
             return String(Int(value))
         }
 
-        return value.formatted(.number.precision(.fractionLength(1)))
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 6
+        return formatter.string(from: NSNumber(value: value)) ?? String(value)
     }
 
     static func parseNumber(_ value: String, locale: Locale = .current) -> Double? {
