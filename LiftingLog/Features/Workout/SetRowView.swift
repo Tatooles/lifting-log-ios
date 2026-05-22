@@ -28,7 +28,7 @@ struct SetRowView: View {
             )
 
             numericField(
-                placeholder: "reps",
+                placeholder: "REPS",
                 text: repsBinding,
                 keyboard: .numberPad,
                 focusTarget: .setReps(set.id),

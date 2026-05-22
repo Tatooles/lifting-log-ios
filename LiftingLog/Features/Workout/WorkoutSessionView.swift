@@ -140,7 +140,26 @@ struct WorkoutSessionView: View {
             }
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
+                    Button {
+                        focusedField = previousFocusedField
+                    } label: {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    .disabled(previousFocusedField == nil)
+                    .accessibilityIdentifier("PreviousWorkoutFieldButton")
+
+                    Button {
+                        focusedField = nextFocusedField
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    .disabled(nextFocusedField == nil)
+                    .accessibilityIdentifier("NextWorkoutFieldButton")
+
                     Spacer()
+
                     Button("Done") {
                         let scrollTarget = recentlyAddedExerciseID
                         focusedField = nil
@@ -189,6 +208,18 @@ struct WorkoutSessionView: View {
                 try? engine.updateWorkoutNotes(newValue, session: session, context: modelContext)
             }
         )
+    }
+
+    private var focusOrder: [WorkoutField] {
+        WorkoutFocusNavigator.focusOrder(for: session)
+    }
+
+    private var previousFocusedField: WorkoutField? {
+        WorkoutFocusNavigator.adjacentField(from: focusedField, in: focusOrder, offset: -1)
+    }
+
+    private var nextFocusedField: WorkoutField? {
+        WorkoutFocusNavigator.adjacentField(from: focusedField, in: focusOrder, offset: 1)
     }
 
     private static func isSetField(_ field: WorkoutField?) -> Bool {
