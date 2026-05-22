@@ -14,15 +14,9 @@ struct WorkoutHistoryDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                SurfaceCard {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(session.title)
-                            .font(.system(size: 26, weight: .bold))
-                        Text(WorkoutFormatters.compactDate(session.startedAt))
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(AppTheme.textSecondary)
-                    }
-                }
+                Text(WorkoutFormatters.compactDate(session.startedAt))
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppTheme.textSecondary)
 
                 HStack(spacing: 10) {
                     metricCard(title: "Duration", value: AppTheme.formatDuration(metrics.durationSeconds))
