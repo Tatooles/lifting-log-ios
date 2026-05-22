@@ -57,5 +57,6 @@ final class WorkoutFocusNavigatorTests: XCTestCase {
         XCTAssertNil(WorkoutFocusNavigator.adjacentField(from: .workoutTitle, in: order, offset: -1))
         XCTAssertNil(WorkoutFocusNavigator.adjacentField(from: .workoutNotes, in: order, offset: 1))
         XCTAssertNil(WorkoutFocusNavigator.adjacentField(from: nil, in: order, offset: 1))
+        XCTAssertNil(WorkoutFocusNavigator.adjacentField(from: .setReps(secondSetID), in: order, offset: 1))
     }
 }
