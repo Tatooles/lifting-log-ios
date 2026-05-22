@@ -157,6 +157,30 @@ final class HistoryPersistenceTests: XCTestCase {
         XCTAssertEqual(groups.first?.setEntries.first?.set.weight, 70)
     }
 
+    func testExerciseHistoryGroupsSortTitleAscendingWhenStartedAtMatches() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(name: "Deadlift", category: .strength, equipment: .barbell, primaryMuscle: "Back")
+        let startedAt = Date(timeIntervalSince1970: 400)
+        let bSession = WorkoutSession(title: "B Session", startedAt: startedAt, status: .completed, source: .blank)
+        let aSession = WorkoutSession(title: "A Session", startedAt: startedAt, status: .completed, source: .blank)
+        let bLoggedExercise = LoggedExercise(orderIndex: 0, exercise: exercise, exerciseSnapshotName: exercise.name)
+        bLoggedExercise.sets = [LoggedSet(orderIndex: 0, weight: 225, reps: 5, rpe: 7, isCompleted: true)]
+        let aLoggedExercise = LoggedExercise(orderIndex: 0, exercise: exercise, exerciseSnapshotName: exercise.name)
+        aLoggedExercise.sets = [LoggedSet(orderIndex: 0, weight: 225, reps: 5, rpe: 7, isCompleted: true)]
+        bSession.loggedExercises = [bLoggedExercise]
+        aSession.loggedExercises = [aLoggedExercise]
+        context.insert(exercise)
+        context.insert(bSession)
+        context.insert(aSession)
+        try context.save()
+
+        let summary = try XCTUnwrap(ExerciseHistorySummary.makeSummaries(from: [bSession, aSession]).first)
+        let groups = ExerciseHistorySessionGroup.makeGroups(from: [bSession, aSession], matching: summary)
+
+        XCTAssertEqual(groups.map(\.title), ["A Session", "B Session"])
+    }
+
     private func completedSessions(in context: ModelContext) throws -> [WorkoutSession] {
         try context.fetch(FetchDescriptor<WorkoutSession>()).filter { $0.status == .completed }
     }
