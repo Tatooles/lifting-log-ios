@@ -5,43 +5,16 @@ struct ExerciseHistoryDetailView: View {
     let summary: ExerciseHistorySummary
     @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
 
-    private var recentSets: [(Date, LoggedExercise, LoggedSet)] {
-        sessions
-            .filter { $0.status == .completed }
-            .flatMap { session in
-                session.sortedLoggedExercises.flatMap { loggedExercise in
-                    loggedExercise.sortedSets
-                        .filter { set in
-                            set.isCompleted && matches(loggedExercise)
-                        }
-                        .map { (session.startedAt, loggedExercise, $0) }
-                }
-            }
-            .sorted { $0.0 > $1.0 }
+    private var sessionGroups: [ExerciseHistorySessionGroup] {
+        ExerciseHistorySessionGroup.makeGroups(from: sessions, matching: summary)
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                SurfaceCard {
-                    HStack(spacing: 14) {
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(AppTheme.accentMuted)
-                            .frame(width: 60, height: 60)
-                            .overlay {
-                                Image(systemName: "dumbbell.fill")
-                                    .font(.system(size: 22))
-                                    .foregroundStyle(AppTheme.accentBright)
-                            }
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(summary.name)
-                                .font(.system(size: 24, weight: .bold))
-                            Text("Last performed \(summary.lastPerformedLabel)")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(AppTheme.textSecondary)
-                        }
-                    }
-                }
+                Text("Last performed \(summary.lastPerformedLabel)")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppTheme.textSecondary)
 
                 SurfaceCard {
                     VStack(alignment: .leading, spacing: 8) {
@@ -53,21 +26,8 @@ struct ExerciseHistoryDetailView: View {
                     }
                 }
 
-                ForEach(Array(recentSets.enumerated()), id: \.offset) { _, entry in
-                    SurfaceCard {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(WorkoutFormatters.compactDate(entry.0))
-                                    .font(.system(size: 15, weight: .bold))
-                                Text(entry.1.exerciseSnapshotName)
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(AppTheme.textSecondary)
-                            }
-                            Spacer()
-                            Text("\(entry.2.weight.map(WorkoutFormatters.number) ?? "-") x \(entry.2.reps.map(String.init) ?? "-")")
-                                .font(.system(size: 16, weight: .bold))
-                        }
-                    }
+                ForEach(sessionGroups) { group in
+                    sessionGroupCard(group)
                 }
             }
             .padding(AppTheme.shellPadding)
@@ -77,11 +37,53 @@ struct ExerciseHistoryDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func matches(_ loggedExercise: LoggedExercise) -> Bool {
-        if let exerciseID = summary.exerciseID {
-            return loggedExercise.exercise?.id == exerciseID
+    private func sessionGroupCard(_ group: ExerciseHistorySessionGroup) -> some View {
+        SurfaceCard {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(group.title)
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Text(WorkoutFormatters.compactDate(group.startedAt))
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+
+                    Spacer()
+
+                    Text("\(group.completedSetCount) sets")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(AppTheme.surfaceMuted)
+                        .clipShape(Capsule())
+                }
+
+                ForEach(group.setEntries) { entry in
+                    HStack {
+                        Text("Set \(entry.displaySetNumber)")
+                        Spacer()
+                        Text(setSummary(for: entry.set))
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                    }
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppTheme.textSecondary)
+                }
+            }
+        }
+    }
+
+    private func setSummary(for set: LoggedSet) -> String {
+        let weight = set.weight.map(WorkoutFormatters.number) ?? "-"
+        let reps = set.reps.map(String.init) ?? "-"
+
+        if let rpe = set.rpe {
+            return "\(weight) x \(reps) @ \(WorkoutFormatters.number(rpe))"
         }
 
-        return loggedExercise.exerciseSnapshotName.caseInsensitiveCompare(summary.name) == .orderedSame
+        return "\(weight) x \(reps)"
     }
 }
