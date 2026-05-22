@@ -84,6 +84,79 @@ final class HistoryPersistenceTests: XCTestCase {
         XCTAssertEqual(past.loggedExercises.first?.sets.first?.weight, 315)
     }
 
+    func testExerciseHistoryGroupsCompletedSetsByWorkoutSession() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscle: "Chest")
+        let newerSession = WorkoutSession(
+            title: "Push B",
+            startedAt: Date(timeIntervalSince1970: 200),
+            status: .completed,
+            source: .blank
+        )
+        let olderSession = WorkoutSession(
+            title: "Push A",
+            startedAt: Date(timeIntervalSince1970: 100),
+            status: .completed,
+            source: .blank
+        )
+        let newerLoggedExercise = LoggedExercise(orderIndex: 0, exercise: exercise, exerciseSnapshotName: exercise.name)
+        newerLoggedExercise.sets = [
+            LoggedSet(orderIndex: 0, weight: 185, reps: 5, rpe: 8, isCompleted: true),
+            LoggedSet(orderIndex: 1, weight: 195, reps: 3, rpe: 9, isCompleted: true)
+        ]
+        let olderLoggedExercise = LoggedExercise(orderIndex: 0, exercise: exercise, exerciseSnapshotName: exercise.name)
+        olderLoggedExercise.sets = [
+            LoggedSet(orderIndex: 0, weight: 175, reps: 6, rpe: 7, isCompleted: true),
+            LoggedSet(orderIndex: 1, weight: 175, reps: 6, rpe: 7, isCompleted: false)
+        ]
+        newerSession.loggedExercises = [newerLoggedExercise]
+        olderSession.loggedExercises = [olderLoggedExercise]
+        context.insert(exercise)
+        context.insert(newerSession)
+        context.insert(olderSession)
+        try context.save()
+
+        let summary = try XCTUnwrap(ExerciseHistorySummary.makeSummaries(from: [olderSession, newerSession]).first)
+        let groups = ExerciseHistorySessionGroup.makeGroups(from: [olderSession, newerSession], matching: summary)
+
+        XCTAssertEqual(groups.map(\.title), ["Push B", "Push A"])
+        XCTAssertEqual(groups.map(\.completedSetCount), [2, 1])
+        XCTAssertEqual(groups.first?.setEntries.map { $0.displaySetNumber }, [1, 2])
+        XCTAssertEqual(groups.last?.setEntries.map { $0.displaySetNumber }, [1])
+    }
+
+    func testExerciseHistoryGroupingMatchesSnapshotNameWhenExerciseIDIsMissing() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let session = WorkoutSession(
+            title: "Snapshot Session",
+            startedAt: Date(timeIntervalSince1970: 300),
+            status: .completed,
+            source: .blank
+        )
+        let loggedExercise = LoggedExercise(orderIndex: 0, exercise: nil, exerciseSnapshotName: "Incline DB Press")
+        loggedExercise.sets = [
+            LoggedSet(orderIndex: 0, weight: 70, reps: 8, rpe: 8, isCompleted: true)
+        ]
+        session.loggedExercises = [loggedExercise]
+        context.insert(session)
+        try context.save()
+
+        let summary = ExerciseHistorySummary(
+            id: "snapshot-incline db press",
+            exerciseID: nil,
+            name: "incline db press",
+            lastPerformedAt: session.startedAt,
+            completedSetCount: 1
+        )
+        let groups = ExerciseHistorySessionGroup.makeGroups(from: [session], matching: summary)
+
+        XCTAssertEqual(groups.count, 1)
+        XCTAssertEqual(groups.first?.title, "Snapshot Session")
+        XCTAssertEqual(groups.first?.setEntries.first?.set.weight, 70)
+    }
+
     private func completedSessions(in context: ModelContext) throws -> [WorkoutSession] {
         try context.fetch(FetchDescriptor<WorkoutSession>()).filter { $0.status == .completed }
     }
