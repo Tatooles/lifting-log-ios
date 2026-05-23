@@ -19,6 +19,7 @@ struct WorkoutSessionView: View {
     @State private var pendingFocusedField: WorkoutField?
     @State private var pendingScrollTarget: UUID?
     @State private var recentlyAddedExerciseID: UUID?
+    @State private var collapsedExerciseIDs: Set<UUID> = []
     @FocusState private var focusedField: WorkoutField?
     private let contentBottomPadding: CGFloat = 360
 
@@ -43,6 +44,7 @@ struct WorkoutSessionView: View {
                                 loggedExercise: loggedExercise,
                                 exerciseIndex: exerciseIndex,
                                 engine: engine,
+                                isCollapsed: isCollapsedBinding(for: loggedExercise),
                                 focusedField: $focusedField
                             )
                             .id(loggedExercise.id)
@@ -140,7 +142,31 @@ struct WorkoutSessionView: View {
             }
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
+                    let previousField = previousFocusedField
+                    let nextField = nextFocusedField
+
+                    Button {
+                        focusedField = previousField
+                    } label: {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    .disabled(previousField == nil)
+                    .accessibilityLabel("Previous field")
+                    .accessibilityIdentifier("PreviousWorkoutFieldButton")
+
+                    Button {
+                        focusedField = nextField
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    .disabled(nextField == nil)
+                    .accessibilityLabel("Next field")
+                    .accessibilityIdentifier("NextWorkoutFieldButton")
+
                     Spacer()
+
                     Button("Done") {
                         let scrollTarget = recentlyAddedExerciseID
                         focusedField = nil
@@ -187,6 +213,31 @@ struct WorkoutSessionView: View {
             get: { session.notes },
             set: { newValue in
                 try? engine.updateWorkoutNotes(newValue, session: session, context: modelContext)
+            }
+        )
+    }
+
+    private var focusOrder: [WorkoutField] {
+        WorkoutFocusNavigator.focusOrder(for: session, collapsedExerciseIDs: collapsedExerciseIDs)
+    }
+
+    private var previousFocusedField: WorkoutField? {
+        WorkoutFocusNavigator.adjacentField(from: focusedField, in: focusOrder, offset: -1)
+    }
+
+    private var nextFocusedField: WorkoutField? {
+        WorkoutFocusNavigator.adjacentField(from: focusedField, in: focusOrder, offset: 1)
+    }
+
+    private func isCollapsedBinding(for loggedExercise: LoggedExercise) -> Binding<Bool> {
+        Binding(
+            get: { collapsedExerciseIDs.contains(loggedExercise.id) },
+            set: { isCollapsed in
+                if isCollapsed {
+                    collapsedExerciseIDs.insert(loggedExercise.id)
+                } else {
+                    collapsedExerciseIDs.remove(loggedExercise.id)
+                }
             }
         )
     }
