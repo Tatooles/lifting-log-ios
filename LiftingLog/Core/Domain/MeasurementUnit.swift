@@ -29,9 +29,9 @@ enum MeasurementUnit: String, CaseIterable, Codable, Identifiable {
     var fieldPlaceholder: String {
         switch self {
         case .pounds:
-            return "lbs"
+            return "LBS"
         case .kilograms:
-            return "kg"
+            return "KG"
         }
     }
 

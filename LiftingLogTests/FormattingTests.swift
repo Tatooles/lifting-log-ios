@@ -16,9 +16,9 @@ final class FormattingTests: XCTestCase {
         XCTAssertTrue(AppTheme.formatDate(date).contains("April"))
     }
 
-    func testMeasurementUnitProvidesWorkoutFieldPlaceholder() {
-        XCTAssertEqual(MeasurementUnit.pounds.fieldPlaceholder, "lbs")
-        XCTAssertEqual(MeasurementUnit.kilograms.fieldPlaceholder, "kg")
+    func testMeasurementUnitProvidesUppercaseWorkoutFieldPlaceholder() {
+        XCTAssertEqual(MeasurementUnit.pounds.fieldPlaceholder, "LBS")
+        XCTAssertEqual(MeasurementUnit.kilograms.fieldPlaceholder, "KG")
     }
 
     func testDecimalWorkoutInputPreservesTrailingSeparatorWhileEditing() {
