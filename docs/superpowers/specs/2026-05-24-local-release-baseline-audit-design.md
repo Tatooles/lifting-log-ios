@@ -116,7 +116,9 @@ Everything else should be recorded as a follow-up issue or later roadmap work.
 
 ## Verification Plan
 
-Automated verification should use the existing project commands from `README.md`:
+Automated verification should prefer XcodeBuildMCP for simulator build and test runs. The audit should use the MCP workflow to inspect session defaults, build the app, and run the unit and UI test targets when available.
+
+The existing project commands from `README.md` remain the CLI fallback and reference for equivalent test coverage:
 
 - `xcodebuild test -project LiftingLog.xcodeproj -scheme LiftingLog -destination platform=iOS\ Simulator,name=iPhone\ 16,OS=18.6 -derivedDataPath /private/tmp/codex-ios-app-derived-data`
 - `xcodebuild test -project LiftingLog.xcodeproj -scheme LiftingLog -destination platform=iOS\ Simulator,name=iPhone\ 16,OS=18.6 -only-testing:LiftingLogTests -derivedDataPath /private/tmp/codex-ios-app-derived-data`
