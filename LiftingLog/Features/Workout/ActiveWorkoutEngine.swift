@@ -47,7 +47,6 @@ final class ActiveWorkoutEngine {
         let session = WorkoutSession(
             title: pastSession.title,
             startedAt: now,
-            notes: pastSession.notes,
             status: .active,
             source: .pastWorkout,
             sourceSessionID: pastSession.id,
@@ -61,7 +60,6 @@ final class ActiveWorkoutEngine {
                 orderIndex: pastLoggedExercise.orderIndex,
                 exercise: pastLoggedExercise.exercise,
                 exerciseSnapshotName: pastLoggedExercise.exerciseSnapshotName,
-                notes: pastLoggedExercise.notes,
                 createdAt: now,
                 updatedAt: now
             )
@@ -71,9 +69,8 @@ final class ActiveWorkoutEngine {
             for pastSet in pastLoggedExercise.sortedSets {
                 let set = LoggedSet(
                     orderIndex: pastSet.orderIndex,
-                    weight: pastSet.weight,
-                    reps: pastSet.reps,
-                    rpe: pastSet.rpe,
+                    placeholderWeight: pastSet.weight,
+                    placeholderReps: pastSet.reps,
                     kind: pastSet.kind,
                     isCompleted: false,
                     createdAt: now,
