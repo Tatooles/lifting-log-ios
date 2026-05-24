@@ -29,15 +29,15 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertEqual(try activeSessions(in: context).count, 1)
     }
 
-    func testStartingFromPastCopiesExerciseOrderAndIncompleteSets() throws {
+    func testStartingFromPastCopiesStructureWithPlaceholderValuesAndBlankActualSetValues() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
         let exercise = Exercise(name: "Back Squat", category: .strength, equipment: .barbell, primaryMuscle: "Quads")
         let past = WorkoutSession(title: "Leg Day", startedAt: .now, status: .completed, source: .blank)
-        let loggedExercise = LoggedExercise(orderIndex: 0, exercise: exercise, exerciseSnapshotName: exercise.name)
+        let loggedExercise = LoggedExercise(orderIndex: 0, exercise: exercise, exerciseSnapshotName: exercise.name, notes: "Use belt")
         loggedExercise.sets = [
-            LoggedSet(orderIndex: 0, weight: 315, reps: 5, rpe: 8, isCompleted: true),
-            LoggedSet(orderIndex: 1, weight: 335, reps: 3, rpe: 9, isCompleted: true)
+            LoggedSet(orderIndex: 0, weight: 315, reps: 5, rpe: 8, kind: .warmup, isCompleted: true),
+            LoggedSet(orderIndex: 1, weight: 335, reps: 3, rpe: 9, kind: .working, isCompleted: true)
         ]
         past.loggedExercises = [loggedExercise]
         context.insert(exercise)
@@ -49,10 +49,41 @@ final class ActiveWorkoutEngineTests: XCTestCase {
 
         XCTAssertEqual(newSession.source, .pastWorkout)
         XCTAssertEqual(newSession.sourceSessionID, past.id)
+        XCTAssertEqual(newSession.title, "Leg Day")
         XCTAssertEqual(newSession.loggedExercises.first?.sets.count, 2)
-        let copiedSets = try XCTUnwrap(newSession.loggedExercises.first?.sortedSets)
+        let copiedExercise = try XCTUnwrap(newSession.loggedExercises.first)
+        XCTAssertEqual(copiedExercise.orderIndex, 0)
+        XCTAssertEqual(copiedExercise.exerciseSnapshotName, "Back Squat")
+        XCTAssertEqual(copiedExercise.notes, "")
+
+        let copiedSets = copiedExercise.sortedSets
         XCTAssertEqual(copiedSets.map(\.isCompleted), [false, false])
-        XCTAssertEqual(copiedSets.first?.weight, 315)
+        XCTAssertEqual(copiedSets.map(\.kind), [.warmup, .working])
+        XCTAssertEqual(copiedSets.map(\.weight), [nil, nil])
+        XCTAssertEqual(copiedSets.map(\.reps), [nil, nil])
+        XCTAssertEqual(copiedSets.map(\.rpe), [nil, nil])
+        XCTAssertEqual(copiedSets.map(\.placeholderWeight), [315, 335])
+        XCTAssertEqual(copiedSets.map(\.placeholderReps), [5, 3])
+    }
+
+    func testStartingFromPastCopiesTitleAndBlanksWorkoutNotes() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let past = WorkoutSession(
+            title: "Push Day",
+            startedAt: .now,
+            notes: "Shoulders felt rough",
+            status: .completed,
+            source: .blank
+        )
+        context.insert(past)
+        try context.save()
+
+        let engine = ActiveWorkoutEngine()
+        let newSession = try engine.startWorkout(fromPast: past, context: context)
+
+        XCTAssertEqual(newSession.title, "Push Day")
+        XCTAssertEqual(newSession.notes, "")
     }
 
     func testAddingExerciseAppendsOrderIndexAndFirstSet() throws {
