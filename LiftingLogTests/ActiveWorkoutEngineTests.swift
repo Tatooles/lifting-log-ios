@@ -158,6 +158,69 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertEqual(metrics.completedVolume, 1000)
     }
 
+    func testCompletingSetCommitsBlankWeightAndRepsFromPlaceholders() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let engine = ActiveWorkoutEngine()
+        let session = try engine.startBlankWorkout(context: context)
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscle: "Chest")
+        context.insert(exercise)
+        let loggedExercise = try engine.addExercise(exercise, to: session, context: context)
+        let set = loggedExercise.sets[0]
+        set.placeholderWeight = 185
+        set.placeholderReps = 5
+
+        try engine.toggleSetCompletion(set, context: context, now: Date(timeIntervalSince1970: 300))
+
+        XCTAssertTrue(set.isCompleted)
+        XCTAssertEqual(set.weight, 185)
+        XCTAssertEqual(set.reps, 5)
+        XCTAssertNil(set.rpe)
+    }
+
+    func testCompletingSetDoesNotOverwriteManualWeightOrRepsWithPlaceholders() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let engine = ActiveWorkoutEngine()
+        let session = try engine.startBlankWorkout(context: context)
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscle: "Chest")
+        context.insert(exercise)
+        let loggedExercise = try engine.addExercise(exercise, to: session, context: context)
+        let set = loggedExercise.sets[0]
+        set.placeholderWeight = 185
+        set.placeholderReps = 5
+        try engine.updateSet(set, weight: 195, reps: 4, rpe: 8.5, context: context)
+
+        try engine.toggleSetCompletion(set, context: context, now: Date(timeIntervalSince1970: 300))
+
+        XCTAssertTrue(set.isCompleted)
+        XCTAssertEqual(set.weight, 195)
+        XCTAssertEqual(set.reps, 4)
+        XCTAssertEqual(set.rpe, 8.5)
+    }
+
+    func testUncheckingCompletedSetDoesNotApplyPlaceholders() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let engine = ActiveWorkoutEngine()
+        let session = try engine.startBlankWorkout(context: context)
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscle: "Chest")
+        context.insert(exercise)
+        let loggedExercise = try engine.addExercise(exercise, to: session, context: context)
+        let set = loggedExercise.sets[0]
+        set.placeholderWeight = 185
+        set.placeholderReps = 5
+        try engine.updateSet(set, weight: 195, reps: 4, rpe: nil, context: context)
+        try engine.toggleSetCompletion(set, context: context, now: Date(timeIntervalSince1970: 300))
+
+        try engine.toggleSetCompletion(set, context: context, now: Date(timeIntervalSince1970: 360))
+
+        XCTAssertFalse(set.isCompleted)
+        XCTAssertEqual(set.weight, 195)
+        XCTAssertEqual(set.reps, 4)
+        XCTAssertNil(set.completedAt)
+    }
+
     func testUpdatingWorkoutTitleAllowsEmptyDraftWhileEditing() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

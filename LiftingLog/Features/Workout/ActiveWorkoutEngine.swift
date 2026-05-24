@@ -153,6 +153,11 @@ final class ActiveWorkoutEngine {
     }
 
     func toggleSetCompletion(_ set: LoggedSet, context: ModelContext, now: Date = .now) throws {
+        let willComplete = !set.isCompleted
+        if willComplete {
+            applyPlaceholderValuesIfNeeded(to: set)
+        }
+
         set.isCompleted.toggle()
         set.completedAt = set.isCompleted ? now : nil
         set.touch(now: now)
@@ -233,6 +238,16 @@ final class ActiveWorkoutEngine {
         for (index, set) in loggedExercise.sortedSets.enumerated() where set.orderIndex != index {
             set.orderIndex = index
             set.touch()
+        }
+    }
+
+    private func applyPlaceholderValuesIfNeeded(to set: LoggedSet) {
+        if set.weight == nil, let placeholderWeight = set.placeholderWeight {
+            set.weight = placeholderWeight
+        }
+
+        if set.reps == nil, let placeholderReps = set.placeholderReps {
+            set.reps = placeholderReps
         }
     }
 
