@@ -59,3 +59,5 @@ Add focused automated coverage for the display rules and data path:
 - Multi-line note text is passed through for display with internal line breaks intact.
 
 Manual verification should complete a workout with both a workout note and at least one exercise note, then confirm the exercise note appears in workout history detail and exercise history detail while history remains read-only.
+
+After implementation, capture simulator screenshots for review. Include at least one workout history detail screenshot showing an exercise note below its set list, one exercise history detail screenshot showing the same placement below completed sets, and one empty-note case where no note block appears.
