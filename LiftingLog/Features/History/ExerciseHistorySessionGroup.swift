@@ -8,9 +8,24 @@ struct ExerciseHistorySetEntry: Identifiable {
     var displaySetNumber: Int { self.set.orderIndex + 1 }
 }
 
+struct ExerciseHistoryLoggedExerciseEntry: Identifiable {
+    let loggedExercise: LoggedExercise
+    var setEntries: [ExerciseHistorySetEntry]
+
+    var id: UUID { loggedExercise.id }
+    var exerciseNotes: String { loggedExercise.notes }
+}
+
 struct ExerciseHistorySessionGroup: Identifiable {
     let session: WorkoutSession
     let setEntries: [ExerciseHistorySetEntry]
+    let loggedExerciseEntries: [ExerciseHistoryLoggedExerciseEntry]
+
+    init(session: WorkoutSession, setEntries: [ExerciseHistorySetEntry]) {
+        self.session = session
+        self.setEntries = setEntries
+        self.loggedExerciseEntries = Self.groupByLoggedExercise(setEntries)
+    }
 
     var id: UUID { session.id }
     var title: String { session.title }
@@ -52,5 +67,30 @@ struct ExerciseHistorySessionGroup: Identifiable {
         }
 
         return loggedExercise.exerciseSnapshotName.caseInsensitiveCompare(summary.name) == .orderedSame
+    }
+
+    private static func groupByLoggedExercise(
+        _ setEntries: [ExerciseHistorySetEntry]
+    ) -> [ExerciseHistoryLoggedExerciseEntry] {
+        var groupedEntries: [ExerciseHistoryLoggedExerciseEntry] = []
+        var groupedIndexByLoggedExerciseID: [UUID: Int] = [:]
+
+        for setEntry in setEntries {
+            let loggedExerciseID = setEntry.loggedExercise.id
+
+            if let groupedIndex = groupedIndexByLoggedExerciseID[loggedExerciseID] {
+                groupedEntries[groupedIndex].setEntries.append(setEntry)
+            } else {
+                groupedIndexByLoggedExerciseID[loggedExerciseID] = groupedEntries.count
+                groupedEntries.append(
+                    ExerciseHistoryLoggedExerciseEntry(
+                        loggedExercise: setEntry.loggedExercise,
+                        setEntries: [setEntry]
+                    )
+                )
+            }
+        }
+
+        return groupedEntries
     }
 }

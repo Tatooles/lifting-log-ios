@@ -211,6 +211,53 @@ final class HistoryPersistenceTests: XCTestCase {
         XCTAssertEqual(groups.first?.exerciseNotes, "Elbow felt better with a closer grip.")
     }
 
+    func testExerciseHistoryGroupPreservesNotesForDuplicateLoggedExercises() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscle: "Chest")
+        let session = WorkoutSession(
+            title: "Duplicate Bench",
+            startedAt: Date(timeIntervalSince1970: 600),
+            status: .completed,
+            source: .blank
+        )
+        let firstLoggedExercise = LoggedExercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000101")!,
+            orderIndex: 0,
+            exercise: exercise,
+            exerciseSnapshotName: exercise.name,
+            notes: ""
+        )
+        firstLoggedExercise.sets = [
+            LoggedSet(orderIndex: 0, weight: 185, reps: 5, rpe: 8, isCompleted: true)
+        ]
+        let secondLoggedExercise = LoggedExercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000202")!,
+            orderIndex: 1,
+            exercise: exercise,
+            exerciseSnapshotName: exercise.name,
+            notes: "Second bench note"
+        )
+        secondLoggedExercise.sets = [
+            LoggedSet(orderIndex: 0, weight: 195, reps: 3, rpe: 9, isCompleted: true)
+        ]
+        session.loggedExercises = [firstLoggedExercise, secondLoggedExercise]
+        context.insert(exercise)
+        context.insert(session)
+        try context.save()
+
+        let summary = try XCTUnwrap(ExerciseHistorySummary.makeSummaries(from: [session]).first)
+        let group = try XCTUnwrap(ExerciseHistorySessionGroup.makeGroups(from: [session], matching: summary).first)
+
+        XCTAssertEqual(group.loggedExerciseEntries.count, 2)
+        XCTAssertEqual(group.loggedExerciseEntries.map { $0.loggedExercise.notes }, ["", "Second bench note"])
+        XCTAssertEqual(group.loggedExerciseEntries.map(\.loggedExercise.id), [firstLoggedExercise.id, secondLoggedExercise.id])
+        XCTAssertEqual(group.setEntries.map { $0.loggedExercise.id }, [firstLoggedExercise.id, secondLoggedExercise.id])
+        XCTAssertEqual(group.loggedExerciseEntries.flatMap { entry in
+            entry.setEntries.map { $0.loggedExercise.id }
+        }, [firstLoggedExercise.id, secondLoggedExercise.id])
+    }
+
     func testExerciseHistoryNoteBlockTreatsWhitespaceOnlyNotesAsAbsent() {
         XCTAssertNil(ExerciseHistoryNoteBlock.displayNote(from: " \n\t "))
     }
