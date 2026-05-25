@@ -18,6 +18,7 @@
 		3852A3BFBF3E8FA88AB4DAB5 /* ExerciseCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93AE1955F1EF73E5A390F35D /* ExerciseCardView.swift */; };
 		3919D105799D48321D1A404B /* SwiftDataTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 812E14546F80B4664B72FBE7 /* SwiftDataTestSupport.swift */; };
 		3B3720E0719766B2A8AABBCD /* ExerciseHistorySessionGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38DDD8951A67801CE5736726 /* ExerciseHistorySessionGroup.swift */; };
+		3BA497932472D8A2F50BE84A /* ExerciseHistorySessionGroupCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F0C215D11279771F89F11A9 /* ExerciseHistorySessionGroupCard.swift */; };
 		3D4B9E2C5A0F4A7AB4B5D6E7 /* ExerciseHistoryRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B8C9D0E1F2A3B4C5D6E7F80 /* ExerciseHistoryRoute.swift */; };
 		3F8D7956C2A8FB3E3174E0F2 /* StartWorkoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3CC8BE770D9FC2508542900 /* StartWorkoutView.swift */; };
 		3FAAE3904F95F91BA30AC71F /* WorkoutHistoryDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7900F942ACBF8FE36A09FD8D /* WorkoutHistoryDetailView.swift */; };
@@ -102,6 +103,7 @@
 		30E1ED3B5916BAE378A8DC03 /* AddExerciseSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddExerciseSheet.swift; sourceTree = "<group>"; };
 		358C22D3418EBFADE814392B /* ExerciseHistoryDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseHistoryDetailView.swift; sourceTree = "<group>"; };
 		38DDD8951A67801CE5736726 /* ExerciseHistorySessionGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseHistorySessionGroup.swift; sourceTree = "<group>"; };
+		3F0C215D11279771F89F11A9 /* ExerciseHistorySessionGroupCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseHistorySessionGroupCard.swift; sourceTree = "<group>"; };
 		3C64BAFFCD750421004CEC28 /* WorkoutHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutHeaderView.swift; sourceTree = "<group>"; };
 		3CF412631A23A0921531136C /* ExerciseHistorySummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseHistorySummary.swift; sourceTree = "<group>"; };
 		54AEC1C879FEDA6709B30F53 /* LoggedExercise.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoggedExercise.swift; sourceTree = "<group>"; };
@@ -167,6 +169,7 @@
 				5E4B1B26ED366011C1BD639B /* ExerciseHistoryRow.swift */,
 				7B8C9D0E1F2A3B4C5D6E7F80 /* ExerciseHistoryRoute.swift */,
 				38DDD8951A67801CE5736726 /* ExerciseHistorySessionGroup.swift */,
+				3F0C215D11279771F89F11A9 /* ExerciseHistorySessionGroupCard.swift */,
 				3CF412631A23A0921531136C /* ExerciseHistorySummary.swift */,
 				907D701D12B60C22962A18E0 /* HistoryView.swift */,
 				7900F942ACBF8FE36A09FD8D /* WorkoutHistoryDetailView.swift */,
@@ -500,6 +503,7 @@
 				EA74B32E2D114B1D2AC1D57F /* ExerciseHistoryRow.swift in Sources */,
 				3D4B9E2C5A0F4A7AB4B5D6E7 /* ExerciseHistoryRoute.swift in Sources */,
 				3B3720E0719766B2A8AABBCD /* ExerciseHistorySessionGroup.swift in Sources */,
+				3BA497932472D8A2F50BE84A /* ExerciseHistorySessionGroupCard.swift in Sources */,
 				46D11B7BC14EF8D954C2957E /* ExerciseHistorySummary.swift in Sources */,
 				7765319A4C1EF72BFCAE858A /* ExerciseLibraryView.swift in Sources */,
 				C1A20B70F444096542509886 /* ExercisePickerView.swift in Sources */,
