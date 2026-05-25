@@ -57,6 +57,8 @@ struct WorkoutHistoryDetailView: View {
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundStyle(AppTheme.textSecondary)
                             }
+
+                            ExerciseHistoryNoteBlock(note: loggedExercise.notes)
                         }
                     }
                 }

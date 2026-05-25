@@ -63,16 +63,20 @@ struct ExerciseHistoryDetailView: View {
                         .clipShape(Capsule())
                 }
 
-                ForEach(group.setEntries) { entry in
-                    HStack {
-                        Text("Set \(entry.displaySetNumber)")
-                        Spacer()
-                        Text(setSummary(for: entry.set))
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(AppTheme.textPrimary)
+                ForEach(group.loggedExerciseEntries) { loggedExerciseEntry in
+                    ForEach(loggedExerciseEntry.setEntries) { entry in
+                        HStack {
+                            Text("Set \(entry.displaySetNumber)")
+                            Spacer()
+                            Text(setSummary(for: entry.set))
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(AppTheme.textPrimary)
+                        }
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(AppTheme.textSecondary)
                     }
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(AppTheme.textSecondary)
+
+                    ExerciseHistoryNoteBlock(note: loggedExerciseEntry.exerciseNotes)
                 }
             }
         }
