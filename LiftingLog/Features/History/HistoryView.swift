@@ -27,6 +27,7 @@ struct HistoryView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                .accessibilityIdentifier("HistoryModePicker")
 
                 switch navigationState.historyMode {
                 case .workouts:
@@ -47,13 +48,14 @@ struct HistoryView: View {
             EmptyStateView(title: "No Workouts Yet", message: "Finished workouts will appear here.")
         } else {
             VStack(spacing: 10) {
-                ForEach(completedSessions) { session in
+                ForEach(Array(completedSessions.enumerated()), id: \.element.id) { index, session in
                     NavigationLink {
                         WorkoutHistoryDetailView(session: session)
                     } label: {
                         WorkoutHistoryRow(session: session)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("WorkoutHistoryButton-\(index)")
                 }
             }
         }
@@ -73,6 +75,7 @@ struct HistoryView: View {
                             ExerciseHistoryRow(summary: summary, showsDivider: index < exerciseSummaries.count - 1)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("ExerciseHistoryButton-\(index)")
                     }
                 }
             }

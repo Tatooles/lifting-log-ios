@@ -12,14 +12,14 @@ struct PastWorkoutPickerView: View {
             )
         } else {
             VStack(spacing: 10) {
-                ForEach(sessions.prefix(6)) { session in
+                ForEach(Array(sessions.prefix(6).enumerated()), id: \.element.id) { index, session in
                     Button {
                         onSelect(session)
                     } label: {
                         WorkoutHistoryRow(session: session)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityIdentifier("PastWorkoutButton-\(session.id.uuidString)")
+                    .accessibilityIdentifier("PastWorkoutButton-\(index)")
                 }
             }
         }
