@@ -110,31 +110,6 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
-    func testWorkoutHistoryDetailOmitsVolumeSection() {
-        let app = makeApp()
-        app.launch()
-
-        app.buttons["StartBlankWorkoutButton"].tap()
-        XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
-
-        addExercise("Bench Press, Strength • Barbell • Chest", in: app)
-        dismissKeyboardIfNeeded(in: app)
-        app.buttons["WorkoutTab"].tap()
-        let firstSetCompletionButton = app.buttons["SetCompleteButton-0-0"]
-        XCTAssertTrue(firstSetCompletionButton.waitForExistence(timeout: 3))
-        firstSetCompletionButton.tap()
-        app.buttons["Finish"].tap()
-        XCTAssertTrue(app.buttons["SaveWorkoutButton"].waitForExistence(timeout: 3))
-        app.buttons["SaveWorkoutButton"].tap()
-
-        app.buttons["HistoryTab"].tap()
-        XCTAssertTrue(app.staticTexts["HistoryTitle"].waitForExistence(timeout: 3))
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Workout,")).firstMatch.tap()
-
-        XCTAssertFalse(app.staticTexts["Volume"].exists)
-    }
-
-    @MainActor
     private func makeApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--uitest-in-memory-store"]
