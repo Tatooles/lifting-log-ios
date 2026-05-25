@@ -54,10 +54,10 @@ struct ExerciseCardView: View {
                         Image(systemName: "clock.arrow.circlepath")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(AppTheme.textSecondary)
-                            .frame(width: 32, height: 32)
+                            .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("View exercise history")
+                    .accessibilityLabel("View \(loggedExercise.exerciseSnapshotName) history")
                     .accessibilityIdentifier("ExerciseHistoryButton-\(exerciseIndex)")
 
                     Button(role: .destructive) {
