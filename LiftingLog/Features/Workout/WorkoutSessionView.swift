@@ -14,8 +14,10 @@ struct WorkoutSessionView: View {
     @Environment(\.modelContext) private var modelContext
     let session: WorkoutSession
     @Bindable var engine: ActiveWorkoutEngine
+    @Bindable var navigationState: AppNavigationState
     @State private var isFinishSheetPresented = false
     @State private var isAddExercisePresented = false
+    @State private var selectedHistoryExercise: LoggedExercise?
     @State private var pendingFocusedField: WorkoutField?
     @State private var pendingScrollTarget: UUID?
     @State private var recentlyAddedExerciseID: UUID?
@@ -45,7 +47,8 @@ struct WorkoutSessionView: View {
                                 exerciseIndex: exerciseIndex,
                                 engine: engine,
                                 isCollapsed: isCollapsedBinding(for: loggedExercise),
-                                focusedField: $focusedField
+                                focusedField: $focusedField,
+                                viewHistory: { selectedHistoryExercise = loggedExercise }
                             )
                             .id(loggedExercise.id)
                         }
@@ -210,6 +213,12 @@ struct WorkoutSessionView: View {
             AddExerciseSheet(session: session, engine: engine) { loggedExercise in
                 pendingScrollTarget = loggedExercise.id
                 pendingFocusedField = loggedExercise.sortedSets.first.map { .setWeight($0.id) }
+            }
+        }
+        .sheet(item: $selectedHistoryExercise) { loggedExercise in
+            ExerciseQuickHistorySheet(loggedExercise: loggedExercise) { route in
+                selectedHistoryExercise = nil
+                navigationState.openExerciseHistory(route)
             }
         }
     }

@@ -24,7 +24,7 @@ struct AppShellView: View {
 
             NavigationStack {
                 if let activeSession {
-                    WorkoutSessionView(session: activeSession, engine: activeWorkoutEngine)
+                    WorkoutSessionView(session: activeSession, engine: activeWorkoutEngine, navigationState: navigationState)
                 } else {
                     StartWorkoutView(navigationState: navigationState, activeWorkoutEngine: activeWorkoutEngine)
                 }
