@@ -16,6 +16,9 @@ struct ExerciseHistorySessionGroup: Identifiable {
     var title: String { session.title }
     var startedAt: Date { session.startedAt }
     var completedSetCount: Int { setEntries.count }
+    var exerciseNotes: String {
+        setEntries.first?.loggedExercise.notes ?? ""
+    }
 
     static func makeGroups(
         from sessions: [WorkoutSession],
