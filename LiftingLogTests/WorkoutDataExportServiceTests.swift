@@ -1,0 +1,308 @@
+import XCTest
+@testable import LiftingLog
+
+@MainActor
+final class WorkoutDataExportServiceTests: XCTestCase {
+    private let header = [
+        "workout_date",
+        "workout_title",
+        "workout_notes",
+        "exercise_order",
+        "exercise_name",
+        "exercise_notes",
+        "set_order",
+        "set_kind",
+        "is_completed",
+        "weight",
+        "reps",
+        "unit",
+        "rpe",
+        "set_notes",
+        "completed_at",
+        "workout_id",
+        "logged_exercise_id",
+        "set_id"
+    ]
+
+    func testCSVIncludesHeaderCompletedWorkoutSetRowsSortingAndStableIDs() throws {
+        let olderSessionID = uuid("00000000-0000-0000-0000-000000000001")
+        let benchExerciseID = uuid("00000000-0000-0000-0000-000000000101")
+        let curlExerciseID = uuid("00000000-0000-0000-0000-000000000102")
+        let incompleteSetID = uuid("00000000-0000-0000-0000-000000000201")
+        let completedSetID = uuid("00000000-0000-0000-0000-000000000202")
+        let curlSetID = uuid("00000000-0000-0000-0000-000000000203")
+        let tieASessionID = uuid("00000000-0000-0000-0000-000000000002")
+        let tieAExerciseID = uuid("00000000-0000-0000-0000-000000000103")
+        let tieASetID = uuid("00000000-0000-0000-0000-000000000204")
+        let tieBSessionID = uuid("00000000-0000-0000-0000-000000000003")
+        let tieBExerciseID = uuid("00000000-0000-0000-0000-000000000104")
+        let tieBSetID = uuid("00000000-0000-0000-0000-000000000205")
+
+        let olderSession = WorkoutSession(
+            id: olderSessionID,
+            title: "Alpha, Day",
+            startedAt: Date(timeIntervalSince1970: 0),
+            notes: "Line one\nLine \"two\"",
+            status: .completed,
+            source: .blank
+        )
+        let curlExercise = LoggedExercise(
+            id: curlExerciseID,
+            orderIndex: 1,
+            exerciseSnapshotName: "Curl"
+        )
+        curlExercise.sets = [
+            LoggedSet(
+                id: curlSetID,
+                orderIndex: 0,
+                weight: 42.1259,
+                reps: 12,
+                rpe: 7.5,
+                kind: .drop,
+                isCompleted: true,
+                completedAt: Date(timeIntervalSince1970: 90),
+                notes: "Pump"
+            )
+        ]
+        let benchExercise = LoggedExercise(
+            id: benchExerciseID,
+            orderIndex: 0,
+            exerciseSnapshotName: "Bench \"Press\"",
+            notes: "Use, spotter"
+        )
+        benchExercise.sets = [
+            LoggedSet(
+                id: completedSetID,
+                orderIndex: 1,
+                weight: 185.5,
+                reps: 5,
+                rpe: 8,
+                kind: .working,
+                isCompleted: true,
+                completedAt: Date(timeIntervalSince1970: 60),
+                notes: "Smooth"
+            ),
+            LoggedSet(
+                id: incompleteSetID,
+                orderIndex: 0,
+                kind: .warmup,
+                isCompleted: false,
+                notes: "Needs\rsetup"
+            )
+        ]
+        olderSession.loggedExercises = [curlExercise, benchExercise]
+        let tieBSession = completedSession(
+            id: tieBSessionID,
+            title: "Tie B",
+            startedAt: Date(timeIntervalSince1970: 100),
+            exerciseID: tieBExerciseID,
+            setID: tieBSetID
+        )
+        let tieASession = completedSession(
+            id: tieASessionID,
+            title: "Tie A",
+            startedAt: Date(timeIntervalSince1970: 100),
+            exerciseID: tieAExerciseID,
+            setID: tieASetID
+        )
+        let activeSession = completedSession(
+            id: uuid("00000000-0000-0000-0000-000000000004"),
+            title: "Active",
+            startedAt: Date(timeIntervalSince1970: -100),
+            status: .active,
+            exerciseID: uuid("00000000-0000-0000-0000-000000000105"),
+            setID: uuid("00000000-0000-0000-0000-000000000206")
+        )
+        let discardedSession = completedSession(
+            id: uuid("00000000-0000-0000-0000-000000000005"),
+            title: "Discarded",
+            startedAt: Date(timeIntervalSince1970: -50),
+            status: .discarded,
+            exerciseID: uuid("00000000-0000-0000-0000-000000000106"),
+            setID: uuid("00000000-0000-0000-0000-000000000207")
+        )
+
+        let csv = WorkoutDataExportService().csv(
+            for: [tieBSession, activeSession, olderSession, discardedSession, tieASession],
+            unit: .pounds
+        )
+        let rows = try parseCSV(csv)
+
+        XCTAssertEqual(csv.last, "\n")
+        XCTAssertEqual(rows.first, header)
+        XCTAssertEqual(rows.count, 6)
+        XCTAssertFalse(csv.contains("Active"))
+        XCTAssertFalse(csv.contains("Discarded"))
+        XCTAssertTrue(csv.contains("\"Alpha, Day\""))
+        XCTAssertTrue(csv.contains("\"Line one\nLine \"\"two\"\"\""))
+        XCTAssertTrue(csv.contains("\"Bench \"\"Press\"\"\""))
+        XCTAssertTrue(csv.contains("\"Use, spotter\""))
+        XCTAssertTrue(csv.contains("\"Needs\rsetup\""))
+
+        XCTAssertEqual(rows[1], [
+            "1970-01-01T00:00:00Z",
+            "Alpha, Day",
+            "Line one\nLine \"two\"",
+            "1",
+            "Bench \"Press\"",
+            "Use, spotter",
+            "1",
+            "warmup",
+            "false",
+            "",
+            "",
+            "pounds",
+            "",
+            "Needs\rsetup",
+            "",
+            olderSessionID.uuidString,
+            benchExerciseID.uuidString,
+            incompleteSetID.uuidString
+        ])
+        XCTAssertEqual(rows[2], [
+            "1970-01-01T00:00:00Z",
+            "Alpha, Day",
+            "Line one\nLine \"two\"",
+            "1",
+            "Bench \"Press\"",
+            "Use, spotter",
+            "2",
+            "working",
+            "true",
+            "185.5",
+            "5",
+            "pounds",
+            "8",
+            "Smooth",
+            "1970-01-01T00:01:00Z",
+            olderSessionID.uuidString,
+            benchExerciseID.uuidString,
+            completedSetID.uuidString
+        ])
+        XCTAssertEqual(rows[3], [
+            "1970-01-01T00:00:00Z",
+            "Alpha, Day",
+            "Line one\nLine \"two\"",
+            "2",
+            "Curl",
+            "",
+            "1",
+            "drop",
+            "true",
+            "42.126",
+            "12",
+            "pounds",
+            "7.5",
+            "Pump",
+            "1970-01-01T00:01:30Z",
+            olderSessionID.uuidString,
+            curlExerciseID.uuidString,
+            curlSetID.uuidString
+        ])
+        XCTAssertEqual(rows[4].suffix(3), [
+            tieASessionID.uuidString,
+            tieAExerciseID.uuidString,
+            tieASetID.uuidString
+        ])
+        XCTAssertEqual(rows[5].suffix(3), [
+            tieBSessionID.uuidString,
+            tieBExerciseID.uuidString,
+            tieBSetID.uuidString
+        ])
+        XCTAssertEqual(rows[4][1], "Tie A")
+        XCTAssertEqual(rows[5][1], "Tie B")
+    }
+
+    private func completedSession(
+        id: UUID,
+        title: String,
+        startedAt: Date,
+        status: WorkoutSessionStatus = .completed,
+        exerciseID: UUID,
+        setID: UUID
+    ) -> WorkoutSession {
+        let session = WorkoutSession(
+            id: id,
+            title: title,
+            startedAt: startedAt,
+            status: status,
+            source: .blank
+        )
+        let loggedExercise = LoggedExercise(
+            id: exerciseID,
+            orderIndex: 0,
+            exerciseSnapshotName: "Squat"
+        )
+        loggedExercise.sets = [
+            LoggedSet(
+                id: setID,
+                orderIndex: 0,
+                weight: 225,
+                reps: 3,
+                rpe: 9,
+                isCompleted: true,
+                completedAt: startedAt
+            )
+        ]
+        session.loggedExercises = [loggedExercise]
+        return session
+    }
+
+    private func uuid(_ value: String) -> UUID {
+        guard let uuid = UUID(uuidString: value) else {
+            XCTFail("Invalid UUID string: \(value)")
+            return UUID()
+        }
+        return uuid
+    }
+
+    private func parseCSV(_ csv: String) throws -> [[String]] {
+        var rows: [[String]] = []
+        var row: [String] = []
+        var field = ""
+        var isQuoted = false
+        var index = csv.startIndex
+
+        while index < csv.endIndex {
+            let character = csv[index]
+
+            if isQuoted {
+                if character == "\"" {
+                    let next = csv.index(after: index)
+                    if next < csv.endIndex, csv[next] == "\"" {
+                        field.append("\"")
+                        index = next
+                    } else {
+                        isQuoted = false
+                    }
+                } else {
+                    field.append(character)
+                }
+            } else {
+                switch character {
+                case "\"":
+                    isQuoted = true
+                case ",":
+                    row.append(field)
+                    field = ""
+                case "\n":
+                    row.append(field)
+                    rows.append(row)
+                    row = []
+                    field = ""
+                default:
+                    field.append(character)
+                }
+            }
+
+            index = csv.index(after: index)
+        }
+
+        if !field.isEmpty || !row.isEmpty {
+            row.append(field)
+            rows.append(row)
+        }
+
+        return rows
+    }
+}

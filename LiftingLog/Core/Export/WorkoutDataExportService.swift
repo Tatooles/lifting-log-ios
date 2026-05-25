@@ -1,0 +1,120 @@
+import Foundation
+
+struct WorkoutDataExportService {
+    private let dateFormatter: ISO8601DateFormatter
+
+    init(dateFormatter: ISO8601DateFormatter = WorkoutDataExportService.makeDateFormatter()) {
+        self.dateFormatter = dateFormatter
+    }
+
+    static func makeDateFormatter() -> ISO8601DateFormatter {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        return formatter
+    }
+
+    func csv(for sessions: [WorkoutSession], unit: MeasurementUnit) -> String {
+        var rows: [[String]] = [Self.header]
+
+        for session in sortedCompletedSessions(from: sessions) {
+            for loggedExercise in session.sortedLoggedExercises {
+                for set in loggedExercise.sortedSets {
+                    rows.append(row(for: set, loggedExercise: loggedExercise, session: session, unit: unit))
+                }
+            }
+        }
+
+        return rows
+            .map { $0.map(Self.escape).joined(separator: ",") }
+            .joined(separator: "\n") + "\n"
+    }
+
+    private static let header = [
+        "workout_date",
+        "workout_title",
+        "workout_notes",
+        "exercise_order",
+        "exercise_name",
+        "exercise_notes",
+        "set_order",
+        "set_kind",
+        "is_completed",
+        "weight",
+        "reps",
+        "unit",
+        "rpe",
+        "set_notes",
+        "completed_at",
+        "workout_id",
+        "logged_exercise_id",
+        "set_id"
+    ]
+
+    private func sortedCompletedSessions(from sessions: [WorkoutSession]) -> [WorkoutSession] {
+        sessions
+            .filter { $0.status == .completed }
+            .sorted { lhs, rhs in
+                if lhs.startedAt != rhs.startedAt {
+                    return lhs.startedAt < rhs.startedAt
+                }
+
+                return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
+            }
+    }
+
+    private func row(
+        for set: LoggedSet,
+        loggedExercise: LoggedExercise,
+        session: WorkoutSession,
+        unit: MeasurementUnit
+    ) -> [String] {
+        [
+            formatDate(session.startedAt),
+            session.title,
+            session.notes,
+            String(loggedExercise.orderIndex + 1),
+            loggedExercise.exerciseSnapshotName,
+            loggedExercise.notes,
+            String(set.orderIndex + 1),
+            set.kind.rawValue,
+            String(set.isCompleted),
+            set.weight.map(Self.formatDouble) ?? "",
+            set.reps.map(String.init) ?? "",
+            unit.rawValue,
+            set.rpe.map(Self.formatDouble) ?? "",
+            set.notes,
+            set.completedAt.map(formatDate) ?? "",
+            session.id.uuidString,
+            loggedExercise.id.uuidString,
+            set.id.uuidString
+        ]
+    }
+
+    private func formatDate(_ date: Date) -> String {
+        dateFormatter.string(from: date)
+    }
+
+    private static func formatDouble(_ value: Double) -> String {
+        let rounded = (value * 1_000).rounded() / 1_000
+        var formatted = String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), rounded)
+
+        while formatted.last == "0" {
+            formatted.removeLast()
+        }
+
+        if formatted.last == "." {
+            formatted.removeLast()
+        }
+
+        return formatted == "-0" ? "0" : formatted
+    }
+
+    private static func escape(_ field: String) -> String {
+        guard field.contains(",") || field.contains("\"") || field.contains("\n") || field.contains("\r") else {
+            return field
+        }
+
+        return "\"\(field.replacingOccurrences(of: "\"", with: "\"\""))\""
+    }
+}
