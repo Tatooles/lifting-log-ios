@@ -8,8 +8,7 @@ struct ExerciseHistorySessionGroupCard: View {
         SurfaceCard {
             VStack(alignment: .leading, spacing: 12) {
                 header
-                setEntries
-                exerciseNotes
+                loggedExerciseEntries
             }
         }
     }
@@ -37,9 +36,28 @@ struct ExerciseHistorySessionGroupCard: View {
         }
     }
 
-    private var setEntries: some View {
+    private var loggedExerciseEntries: some View {
+        VStack(spacing: 12) {
+            ForEach(Array(group.loggedExerciseEntries.enumerated()), id: \.element.id) { index, entry in
+                VStack(alignment: .leading, spacing: 10) {
+                    setRows(for: entry.setEntries)
+
+                    if showsExerciseNotes {
+                        ExerciseHistoryNoteBlock(note: entry.exerciseNotes)
+                    }
+                }
+
+                if index < group.loggedExerciseEntries.count - 1 {
+                    Divider()
+                        .overlay(AppTheme.border)
+                }
+            }
+        }
+    }
+
+    private func setRows(for entries: [ExerciseHistorySetEntry]) -> some View {
         VStack(spacing: 8) {
-            ForEach(group.setEntries) { entry in
+            ForEach(entries) { entry in
                 HStack {
                     Text("Set \(entry.displaySetNumber)")
                     Spacer()
@@ -49,24 +67,6 @@ struct ExerciseHistorySessionGroupCard: View {
                 }
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(AppTheme.textSecondary)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var exerciseNotes: some View {
-        if showsExerciseNotes, let notes = group.exerciseNotes {
-            VStack(alignment: .leading, spacing: 6) {
-                Divider()
-                    .overlay(AppTheme.border)
-                Text("NOTES")
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(1.4)
-                    .foregroundStyle(AppTheme.textTertiary)
-                Text(notes)
-                    .font(.system(size: 14))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
