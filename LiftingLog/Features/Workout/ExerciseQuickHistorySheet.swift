@@ -72,6 +72,7 @@ struct ExerciseQuickHistorySheet: View {
                 }
             }
         }
+        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
 }
