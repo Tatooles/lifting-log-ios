@@ -79,7 +79,7 @@ final class WorkoutSession: Identifiable {
 
     var sortedLoggedExercises: [LoggedExercise] {
         loggedExercises
-            .filter { !$0.isDeleted }
+            .filter { $0.deletedAt == nil }
             .sorted { $0.orderIndex < $1.orderIndex }
     }
 

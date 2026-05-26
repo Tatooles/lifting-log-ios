@@ -61,6 +61,28 @@ final class HistoryPersistenceTests: XCTestCase {
         XCTAssertEqual(sessions.map(\.id), [visibleCompletedSession.id])
     }
 
+    func testWorkoutHistoryRowExerciseCountIgnoresTombstonedLoggedExercises() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let visibleExercise = LoggedExercise(orderIndex: 0, exerciseSnapshotName: "Bench Press")
+        let deletedExercise = LoggedExercise(orderIndex: 1, exerciseSnapshotName: "Back Squat")
+        let session = WorkoutSession(
+            title: "Push",
+            startedAt: .now,
+            status: .completed,
+            source: .blank,
+            loggedExercises: [visibleExercise, deletedExercise]
+        )
+        context.insert(session)
+        try context.save()
+        let relationshipDeletedExercise = try XCTUnwrap(session.loggedExercises.first { $0.exerciseSnapshotName == "Back Squat" })
+        relationshipDeletedExercise.markDeleted(now: Date(timeIntervalSince1970: 700))
+        try context.save()
+
+        XCTAssertTrue(relationshipDeletedExercise.isDeleted)
+        XCTAssertEqual(WorkoutHistoryRow.exerciseCount(for: session), 1)
+    }
+
     func testDeletingCompletedWorkoutTombstonesSessionLoggedExercisesAndSets() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

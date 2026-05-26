@@ -272,6 +272,21 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertEqual(removedSet.orderIndex, 1)
     }
 
+    func testExerciseCardSetProgressIgnoresTombstonedSets() throws {
+        let loggedExercise = LoggedExercise(orderIndex: 0, exerciseSnapshotName: "Bench Press")
+        let completedSet = LoggedSet(orderIndex: 0, isCompleted: true)
+        let deletedCompletedSet = LoggedSet(orderIndex: 1, isCompleted: true)
+        let openSet = LoggedSet(orderIndex: 2, isCompleted: false)
+        deletedCompletedSet.markDeleted(now: Date(timeIntervalSince1970: 600))
+        loggedExercise.sets = [completedSet, deletedCompletedSet, openSet]
+
+        let progress = ExerciseCardView.setProgress(for: loggedExercise)
+
+        XCTAssertEqual(progress.completed, 1)
+        XCTAssertEqual(progress.total, 2)
+        XCTAssertFalse(progress.isComplete)
+    }
+
     func testCompletingSetUpdatesMetrics() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
