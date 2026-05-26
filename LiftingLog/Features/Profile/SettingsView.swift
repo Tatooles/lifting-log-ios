@@ -18,6 +18,7 @@ struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                .accessibilityIdentifier("WeightUnitPicker")
             }
 
             Section("Rest Timer") {

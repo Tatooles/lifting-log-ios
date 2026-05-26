@@ -28,6 +28,7 @@ struct ExerciseLibraryView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                .accessibilityIdentifier("ExerciseLibraryRow-\(exercise.name)")
                 .swipeActions {
                     Button(role: .destructive) {
                         do {
@@ -55,6 +56,7 @@ struct ExerciseLibraryView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityIdentifier("CreateExerciseButton")
             }
         }
         .navigationDestination(isPresented: $isCreatingExercise) {

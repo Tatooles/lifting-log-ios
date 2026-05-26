@@ -57,6 +57,7 @@ struct WorkoutHeaderView: View {
                     )
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("FinishWorkoutButton")
         }
         .padding(.horizontal, AppTheme.shellPadding)
         .padding(.top, 6)

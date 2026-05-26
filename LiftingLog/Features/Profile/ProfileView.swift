@@ -57,6 +57,7 @@ struct ProfileView: View {
                         settingsRow(title: "Settings", systemImage: "gearshape")
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("ProfileSettingsLink")
                 }
 
                 NavigationLink {
@@ -65,6 +66,7 @@ struct ProfileView: View {
                     settingsRow(title: "Exercise Library", systemImage: "dumbbell")
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("ProfileExerciseLibraryLink")
             }
             .padding(AppTheme.shellPadding)
         }

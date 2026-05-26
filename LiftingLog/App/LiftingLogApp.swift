@@ -9,7 +9,11 @@ struct LiftingLogApp: App {
 
     init() {
         do {
-            let useInMemoryStore = ProcessInfo.processInfo.arguments.contains("--uitest-in-memory-store")
+            let arguments = ProcessInfo.processInfo.arguments
+            let useInMemoryStore = arguments.contains("--uitest-in-memory-store")
+            if arguments.contains("--uitest-reset-persistent-store") {
+                try ModelContainerFactory.resetPersistentStoreFiles()
+            }
             let container = try ModelContainerFactory.makeModelContainer(isStoredInMemoryOnly: useInMemoryStore)
             try SeedDataService.seedIfNeeded(context: container.mainContext)
             modelContainer = container

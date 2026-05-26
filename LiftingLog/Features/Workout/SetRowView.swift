@@ -54,7 +54,7 @@ struct SetRowView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(set.isCompleted ? "Mark set incomplete" : "Mark set complete")
-            .accessibilityIdentifier("SetCompleteButton-\(exerciseIndex)-\(index)")
+            .accessibilityIdentifier("SetCompletionButton-\(exerciseIndex)-\(index)")
 
             Button(role: .destructive) {
                 try? engine.removeSet(set, context: modelContext)

@@ -29,6 +29,7 @@ struct ExerciseEditorView: View {
         Form {
             Section {
                 TextField("Name", text: $name)
+                    .accessibilityIdentifier("ExerciseNameField")
                 Picker("Category", selection: $category) {
                     ForEach(ExerciseCategory.allCases) { category in
                         Text(category.displayName).tag(category)
@@ -40,7 +41,9 @@ struct ExerciseEditorView: View {
                     }
                 }
                 TextField("Primary muscle", text: $primaryMuscle)
+                    .accessibilityIdentifier("ExercisePrimaryMuscleField")
                 TextField("Notes", text: $notes, axis: .vertical)
+                    .accessibilityIdentifier("ExerciseNotesField")
             }
 
             if let validationMessage {
@@ -59,6 +62,7 @@ struct ExerciseEditorView: View {
                 Button("Save") {
                     save()
                 }
+                .accessibilityIdentifier("ExerciseEditorSaveButton")
             }
         }
     }
