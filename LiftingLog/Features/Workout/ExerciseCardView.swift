@@ -8,6 +8,7 @@ struct ExerciseCardView: View {
     @Bindable var engine: ActiveWorkoutEngine
     @Binding var isCollapsed: Bool
     var focusedField: FocusState<WorkoutField?>.Binding
+    let viewHistory: () -> Void
     @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
 
     private var weightUnit: MeasurementUnit {
@@ -48,6 +49,16 @@ struct ExerciseCardView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("ExerciseHeader-\(exerciseIndex)")
+
+                    Button(action: viewHistory) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("View \(loggedExercise.exerciseSnapshotName) history")
+                    .accessibilityIdentifier("ExerciseHistoryButton-\(exerciseIndex)")
 
                     Button(role: .destructive) {
                         try? engine.removeLoggedExercise(loggedExercise, context: modelContext)

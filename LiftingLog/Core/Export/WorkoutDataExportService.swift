@@ -158,5 +158,5 @@ struct WorkoutDataExportService {
         return "'\(value)"
     }
 
-    private static let formulaPrefixCharacters: Set<Character> = ["=", "+", "-", "@"]
+    private static let formulaPrefixCharacters: Set<Character> = ["=", "+", "-", "@", "＝", "＋", "－", "＠"]
 }

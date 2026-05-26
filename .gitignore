@@ -4,6 +4,7 @@
 # Git worktrees
 .worktrees/
 worktrees/
+.superpowers/
 
 # Xcode user data
 xcuserdata/
