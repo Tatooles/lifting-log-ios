@@ -72,5 +72,6 @@ struct ExerciseQuickHistorySheet: View {
                 }
             }
         }
+        .presentationDragIndicator(.visible)
     }
 }
