@@ -94,7 +94,7 @@ final class ActiveWorkoutEngine {
 
     @discardableResult
     func addExercise(_ exercise: Exercise, to session: WorkoutSession, context: ModelContext) throws -> LoggedExercise {
-        let nextIndex = (session.loggedExercises.map(\.orderIndex).max() ?? -1) + 1
+        let nextIndex = (session.sortedLoggedExercises.map(\.orderIndex).max() ?? -1) + 1
         let loggedExercise = LoggedExercise(orderIndex: nextIndex, exercise: exercise, exerciseSnapshotName: exercise.name)
         loggedExercise.session = session
         context.insert(loggedExercise)

@@ -12,7 +12,7 @@ struct ProfileView: View {
     }
 
     private var completedWorkoutCount: Int {
-        sessions.filter { $0.status == .completed }.count
+        WorkoutSession.visibleCompletedSessions(from: sessions).count
     }
 
     private var activeExerciseCount: Int {

@@ -223,6 +223,28 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertEqual(try allLoggedExercises(in: context).count, 3)
     }
 
+    func testAddingExerciseAfterRemovingLastExerciseUsesNextVisibleOrderIndex() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let engine = ActiveWorkoutEngine()
+        let session = try engine.startBlankWorkout(context: context)
+        let firstExercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscle: "Chest")
+        let removedExercise = Exercise(name: "Back Squat", category: .strength, equipment: .barbell, primaryMuscle: "Quads")
+        let replacementExercise = Exercise(name: "Deadlift", category: .strength, equipment: .barbell, primaryMuscle: "Back")
+        context.insert(firstExercise)
+        context.insert(removedExercise)
+        context.insert(replacementExercise)
+        _ = try engine.addExercise(firstExercise, to: session, context: context)
+        let removed = try engine.addExercise(removedExercise, to: session, context: context)
+        try engine.removeLoggedExercise(removed, context: context, now: Date(timeIntervalSince1970: 500))
+
+        let replacement = try engine.addExercise(replacementExercise, to: session, context: context)
+
+        XCTAssertEqual(replacement.orderIndex, 1)
+        XCTAssertEqual(session.sortedLoggedExercises.map(\.orderIndex), [0, 1])
+        XCTAssertEqual(try allLoggedExercises(in: context).count, 3)
+    }
+
     func testRemovingSetTombstonesSetAndReindexesRemainingNonDeletedSiblings() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
