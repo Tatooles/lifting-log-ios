@@ -4,7 +4,7 @@
 
 - Branch: `3-audit-and-stabilize-local-release-baseline`
 - Scope: Local/offline Phase 0 baseline for workout creation, editing, finishing, history, settings, SwiftData persistence, and tests.
-- Result: Pass with follow-ups. After merging `origin/main`, one narrow history-detail regression was fixed and the post-merge unit/UI suite passed in split runs.
+- Result: Pass with follow-ups. After merging `origin/main`, stale audit expectations were updated for the intentional workout-history volume removal and the post-merge unit/UI suite passed in split runs.
 
 ## Automated Verification
 
@@ -12,11 +12,12 @@
 | --- | --- | --- | --- |
 | Full test suite | XcodeBuildMCP `test_sim` | Pass | `SUCCEEDED`; 49 passed, 0 failed, 0 skipped; duration `70392ms`; project `LiftingLog.xcodeproj`, scheme `LiftingLog`, simulator `iPhone 16`; build log `/Users/kevintatooles/Library/Developer/XcodeBuildMCP/workspaces/codex-ios-app-62beddaa6b92/logs/test_sim_2026-05-24T19-31-39-786Z_pid34880_f0098b0b.log`; result bundle `/Users/kevintatooles/Library/Developer/XcodeBuildMCP/workspaces/codex-ios-app-62beddaa6b92/result-bundles/test_sim_2026-05-24T19-31-39-787Z_pid34880_b61cbdcc.xcresult`. |
 | Final full suite | XcodeBuildMCP `test_sim` | Pass | `SUCCEEDED`; 49 passed, 0 failed, 0 skipped; duration `60596ms`; build log `/Users/kevintatooles/Library/Developer/XcodeBuildMCP/workspaces/codex-ios-app-62beddaa6b92/logs/test_sim_2026-05-24T20-07-05-231Z_pid34880_d4abda02.log`; result bundle `/Users/kevintatooles/Library/Developer/XcodeBuildMCP/workspaces/codex-ios-app-62beddaa6b92/result-bundles/test_sim_2026-05-24T20-07-05-231Z_pid34880_d6155aaa.xcresult`. |
-| Post-merge full suite | XcodeBuildMCP `test_sim` | Inconclusive | The combined post-merge suite exceeded the MCP tool timeout. The partial log showed all 69 unit tests passed, then exposed a UI assertion failure in `testCompletedWorkoutCanBeOpenedFromWorkoutAndExerciseHistory` because workout history detail no longer showed completed volume after merging `origin/main`. |
+| Post-merge full suite | XcodeBuildMCP `test_sim` | Inconclusive | The combined post-merge suite exceeded the MCP tool timeout. The partial log showed all 69 unit tests passed, then exposed a stale UI assertion in `testCompletedWorkoutCanBeOpenedFromWorkoutAndExerciseHistory` that still expected the intentionally removed workout-history volume metric. |
 | Post-merge unit tests | XcodeBuildMCP `test_sim -only-testing:LiftingLogTests` | Pass | `SUCCEEDED`; 69 passed, 0 failed, 0 skipped; duration `20561ms`; build log `/Users/kevintatooles/Library/Developer/XcodeBuildMCP/workspaces/codex-ios-app-62beddaa6b92/logs/test_sim_2026-05-26T03-03-53-515Z_pid686_340fccd0.log`; result bundle `/Users/kevintatooles/Library/Developer/XcodeBuildMCP/workspaces/codex-ios-app-62beddaa6b92/result-bundles/test_sim_2026-05-26T03-03-53-515Z_pid686_15c9f20f.xcresult`. |
 | Post-merge UI tests, chunk 1 | XcodeBuildMCP `test_sim` with four `-only-testing:LiftingLogUITests/...` arguments | Pass | `SUCCEEDED`; 4 passed, 0 failed, 0 skipped; duration `67106ms`; covered start blank, finish sheet smoke, add exercise/set focus, and scroll-to-new-exercise tests. |
 | Post-merge UI tests, chunk 2 | XcodeBuildMCP `test_sim` with three `-only-testing:LiftingLogUITests/...` arguments | Pass | `SUCCEEDED`; 3 passed, 0 failed, 0 skipped; duration `95002ms`; covered completed workout history detail, past-workout copy state, and exercise-history card width tests. |
 | Post-merge UI tests, chunk 3 | XcodeBuildMCP `test_sim` with three `-only-testing:LiftingLogUITests/...` arguments | Pass | `SUCCEEDED`; 3 passed, 0 failed, 0 skipped; duration `93610ms`; covered settings unit conversion, exercise library create/edit/remove, and disk-backed relaunch persistence tests. |
+| Post-correction affected UI test | XcodeBuildMCP `test_sim -only-testing:LiftingLogUITests/LiftingLogUITests/testCompletedWorkoutCanBeOpenedFromWorkoutAndExerciseHistory` | Pass | `SUCCEEDED`; 1 passed, 0 failed, 0 skipped; duration `54196ms`; verifies the workflow after removing the stale workout-history volume assertion. |
 
 ## Coverage Map
 
@@ -37,7 +38,7 @@
 | --- | --- | --- |
 | Fresh launch and seed data | Pass with caveat | Normal launch resumed pre-existing disk-backed simulator state with an active workout, so it did not provide a no-active-workout baseline. Deterministic fresh baseline used `--uitest-in-memory-store`; Start Workout showed `No Past Workouts`, and seeded exercises such as Back Squat and Bench Press were visible. |
 | Blank workout creation and finish | Pass | Started a blank workout, added Bench Press, entered `185 x 5 @ 8`, marked the first set complete, added a second set, confirmed values copied as `185 x 5 @ 8` and remained incomplete, then saved. Finish sheet showed `1/2` sets and volume `925`; saving returned to Start with a past-workout card. |
-| History detail and exercise history | Pass | Workouts history showed the saved workout with 1 exercise and 2 sets. Detail showed duration about `00:45`, 1 exercise, 1 completed set, volume `925`, Bench Press Set 1 `185 x 5 Done`, and Set 2 `185 x 5 Open`. Exercise history showed Bench Press `x1` and detail `185 x 5 @ 8`. |
+| History detail and exercise history | Pass | Workouts history showed the saved workout with 1 exercise and 2 sets. Detail showed duration about `00:45`, 1 exercise, 1 completed set, Bench Press Set 1 `185 x 5 Done`, and Set 2 `185 x 5 Open`. Exercise history showed Bench Press `x1` and detail `185 x 5 @ 8`. |
 | Past-workout reuse | Pass | Selecting the past workout created a new active workout with Bench Press and two copied sets, both incomplete. Changing the copied first set to `200` did not mutate the original completed workout. Discard confirmation appeared and discard kept the copy out of completed history. |
 | Settings and unit conversion | Pass with caveat | Profile initially showed 1 workout, 20 active exercises, and `LBS`. Changing Pounds to Kilograms updated Profile to `KG` and `Kilograms`; history UI displayed the prior `185` lb set as `83.914588` kg and volume as `419.572942`. Rest timer changed from `90 seconds` to `105 seconds` in-session; relaunch persistence was not manually checked. |
 | Exercise library create/edit/remove | Pass with caveat | Seeded exercises were visible. Created custom `Audit Row`, edited it to `Audit Chest Supported Row`, attempted duplicate active creation and saw `An active exercise with that name already exists.`, then removed the custom exercise and confirmed it disappeared from the active library list. Search-after-removal and picker hiding after removal were not separately checked. |
@@ -53,11 +54,11 @@
 | Removed custom exercise was confirmed hidden from the active library list but not separately from the add-exercise picker. | No | Library removal worked and no release-critical workout data was lost. Picker hiding is useful coverage but not a blocker based on observed behavior. | Record as non-blocking follow-up. |
 | Automated UI coverage lacks a full create-add-finish-history test. | No | This was a previous gap. Post-merge automation now covers create, add set data, finish, open workout history, and open exercise history. | Covered by `testCompletedWorkoutCanBeOpenedFromWorkoutAndExerciseHistory`. |
 | Unit conversion displayed high-precision values such as `83.914588` kg and `419.572942` volume. | No | This was a previous polish gap. Post-merge formatting now rounds converted workout values for display. | Covered by `testNumberFormatterRoundsConvertedWeightForDisplay` and `testSettingsWeightUnitConversionRoundsDisplayedWorkoutValues`. |
-| Merging `origin/main` removed the workout-history completed volume metric while the audit UI test still expected `925`. | No | The regression affected release polish and test correctness, not data persistence. It was narrow and directly tied to the Phase 0 history-detail audit expectation. | Restored the volume metric in workout history detail and reran the affected UI test plus split unit/UI verification. |
+| Merging `origin/main` removed the workout-history completed volume metric while the audit UI test still expected `925`. | No | The metric removal was intentional, and the stale assertion did not represent a product regression. | Updated the UI test and audit report to stop expecting the removed workout-history volume metric. |
 
 ## Fixes Made
 
-- Restored the completed volume metric in workout history detail after merging `origin/main`, preserving the new exercise-note history changes from main.
+- No Phase 0 blocker fixes were required after merging `origin/main`; stale audit/test expectations were updated to match the intentional workout-history volume removal.
 
 ## Follow-Up Notes
 

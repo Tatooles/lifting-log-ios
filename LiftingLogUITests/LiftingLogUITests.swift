@@ -93,7 +93,6 @@ final class LiftingLogUITests: XCTestCase {
         app.buttons["WorkoutHistoryButton-0"].tap()
         XCTAssertTrue(app.staticTexts["Bench Press"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Done"].exists)
-        XCTAssertTrue(app.staticTexts["925"].exists)
 
         app.navigationBars.buttons.element(boundBy: 0).tap()
         app.segmentedControls["HistoryModePicker"].buttons["Exercises"].tap()
