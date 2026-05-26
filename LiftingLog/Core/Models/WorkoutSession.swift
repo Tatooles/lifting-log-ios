@@ -15,6 +15,7 @@ final class WorkoutSession: Identifiable {
     var sourceSessionID: UUID?
     var createdAt: Date
     var updatedAt: Date
+    var deletedAt: Date?
     var healthLinkID: UUID?
     @Relationship(deleteRule: .cascade, inverse: \LoggedExercise.session) var loggedExercises: [LoggedExercise]
 
@@ -31,6 +32,7 @@ final class WorkoutSession: Identifiable {
         referenceNotes: String? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now,
+        deletedAt: Date? = nil,
         healthLinkID: UUID? = nil,
         loggedExercises: [LoggedExercise] = []
     ) {
@@ -46,6 +48,7 @@ final class WorkoutSession: Identifiable {
         self.sourceSessionID = sourceSessionID
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
         self.healthLinkID = healthLinkID
         self.loggedExercises = loggedExercises
 
@@ -70,6 +73,10 @@ final class WorkoutSession: Identifiable {
         }
     }
 
+    var isDeleted: Bool {
+        deletedAt != nil
+    }
+
     var sortedLoggedExercises: [LoggedExercise] {
         loggedExercises.sorted { $0.orderIndex < $1.orderIndex }
     }
@@ -91,6 +98,16 @@ final class WorkoutSession: Identifiable {
     }
 
     func touch(now: Date = .now) {
+        updatedAt = now
+    }
+
+    func markDeleted(now: Date = .now) {
+        deletedAt = now
+        updatedAt = now
+    }
+
+    func restoreFromDeletion(now: Date = .now) {
+        deletedAt = nil
         updatedAt = now
     }
 }

@@ -9,6 +9,7 @@ final class UserSettings: Identifiable {
     var hasCompletedOnboarding: Bool
     var createdAt: Date
     var updatedAt: Date
+    var deletedAt: Date?
 
     init(
         id: UUID = UUID(),
@@ -16,7 +17,8 @@ final class UserSettings: Identifiable {
         defaultRestTimerSeconds: Int = 90,
         hasCompletedOnboarding: Bool = true,
         createdAt: Date = .now,
-        updatedAt: Date = .now
+        updatedAt: Date = .now,
+        deletedAt: Date? = nil
     ) {
         self.id = id
         self.weightUnitRaw = weightUnit.rawValue
@@ -24,6 +26,11 @@ final class UserSettings: Identifiable {
         self.hasCompletedOnboarding = hasCompletedOnboarding
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
+    }
+
+    var isDeleted: Bool {
+        deletedAt != nil
     }
 
     var weightUnit: MeasurementUnit {
@@ -59,6 +66,16 @@ final class UserSettings: Identifiable {
     }
 
     func touch(now: Date = .now) {
+        updatedAt = now
+    }
+
+    func markDeleted(now: Date = .now) {
+        deletedAt = now
+        updatedAt = now
+    }
+
+    func restoreFromDeletion(now: Date = .now) {
+        deletedAt = nil
         updatedAt = now
     }
 }
