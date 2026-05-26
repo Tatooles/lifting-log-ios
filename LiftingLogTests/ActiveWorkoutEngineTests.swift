@@ -173,6 +173,83 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertEqual(newSet.orderIndex, 2)
     }
 
+    func testRemovingLoggedExerciseTombstonesExerciseAndSetsWithoutDeletingRecords() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let engine = ActiveWorkoutEngine()
+        let session = try engine.startBlankWorkout(context: context, now: Date(timeIntervalSince1970: 100))
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscle: "Chest")
+        context.insert(exercise)
+        let loggedExercise = try engine.addExercise(exercise, to: session, context: context)
+        _ = try engine.addSet(to: loggedExercise, context: context)
+        let deletedAt = Date(timeIntervalSince1970: 200)
+
+        try engine.removeLoggedExercise(loggedExercise, context: context, now: deletedAt)
+
+        let persistedExercises = try allLoggedExercises(in: context)
+        let persistedSets = try allLoggedSets(in: context)
+        XCTAssertEqual(persistedExercises.map(\.id), [loggedExercise.id])
+        XCTAssertEqual(persistedSets.count, 2)
+        XCTAssertEqual(loggedExercise.deletedAt, deletedAt)
+        XCTAssertEqual(loggedExercise.updatedAt, deletedAt)
+        XCTAssertTrue(loggedExercise.sets.allSatisfy { $0.deletedAt == deletedAt })
+        XCTAssertTrue(loggedExercise.sets.allSatisfy { $0.updatedAt == deletedAt })
+        XCTAssertEqual(session.loggedExercises.count, 1)
+    }
+
+    func testRemovingLoggedExerciseReindexesRemainingNonDeletedSiblings() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let engine = ActiveWorkoutEngine()
+        let session = try engine.startBlankWorkout(context: context)
+        let firstExercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscle: "Chest")
+        let secondExercise = Exercise(name: "Back Squat", category: .strength, equipment: .barbell, primaryMuscle: "Quads")
+        let thirdExercise = Exercise(name: "Deadlift", category: .strength, equipment: .barbell, primaryMuscle: "Back")
+        context.insert(firstExercise)
+        context.insert(secondExercise)
+        context.insert(thirdExercise)
+        let first = try engine.addExercise(firstExercise, to: session, context: context)
+        let removed = try engine.addExercise(secondExercise, to: session, context: context)
+        let third = try engine.addExercise(thirdExercise, to: session, context: context)
+
+        try engine.removeLoggedExercise(removed, context: context, now: Date(timeIntervalSince1970: 300))
+
+        let activeSiblings = session.loggedExercises
+            .filter { !$0.isDeleted }
+            .sorted { $0.orderIndex < $1.orderIndex }
+        XCTAssertEqual(activeSiblings.map(\.id), [first.id, third.id])
+        XCTAssertEqual(activeSiblings.map(\.orderIndex), [0, 1])
+        XCTAssertEqual(removed.orderIndex, 1)
+        XCTAssertEqual(try allLoggedExercises(in: context).count, 3)
+    }
+
+    func testRemovingSetTombstonesSetAndReindexesRemainingNonDeletedSiblings() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let engine = ActiveWorkoutEngine()
+        let session = try engine.startBlankWorkout(context: context)
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscle: "Chest")
+        context.insert(exercise)
+        let loggedExercise = try engine.addExercise(exercise, to: session, context: context)
+        let firstSet = loggedExercise.sets[0]
+        let removedSet = try engine.addSet(to: loggedExercise, context: context)
+        let thirdSet = try engine.addSet(to: loggedExercise, context: context)
+        let deletedAt = Date(timeIntervalSince1970: 400)
+
+        try engine.removeSet(removedSet, context: context, now: deletedAt)
+
+        let persistedSets = try allLoggedSets(in: context)
+        let activeSets = loggedExercise.sets
+            .filter { !$0.isDeleted }
+            .sorted { $0.orderIndex < $1.orderIndex }
+        XCTAssertEqual(persistedSets.count, 3)
+        XCTAssertEqual(removedSet.deletedAt, deletedAt)
+        XCTAssertEqual(removedSet.updatedAt, deletedAt)
+        XCTAssertEqual(activeSets.map(\.id), [firstSet.id, thirdSet.id])
+        XCTAssertEqual(activeSets.map(\.orderIndex), [0, 1])
+        XCTAssertEqual(removedSet.orderIndex, 1)
+    }
+
     func testCompletingSetUpdatesMetrics() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
@@ -314,5 +391,15 @@ final class ActiveWorkoutEngineTests: XCTestCase {
 
     private func completedSessions(in context: ModelContext) throws -> [WorkoutSession] {
         try context.fetch(FetchDescriptor<WorkoutSession>()).filter { $0.status == .completed }
+    }
+
+    private func allLoggedExercises(in context: ModelContext) throws -> [LoggedExercise] {
+        try context.fetch(FetchDescriptor<LoggedExercise>())
+            .sorted { $0.orderIndex < $1.orderIndex }
+    }
+
+    private func allLoggedSets(in context: ModelContext) throws -> [LoggedSet] {
+        try context.fetch(FetchDescriptor<LoggedSet>())
+            .sorted { $0.orderIndex < $1.orderIndex }
     }
 }

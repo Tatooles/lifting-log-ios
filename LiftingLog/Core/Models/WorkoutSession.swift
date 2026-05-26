@@ -78,7 +78,9 @@ final class WorkoutSession: Identifiable {
     }
 
     var sortedLoggedExercises: [LoggedExercise] {
-        loggedExercises.sorted { $0.orderIndex < $1.orderIndex }
+        loggedExercises
+            .filter { !$0.isDeleted }
+            .sorted { $0.orderIndex < $1.orderIndex }
     }
 
     func effectiveDurationSeconds(now: Date = .now) -> Int {
@@ -104,6 +106,16 @@ final class WorkoutSession: Identifiable {
     func markDeleted(now: Date = .now) {
         deletedAt = now
         updatedAt = now
+    }
+
+    func markDeletedCascade(now: Date = .now) {
+        markDeleted(now: now)
+        for loggedExercise in loggedExercises {
+            loggedExercise.markDeleted(now: now)
+            for set in loggedExercise.sets {
+                set.markDeleted(now: now)
+            }
+        }
     }
 
     func restoreFromDeletion(now: Date = .now) {

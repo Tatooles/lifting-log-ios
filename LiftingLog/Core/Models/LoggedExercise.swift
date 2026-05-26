@@ -44,7 +44,9 @@ final class LoggedExercise: Identifiable {
     }
 
     var sortedSets: [LoggedSet] {
-        sets.sorted { $0.orderIndex < $1.orderIndex }
+        sets
+            .filter { !$0.isDeleted }
+            .sorted { $0.orderIndex < $1.orderIndex }
     }
 
     var isDeleted: Bool {

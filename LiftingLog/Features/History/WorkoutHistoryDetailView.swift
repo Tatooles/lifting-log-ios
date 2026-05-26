@@ -64,7 +64,7 @@ struct WorkoutHistoryDetailView: View {
                 }
 
                 Button(role: .destructive) {
-                    modelContext.delete(session)
+                    session.markDeletedCascade()
                     do {
                         try modelContext.save()
                         deleteErrorMessage = nil
