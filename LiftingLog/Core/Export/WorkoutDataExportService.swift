@@ -98,11 +98,11 @@ struct WorkoutDataExportService {
     ) -> [String] {
         [
             formatDate(session.startedAt),
-            session.title,
-            session.notes,
+            Self.neutralizedText(session.title),
+            Self.neutralizedText(session.notes),
             String(loggedExercise.orderIndex + 1),
-            loggedExercise.exerciseSnapshotName,
-            loggedExercise.notes,
+            Self.neutralizedText(loggedExercise.exerciseSnapshotName),
+            Self.neutralizedText(loggedExercise.notes),
             String(set.orderIndex + 1),
             set.kind.rawValue,
             String(set.isCompleted),
@@ -110,7 +110,7 @@ struct WorkoutDataExportService {
             set.reps.map(String.init) ?? "",
             unit.rawValue,
             set.rpe.map(Self.formatDouble) ?? "",
-            set.notes,
+            Self.neutralizedText(set.notes),
             set.completedAt.map(formatDate) ?? "",
             session.id.uuidString,
             loggedExercise.id.uuidString,
@@ -143,5 +143,15 @@ struct WorkoutDataExportService {
         }
 
         return "\"\(field.replacingOccurrences(of: "\"", with: "\"\""))\""
+    }
+
+    private static func neutralizedText(_ value: String) -> String {
+        guard let firstCharacter = value.first,
+              ["=", "+", "-", "@"].contains(firstCharacter)
+        else {
+            return value
+        }
+
+        return "'\(value)"
     }
 }

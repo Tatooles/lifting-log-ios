@@ -270,6 +270,45 @@ final class WorkoutDataExportServiceTests: XCTestCase {
         XCTAssertEqual(rows[4][15], sessionBID.uuidString)
     }
 
+    func testCSVNeutralizesFormulaLikeUserTextFields() throws {
+        let session = WorkoutSession(
+            id: uuid("00000000-0000-0000-0000-000000000001"),
+            title: "=IMPORTDATA(\"https://example.com\")",
+            startedAt: Date(timeIntervalSince1970: 0),
+            notes: "+SUM(1,1)",
+            status: .completed,
+            source: .blank
+        )
+        let loggedExercise = LoggedExercise(
+            id: uuid("00000000-0000-0000-0000-000000000101"),
+            orderIndex: 0,
+            exerciseSnapshotName: "-HYPERLINK(\"https://example.com\")",
+            notes: "@metadata"
+        )
+        let loggedSet = LoggedSet(
+            id: uuid("00000000-0000-0000-0000-000000000201"),
+            orderIndex: 0,
+            weight: -25,
+            reps: 5,
+            rpe: 8,
+            kind: .working,
+            isCompleted: true,
+            completedAt: Date(timeIntervalSince1970: 60),
+            notes: "=cmd"
+        )
+        loggedExercise.sets = [loggedSet]
+        session.loggedExercises = [loggedExercise]
+
+        let rows = try parseCSV(WorkoutDataExportService().csv(for: [session], unit: .pounds))
+
+        XCTAssertEqual(rows[1][1], "'=IMPORTDATA(\"https://example.com\")")
+        XCTAssertEqual(rows[1][2], "'+SUM(1,1)")
+        XCTAssertEqual(rows[1][4], "'-HYPERLINK(\"https://example.com\")")
+        XCTAssertEqual(rows[1][5], "'@metadata")
+        XCTAssertEqual(rows[1][9], "-25")
+        XCTAssertEqual(rows[1][13], "'=cmd")
+    }
+
     private func completedSession(
         id: UUID,
         title: String,
