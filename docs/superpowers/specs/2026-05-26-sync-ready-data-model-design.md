@@ -48,8 +48,9 @@ Local UI should filter deleted records out of user-visible active collections. E
 For Phase 1, workout graph delete helpers should tombstone parent and child records together:
 
 - Deleting a `WorkoutSession` marks the session, its `LoggedExercise` children, and their `LoggedSet` children deleted.
-- Deleting a `LoggedExercise` marks the logged exercise and its sets deleted.
+- Deleting a `LoggedExercise` marks the logged exercise and its sets deleted, then reindexes remaining non-deleted sibling `LoggedExercise` records in the same workout session.
 - Deleting a `LoggedSet` marks only that set deleted and reindexes remaining non-deleted sibling sets.
+- Deleting an `Exercise` library record does not reindex sibling exercises because library exercises are sorted by fields such as name, not by a persisted order index.
 
 Hard deletes can still exist for non-synced models and test setup cleanup.
 
