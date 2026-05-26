@@ -8,6 +8,7 @@ struct ExerciseCardView: View {
     @Bindable var engine: ActiveWorkoutEngine
     @Binding var isCollapsed: Bool
     var focusedField: FocusState<WorkoutField?>.Binding
+    let viewHistory: () -> Void
     @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
 
     private var weightUnit: MeasurementUnit {
@@ -48,6 +49,16 @@ struct ExerciseCardView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("ExerciseHeader-\(exerciseIndex)")
+
+                    Button(action: viewHistory) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("View \(loggedExercise.exerciseSnapshotName) history")
+                    .accessibilityIdentifier("ExerciseHistoryButton-\(exerciseIndex)")
 
                     Button(role: .destructive) {
                         try? engine.removeLoggedExercise(loggedExercise, context: modelContext)
@@ -134,12 +145,35 @@ struct ExerciseCardView: View {
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 18))
                         .padding(.horizontal, 16)
-                        .padding(.bottom, 16)
+
+                        if let referenceNotes {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Divider()
+                                    .overlay(AppTheme.border)
+                                    .padding(.bottom, 4)
+
+                                Text("LAST TIME")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .tracking(1.4)
+                                    .foregroundStyle(AppTheme.textTertiary)
+                                Text(referenceNotes)
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(AppTheme.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(.horizontal, 16)
+                        }
                     }
                     .transition(.opacity.combined(with: .move(edge: .top)))
+                    .padding(.bottom, 16)
                 }
             }
         }
+    }
+
+    private var referenceNotes: String? {
+        let trimmed = loggedExercise.referenceNotes?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private func columnHeader(_ title: String) -> some View {

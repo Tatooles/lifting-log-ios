@@ -123,6 +123,34 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
+    func testExerciseHistorySummaryUsesAvailableContentWidth() {
+        let app = makeApp()
+        app.launch()
+
+        app.buttons["StartBlankWorkoutButton"].tap()
+        XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
+        addExercise("Bench Press, Strength • Barbell • Chest", in: app)
+        dismissKeyboardIfNeeded(in: app)
+        app.buttons["WorkoutTab"].tap()
+
+        let firstSetCompletionButton = app.buttons["SetCompletionButton-0-0"]
+        XCTAssertTrue(firstSetCompletionButton.waitForExistence(timeout: 3))
+        firstSetCompletionButton.tap()
+        app.buttons["FinishWorkoutButton"].tap()
+        XCTAssertTrue(app.buttons["SaveWorkoutButton"].waitForExistence(timeout: 3))
+        app.buttons["SaveWorkoutButton"].tap()
+
+        app.buttons["HistoryTab"].tap()
+        XCTAssertTrue(app.staticTexts["HistoryTitle"].waitForExistence(timeout: 3))
+        app.segmentedControls["HistoryModePicker"].buttons["Exercises"].tap()
+        app.staticTexts["Bench Press"].tap()
+
+        let completedSetsCard = app.otherElements["ExerciseHistoryCompletedSetsCard"]
+        XCTAssertTrue(completedSetsCard.waitForExistence(timeout: 3))
+        XCTAssertGreaterThanOrEqual(completedSetsCard.frame.width, app.frame.width - 40)
+    }
+
+    @MainActor
     func testSettingsWeightUnitConversionRoundsDisplayedWorkoutValues() {
         let app = makeApp()
         app.launch()

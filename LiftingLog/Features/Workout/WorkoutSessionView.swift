@@ -14,8 +14,10 @@ struct WorkoutSessionView: View {
     @Environment(\.modelContext) private var modelContext
     let session: WorkoutSession
     @Bindable var engine: ActiveWorkoutEngine
+    @Bindable var navigationState: AppNavigationState
     @State private var isFinishSheetPresented = false
     @State private var isAddExercisePresented = false
+    @State private var selectedHistoryExercise: LoggedExercise?
     @State private var pendingFocusedField: WorkoutField?
     @State private var pendingScrollTarget: UUID?
     @State private var recentlyAddedExerciseID: UUID?
@@ -45,7 +47,8 @@ struct WorkoutSessionView: View {
                                 exerciseIndex: exerciseIndex,
                                 engine: engine,
                                 isCollapsed: isCollapsedBinding(for: loggedExercise),
-                                focusedField: $focusedField
+                                focusedField: $focusedField,
+                                viewHistory: { selectedHistoryExercise = loggedExercise }
                             )
                             .id(loggedExercise.id)
                         }
@@ -83,6 +86,21 @@ struct WorkoutSessionView: View {
                                 .foregroundStyle(AppTheme.textPrimary)
                                 .lineLimit(4...6)
                                 .focused($focusedField, equals: .workoutNotes)
+
+                                if let referenceNotes {
+                                    Divider()
+                                        .overlay(AppTheme.border)
+                                        .padding(.vertical, 4)
+
+                                    Text("LAST TIME")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .tracking(1.4)
+                                        .foregroundStyle(AppTheme.textTertiary)
+                                    Text(referenceNotes)
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(AppTheme.textSecondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
                             }
                         }
                     }
@@ -197,6 +215,12 @@ struct WorkoutSessionView: View {
                 pendingFocusedField = loggedExercise.sortedSets.first.map { .setWeight($0.id) }
             }
         }
+        .sheet(item: $selectedHistoryExercise) { loggedExercise in
+            ExerciseQuickHistorySheet(loggedExercise: loggedExercise) { route in
+                selectedHistoryExercise = nil
+                navigationState.openExerciseHistory(route)
+            }
+        }
     }
 
     private var workoutTitleBinding: Binding<String> {
@@ -215,6 +239,11 @@ struct WorkoutSessionView: View {
                 try? engine.updateWorkoutNotes(newValue, session: session, context: modelContext)
             }
         )
+    }
+
+    private var referenceNotes: String? {
+        let trimmed = session.referenceNotes?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private var focusOrder: [WorkoutField] {
