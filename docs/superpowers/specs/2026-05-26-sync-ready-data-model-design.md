@@ -16,6 +16,8 @@ The v1 synced scope is:
 - `LoggedExercise`
 - `LoggedSet`
 
+Workout sync includes active workout drafts as well as completed and discarded sessions. V1 should treat active workouts as durable offline-first records that can be backed up and recovered once sync catches up; it should not attempt live collaborative editing across multiple active devices.
+
 The v1 excluded scope is:
 
 - `WorkoutTemplate`: excluded because there is no user-facing template workflow in v1. Existing completed workouts already serve as reusable workout sources.

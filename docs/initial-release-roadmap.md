@@ -113,6 +113,8 @@ Suggested issue:
 
 Implement cloud sync incrementally, starting with simple entities before workout graph data.
 
+V1 workout sync should include in-progress workout drafts, not just completed history. Treat active workouts as durable offline-first records that can be backed up and recovered through Convex once sync catches up. This is not a live collaborative editing requirement: v1 should assume one active editing device at a time, use local SwiftData as the immediate source of truth, and push workout graph changes opportunistically after local saves.
+
 Target outcomes:
 
 - Local changes are tracked in an outbox or equivalent sync metadata.
