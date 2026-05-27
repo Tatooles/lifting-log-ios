@@ -111,9 +111,9 @@ Suggested issue:
 
 ## Phase 5: Sync Engine
 
-Implement cloud sync incrementally, starting with simple entities before workout graph data.
+Implement cloud sync incrementally, starting with simple entities before completed workout history.
 
-V1 workout sync should include in-progress workout drafts, not just completed history. Treat active workouts as durable offline-first records that can be backed up and recovered through Convex once sync catches up. This is not a live collaborative editing requirement: v1 should assume one active editing device at a time, use local SwiftData as the immediate source of truth, and push workout graph changes opportunistically after local saves.
+V1 workout sync should not include in-progress active workouts. Active workouts remain local SwiftData drafts until the user finishes them; once a workout is completed, its workout session, logged exercises, and logged sets become eligible for Convex sync. Mid-workout cross-device resume and cloud backup of active drafts are deferred until after v1 unless user demand proves the added sync complexity is worthwhile.
 
 Target outcomes:
 
@@ -128,7 +128,7 @@ Suggested entity order:
 
 1. User settings
 2. Exercises
-3. Workout sessions
+3. Completed workout sessions
 4. Logged exercises
 5. Logged sets
 
