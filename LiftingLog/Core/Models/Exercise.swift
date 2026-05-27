@@ -104,7 +104,7 @@ final class Exercise: Identifiable {
         if isSeeded || hasLoggedHistory {
             archive()
         } else {
-            context.delete(self)
+            markDeleted()
         }
     }
 

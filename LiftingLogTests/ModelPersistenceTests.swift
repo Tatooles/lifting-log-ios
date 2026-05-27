@@ -374,6 +374,25 @@ final class ModelPersistenceTests: XCTestCase {
         XCTAssertFalse(activeExercises.contains { $0.id == exercise.id })
     }
 
+    func testCustomExerciseWithoutHistoryTombstonesInsteadOfHardDeleting() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(name: "Seal Row", category: .strength, equipment: .dumbbell, primaryMuscle: "Back")
+
+        context.insert(exercise)
+        try context.save()
+
+        let exerciseID = exercise.id
+        try exercise.archiveOrDelete(context: context)
+        try context.save()
+
+        let allExercises = try context.fetch(FetchDescriptor<Exercise>())
+        let fetched = try XCTUnwrap(allExercises.first { $0.id == exerciseID })
+        XCTAssertTrue(fetched.isDeleted)
+        XCTAssertNotNil(fetched.deletedAt)
+        XCTAssertFalse(Exercise.visibleActiveExercises(from: allExercises).contains { $0.id == exerciseID })
+    }
+
     func testSeededExerciseWithHistoryArchivesInsteadOfHardDeleting() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
