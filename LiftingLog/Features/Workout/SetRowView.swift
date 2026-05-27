@@ -44,6 +44,7 @@ struct SetRowView: View {
             )
 
             Button {
+                clearFocusedFieldForThisSet()
                 withAnimation(.easeInOut(duration: 0.2)) {
                     try? engine.toggleSetCompletion(set, context: modelContext)
                 }
@@ -105,6 +106,11 @@ struct SetRowView: View {
         Binding(
             get: { weightInputText.displayText(for: set.weight) },
             set: { value in
+                guard shouldApplyDecimalEdit(value, currentValue: set.weight) else {
+                    weightInputText.endEditing()
+                    return
+                }
+
                 weightInputText.updateDraft(value)
                 try? engine.updateSet(set, weight: WorkoutFormatters.parseNumber(value), reps: set.reps, rpe: set.rpe, context: modelContext)
             }
@@ -132,6 +138,11 @@ struct SetRowView: View {
         Binding(
             get: { rpeInputText.displayText(for: set.rpe) },
             set: { value in
+                guard shouldApplyDecimalEdit(value, currentValue: set.rpe) else {
+                    rpeInputText.endEditing()
+                    return
+                }
+
                 rpeInputText.updateDraft(value)
                 try? engine.updateSet(set, weight: set.weight, reps: set.reps, rpe: WorkoutFormatters.parseNumber(value), context: modelContext)
             }
@@ -140,6 +151,18 @@ struct SetRowView: View {
 
     private var rpePlaceholder: String {
         return set.placeholderRPE.map(WorkoutFormatters.number) ?? "RPE"
+    }
+
+    private func clearFocusedFieldForThisSet() {
+        if focusedField.wrappedValue == .setWeight(set.id)
+            || focusedField.wrappedValue == .setReps(set.id)
+            || focusedField.wrappedValue == .setRPE(set.id) {
+            focusedField.wrappedValue = nil
+        }
+    }
+
+    private func shouldApplyDecimalEdit(_ value: String, currentValue: Double?) -> Bool {
+        !(value.isEmpty && set.isCompleted && currentValue != nil)
     }
 }
 
