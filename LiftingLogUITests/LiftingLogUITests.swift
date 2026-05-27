@@ -60,7 +60,7 @@ final class LiftingLogUITests: XCTestCase {
         let secondWeightField = app.textFields["SetWeightField-0-1"]
         XCTAssertTrue(secondWeightField.waitForExistence(timeout: 3))
         XCTAssertEqual(secondWeightField.value as? String, "185")
-        XCTAssertFalse(app.keyboards.firstMatch.waitForExistence(timeout: 1))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3))
     }
 
     @MainActor
