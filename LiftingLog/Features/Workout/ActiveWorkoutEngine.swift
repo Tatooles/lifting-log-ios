@@ -128,12 +128,9 @@ final class ActiveWorkoutEngine {
         let previous = sortedSets.last
         let set = LoggedSet(
             orderIndex: (sortedSets.map(\.orderIndex).max() ?? -1) + 1,
-            weight: previous?.weight,
-            reps: previous?.reps,
-            rpe: previous?.rpe,
-            placeholderWeight: previous?.weight == nil ? previous?.placeholderWeight : nil,
-            placeholderReps: previous?.reps == nil ? previous?.placeholderReps : nil,
-            placeholderRPE: previous?.rpe == nil ? previous?.placeholderRPE : nil,
+            placeholderWeight: previous?.weight ?? previous?.placeholderWeight,
+            placeholderReps: previous?.reps ?? previous?.placeholderReps,
+            placeholderRPE: previous?.rpe ?? previous?.placeholderRPE,
             kind: previous?.kind ?? .working,
             isCompleted: false
         )

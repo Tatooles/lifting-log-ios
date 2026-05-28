@@ -132,7 +132,7 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertEqual(added.sets.count, 1)
     }
 
-    func testAddingSetCopiesPreviousValuesAndStartsIncomplete() throws {
+    func testAddingSetCarriesPreviousValuesAsPlaceholdersAndStartsIncomplete() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
         let engine = ActiveWorkoutEngine()
@@ -145,9 +145,12 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         let newSet = try engine.addSet(to: loggedExercise, context: context)
 
         XCTAssertEqual(newSet.orderIndex, 1)
-        XCTAssertEqual(newSet.weight, 185)
-        XCTAssertEqual(newSet.reps, 5)
-        XCTAssertEqual(newSet.rpe, 8)
+        XCTAssertNil(newSet.weight)
+        XCTAssertNil(newSet.reps)
+        XCTAssertNil(newSet.rpe)
+        XCTAssertEqual(newSet.placeholderWeight, 185)
+        XCTAssertEqual(newSet.placeholderReps, 5)
+        XCTAssertEqual(newSet.placeholderRPE, 8)
         XCTAssertFalse(newSet.isCompleted)
     }
 
