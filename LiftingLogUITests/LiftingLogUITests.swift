@@ -178,6 +178,22 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
+    func testClearingCompletedWeightRemovesLoggedWeight() {
+        assertClearingCompletedSetField(
+            fieldIdentifier: "SetWeightField-0-0",
+            expectedHistorySummary: "- x 5 @ 8"
+        )
+    }
+
+    @MainActor
+    func testClearingCompletedRPERemovesLoggedRPE() {
+        assertClearingCompletedSetField(
+            fieldIdentifier: "SetRPEField-0-0",
+            expectedHistorySummary: "185 x 5"
+        )
+    }
+
+    @MainActor
     func testExerciseHistorySummaryUsesAvailableContentWidth() {
         let app = makeApp()
         app.launch()
@@ -338,6 +354,32 @@ final class LiftingLogUITests: XCTestCase {
         XCTAssertTrue(app.buttons["ExerciseHistoryButton-0"].waitForExistence(timeout: 3))
         app.buttons["ExerciseHistoryButton-0"].tap()
         XCTAssertTrue(app.staticTexts["185 x 5 @ 8"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    private func assertClearingCompletedSetField(fieldIdentifier: String, expectedHistorySummary: String) {
+        let app = makeApp()
+        app.launch()
+
+        app.buttons["StartBlankWorkoutButton"].tap()
+        XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
+        addBenchPress(in: app)
+        fillFirstBenchSet(in: app)
+        app.buttons["SetCompletionButton-0-0"].tap()
+
+        replaceText(in: app.textFields[fieldIdentifier], with: "")
+        dismissKeyboardIfNeeded(in: app)
+
+        app.buttons["FinishWorkoutButton"].tap()
+        XCTAssertTrue(app.buttons["SaveWorkoutButton"].waitForExistence(timeout: 3))
+        app.buttons["SaveWorkoutButton"].tap()
+
+        app.buttons["HistoryTab"].tap()
+        XCTAssertTrue(app.staticTexts["HistoryTitle"].waitForExistence(timeout: 3))
+        app.segmentedControls["HistoryModePicker"].buttons["Exercises"].tap()
+        XCTAssertTrue(app.buttons["ExerciseHistoryButton-0"].waitForExistence(timeout: 3))
+        app.buttons["ExerciseHistoryButton-0"].tap()
+        XCTAssertTrue(app.staticTexts[expectedHistorySummary].waitForExistence(timeout: 3))
     }
 
     @MainActor

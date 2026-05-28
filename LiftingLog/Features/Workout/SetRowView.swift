@@ -11,6 +11,7 @@ struct SetRowView: View {
     let weightUnit: MeasurementUnit
     @State private var weightInputText = WorkoutNumberInputText()
     @State private var rpeInputText = WorkoutNumberInputText()
+    @State private var suppressedCompletionClearField: WorkoutField?
 
     var body: some View {
         HStack(spacing: 10) {
@@ -44,6 +45,7 @@ struct SetRowView: View {
             )
 
             Button {
+                suppressNextCompletionClearIfNeeded()
                 clearFocusedFieldForThisSet()
                 withAnimation(.easeInOut(duration: 0.2)) {
                     try? engine.toggleSetCompletion(set, context: modelContext)
@@ -106,7 +108,7 @@ struct SetRowView: View {
         Binding(
             get: { weightInputText.displayText(for: set.weight) },
             set: { value in
-                guard shouldApplyDecimalEdit(value, currentValue: set.weight) else {
+                if shouldSuppressDecimalClear(value, field: .setWeight(set.id)) {
                     weightInputText.endEditing()
                     return
                 }
@@ -138,7 +140,7 @@ struct SetRowView: View {
         Binding(
             get: { rpeInputText.displayText(for: set.rpe) },
             set: { value in
-                guard shouldApplyDecimalEdit(value, currentValue: set.rpe) else {
+                if shouldSuppressDecimalClear(value, field: .setRPE(set.id)) {
                     rpeInputText.endEditing()
                     return
                 }
@@ -161,8 +163,30 @@ struct SetRowView: View {
         }
     }
 
-    private func shouldApplyDecimalEdit(_ value: String, currentValue: Double?) -> Bool {
-        !(value.isEmpty && set.isCompleted && currentValue != nil)
+    private func suppressNextCompletionClearIfNeeded() {
+        let fieldToSuppress: WorkoutField?
+        if focusedField.wrappedValue == .setWeight(set.id), !set.isCompleted, set.weight == nil, set.placeholderWeight != nil {
+            fieldToSuppress = .setWeight(set.id)
+        } else if focusedField.wrappedValue == .setRPE(set.id), !set.isCompleted, set.rpe == nil, set.placeholderRPE != nil {
+            fieldToSuppress = .setRPE(set.id)
+        } else {
+            fieldToSuppress = nil
+        }
+
+        guard let fieldToSuppress else { return }
+        suppressedCompletionClearField = fieldToSuppress
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(500))
+            if suppressedCompletionClearField == fieldToSuppress {
+                suppressedCompletionClearField = nil
+            }
+        }
+    }
+
+    private func shouldSuppressDecimalClear(_ value: String, field: WorkoutField) -> Bool {
+        guard value.isEmpty, suppressedCompletionClearField == field else { return false }
+        suppressedCompletionClearField = nil
+        return true
     }
 }
 
