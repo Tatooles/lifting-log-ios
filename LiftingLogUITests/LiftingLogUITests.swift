@@ -60,7 +60,7 @@ final class LiftingLogUITests: XCTestCase {
         let secondWeightField = app.textFields["SetWeightField-0-1"]
         XCTAssertTrue(secondWeightField.waitForExistence(timeout: 3))
         XCTAssertEqual(secondWeightField.value as? String, "185")
-        XCTAssertFalse(app.keyboards.firstMatch.waitForExistence(timeout: 1))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3))
     }
 
     @MainActor
@@ -79,6 +79,52 @@ final class LiftingLogUITests: XCTestCase {
         let addedExerciseHeader = app.buttons["ExerciseHeader-1"]
         XCTAssertTrue(addedExerciseHeader.waitForExistence(timeout: 3))
         XCTAssertLessThanOrEqual(addedExerciseHeader.frame.minY, 150)
+    }
+
+    @MainActor
+    func testWorkoutNotesScrollsAboveKeyboardToolbarWhenFocused() {
+        let app = makeApp()
+        app.launch()
+
+        app.buttons["StartBlankWorkoutButton"].tap()
+        XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
+
+        let notesField = app.textFields["How did this session feel? Any notes for next time..."]
+        for _ in 0..<6 where !notesField.exists || !notesField.isHittable {
+            app.swipeUp()
+        }
+
+        XCTAssertTrue(notesField.waitForExistence(timeout: 3))
+        notesField.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3))
+
+        let doneButton = app.buttons["DismissKeyboardButton"]
+        XCTAssertTrue(doneButton.waitForExistence(timeout: 3))
+        XCTAssertLessThan(notesField.frame.maxY, doneButton.frame.minY - 8)
+    }
+
+    @MainActor
+    func testExerciseNotesScrollsAboveKeyboardToolbarWhenFocused() {
+        let app = makeApp()
+        app.launch()
+
+        app.buttons["StartBlankWorkoutButton"].tap()
+        XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
+        addBenchPress(in: app)
+        dismissKeyboardIfNeeded(in: app)
+
+        let notesField = app.textFields["ExerciseNotesField-0"]
+        for _ in 0..<6 where !notesField.exists || !notesField.isHittable {
+            app.swipeUp()
+        }
+
+        XCTAssertTrue(notesField.waitForExistence(timeout: 3))
+        notesField.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3))
+
+        let doneButton = app.buttons["DismissKeyboardButton"]
+        XCTAssertTrue(doneButton.waitForExistence(timeout: 3))
+        XCTAssertLessThan(notesField.frame.maxY, doneButton.frame.minY - 8)
     }
 
     @MainActor
@@ -119,6 +165,32 @@ final class LiftingLogUITests: XCTestCase {
         XCTAssertEqual(app.textFields["SetRepsField-0-0"].value as? String, "5")
         XCTAssertTrue(app.buttons["SetCompletionButton-0-0"].exists)
         XCTAssertEqual(app.buttons["SetCompletionButton-0-0"].label, "Mark set complete")
+    }
+
+    @MainActor
+    func testCompletingClonedSetWhileWeightFieldIsFocusedCommitsPlaceholders() {
+        assertCompletingClonedSetCommitsPlaceholdersAfterFocusing(fieldIdentifier: "SetWeightField-0-0")
+    }
+
+    @MainActor
+    func testCompletingClonedSetWhileRPEFieldIsFocusedCommitsPlaceholders() {
+        assertCompletingClonedSetCommitsPlaceholdersAfterFocusing(fieldIdentifier: "SetRPEField-0-0")
+    }
+
+    @MainActor
+    func testClearingCompletedWeightRemovesLoggedWeight() {
+        assertClearingCompletedSetField(
+            fieldIdentifier: "SetWeightField-0-0",
+            expectedHistorySummary: "- x 5 @ 8"
+        )
+    }
+
+    @MainActor
+    func testClearingCompletedRPERemovesLoggedRPE() {
+        assertClearingCompletedSetField(
+            fieldIdentifier: "SetRPEField-0-0",
+            expectedHistorySummary: "185 x 5"
+        )
     }
 
     @MainActor
@@ -253,6 +325,61 @@ final class LiftingLogUITests: XCTestCase {
             }
         }
         XCTAssertTrue(app.staticTexts["StartWorkoutTitle"].waitForExistence(timeout: 1))
+    }
+
+    @MainActor
+    private func assertCompletingClonedSetCommitsPlaceholdersAfterFocusing(fieldIdentifier: String) {
+        let app = makeApp()
+        app.launch()
+
+        createCompletedBenchWorkout(in: app, title: "Focused Clone")
+
+        app.buttons["WorkoutTab"].tap()
+        XCTAssertTrue(app.buttons["PastWorkoutButton-0"].waitForExistence(timeout: 3))
+        app.buttons["PastWorkoutButton-0"].tap()
+        XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
+
+        app.textFields[fieldIdentifier].tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3))
+        app.buttons["SetCompletionButton-0-0"].tap()
+        dismissKeyboardIfNeeded(in: app)
+
+        app.buttons["FinishWorkoutButton"].tap()
+        XCTAssertTrue(app.buttons["SaveWorkoutButton"].waitForExistence(timeout: 3))
+        app.buttons["SaveWorkoutButton"].tap()
+
+        app.buttons["HistoryTab"].tap()
+        XCTAssertTrue(app.staticTexts["HistoryTitle"].waitForExistence(timeout: 3))
+        app.segmentedControls["HistoryModePicker"].buttons["Exercises"].tap()
+        XCTAssertTrue(app.buttons["ExerciseHistoryButton-0"].waitForExistence(timeout: 3))
+        app.buttons["ExerciseHistoryButton-0"].tap()
+        XCTAssertTrue(app.staticTexts["185 x 5 @ 8"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    private func assertClearingCompletedSetField(fieldIdentifier: String, expectedHistorySummary: String) {
+        let app = makeApp()
+        app.launch()
+
+        app.buttons["StartBlankWorkoutButton"].tap()
+        XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
+        addBenchPress(in: app)
+        fillFirstBenchSet(in: app)
+        app.buttons["SetCompletionButton-0-0"].tap()
+
+        replaceText(in: app.textFields[fieldIdentifier], with: "")
+        dismissKeyboardIfNeeded(in: app)
+
+        app.buttons["FinishWorkoutButton"].tap()
+        XCTAssertTrue(app.buttons["SaveWorkoutButton"].waitForExistence(timeout: 3))
+        app.buttons["SaveWorkoutButton"].tap()
+
+        app.buttons["HistoryTab"].tap()
+        XCTAssertTrue(app.staticTexts["HistoryTitle"].waitForExistence(timeout: 3))
+        app.segmentedControls["HistoryModePicker"].buttons["Exercises"].tap()
+        XCTAssertTrue(app.buttons["ExerciseHistoryButton-0"].waitForExistence(timeout: 3))
+        app.buttons["ExerciseHistoryButton-0"].tap()
+        XCTAssertTrue(app.staticTexts[expectedHistorySummary].waitForExistence(timeout: 3))
     }
 
     @MainActor
