@@ -160,10 +160,8 @@ final class ActiveWorkoutEngine {
             }
         }
 
-        if didChangeOrder {
-            session.touch(now: now)
-        }
-
+        guard didChangeOrder else { return }
+        session.touch(now: now)
         try context.save()
     }
 
