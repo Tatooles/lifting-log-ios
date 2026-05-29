@@ -8,11 +8,11 @@ private struct ReorderExerciseDraft: Identifiable, Equatable {
     let totalSets: Int
 
     init(loggedExercise: LoggedExercise) {
-        let progress = ExerciseCardView.setProgress(for: loggedExercise)
+        let visibleSets = loggedExercise.sortedSets
         id = loggedExercise.id
         name = loggedExercise.exerciseSnapshotName
-        completedSets = progress.completed
-        totalSets = progress.total
+        completedSets = visibleSets.filter(\.isCompleted).count
+        totalSets = visibleSets.count
     }
 
     var progressText: String {
