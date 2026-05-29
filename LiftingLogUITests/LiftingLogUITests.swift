@@ -378,7 +378,13 @@ final class LiftingLogUITests: XCTestCase {
         openWorkoutOptions(in: app)
         let finishButton = app.buttons["Finish Workout"]
         XCTAssertTrue(finishButton.waitForExistence(timeout: 3))
-        finishButton.tap()
+        for _ in 0..<2 {
+            finishButton.tap()
+            if app.buttons["SaveWorkoutButton"].waitForExistence(timeout: 1)
+                || app.buttons["KeepGoingButton"].waitForExistence(timeout: 1) {
+                return
+            }
+        }
     }
 
     @MainActor
