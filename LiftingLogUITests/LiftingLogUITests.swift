@@ -78,7 +78,10 @@ final class LiftingLogUITests: XCTestCase {
 
         let addedExerciseHeader = app.buttons["ExerciseHeader-1"]
         XCTAssertTrue(addedExerciseHeader.waitForExistence(timeout: 3))
-        XCTAssertLessThanOrEqual(addedExerciseHeader.frame.minY, 150)
+        XCTAssertTrue(
+            waitForElement(addedExerciseHeader, maxYOrigin: 150, timeout: 3),
+            "Expected ExerciseHeader-1 to scroll near the top, got minY \(addedExerciseHeader.frame.minY)"
+        )
     }
 
     @MainActor
@@ -587,6 +590,20 @@ final class LiftingLogUITests: XCTestCase {
         if app.keyboards.firstMatch.waitForExistence(timeout: 1) {
             app.buttons["DismissKeyboardButton"].tap()
         }
+    }
+
+    @MainActor
+    private func waitForElement(_ element: XCUIElement, maxYOrigin: CGFloat, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if element.exists && element.frame.minY <= maxYOrigin {
+                return true
+            }
+
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < deadline
+
+        return element.exists && element.frame.minY <= maxYOrigin
     }
 
     @MainActor

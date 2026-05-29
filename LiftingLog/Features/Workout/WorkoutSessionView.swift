@@ -24,7 +24,7 @@ struct WorkoutSessionView: View {
     @State private var recentlyAddedExerciseID: UUID?
     @State private var collapsedExerciseIDs: Set<UUID> = []
     @FocusState private var focusedField: WorkoutField?
-    private let contentBottomPadding: CGFloat = 24
+    private let contentBottomPadding: CGFloat = 180
 
     var body: some View {
         ScrollViewReader { scrollProxy in
