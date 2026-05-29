@@ -46,7 +46,9 @@ struct ReorderExercisesSheet: View {
                             .monospacedDigit()
                     }
                     .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier("ReorderExerciseRow-\(exercise.name)")
+                    .accessibilityLabel(exercise.name)
+                    .accessibilityValue(exercise.progressText)
+                    .accessibilityIdentifier("ReorderExerciseRow-\(exercise.id.uuidString)")
                 }
                 .onMove(perform: moveExercises)
             }
@@ -75,9 +77,7 @@ struct ReorderExercisesSheet: View {
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .onAppear {
-            if draftExercises.isEmpty {
-                draftExercises = session.sortedLoggedExercises.map(ReorderExerciseDraft.init)
-            }
+            draftExercises = session.sortedLoggedExercises.map(ReorderExerciseDraft.init)
         }
     }
 
