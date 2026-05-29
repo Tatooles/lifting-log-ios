@@ -2,6 +2,17 @@ import Foundation
 import Observation
 import SwiftData
 
+enum ActiveWorkoutEngineError: LocalizedError, Equatable {
+    case invalidExerciseReorder
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidExerciseReorder:
+            return "Workout exercises changed. Review the current order and try again."
+        }
+    }
+}
+
 @Observable
 final class ActiveWorkoutEngine {
     var activeSessionID: UUID?
@@ -119,6 +130,40 @@ final class ActiveWorkoutEngine {
             reindexLoggedExercises(for: session, now: now)
             session.touch(now: now)
         }
+        try context.save()
+    }
+
+    func reorderLoggedExercises(
+        in session: WorkoutSession,
+        orderedIDs: [UUID],
+        context: ModelContext,
+        now: Date = .now
+    ) throws {
+        let visibleExercises = session.sortedLoggedExercises
+        let visibleIDs = visibleExercises.map(\.id)
+        guard orderedIDs.count == visibleIDs.count, Set(orderedIDs) == Set(visibleIDs) else {
+            throw ActiveWorkoutEngineError.invalidExerciseReorder
+        }
+
+        let exercisesByID = Dictionary(uniqueKeysWithValues: visibleExercises.map { ($0.id, $0) })
+        var didChangeOrder = false
+
+        for (index, id) in orderedIDs.enumerated() {
+            guard let loggedExercise = exercisesByID[id] else {
+                throw ActiveWorkoutEngineError.invalidExerciseReorder
+            }
+
+            if loggedExercise.orderIndex != index {
+                loggedExercise.orderIndex = index
+                loggedExercise.touch(now: now)
+                didChangeOrder = true
+            }
+        }
+
+        if didChangeOrder {
+            session.touch(now: now)
+        }
+
         try context.save()
     }
 
