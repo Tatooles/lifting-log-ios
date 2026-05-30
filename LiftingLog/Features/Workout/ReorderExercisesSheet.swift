@@ -45,13 +45,29 @@ struct ReorderExercisesSheet: View {
                             .foregroundStyle(AppTheme.textSecondary)
                             .monospacedDigit()
                     }
+                    .padding(.horizontal, 18)
+                    .frame(minHeight: 68)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(AppTheme.surface)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(AppTheme.border)
+                    )
+                    .contentShape(.dragPreview, RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(exercise.name)
                     .accessibilityValue(exercise.progressText)
                     .accessibilityIdentifier("ReorderExerciseRow-\(exercise.id.uuidString)")
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 6))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
                 }
                 .onMove(perform: moveExercises)
             }
+            .scrollContentBackground(.hidden)
+            .background(AppTheme.subtleBackground.ignoresSafeArea())
             .accessibilityIdentifier("ReorderExercisesList")
             .environment(\.editMode, $editMode)
             .navigationTitle("Reorder Exercises")
