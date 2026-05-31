@@ -20,7 +20,7 @@ final class LiftingLogUITests: XCTestCase {
         app.buttons["StartBlankWorkoutButton"].tap()
         XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
 
-        app.buttons["Finish"].tap()
+        openFinishWorkoutSheet(in: app)
         XCTAssertTrue(app.buttons["KeepGoingButton"].waitForExistence(timeout: 3))
         app.buttons["KeepGoingButton"].tap()
 
@@ -78,7 +78,65 @@ final class LiftingLogUITests: XCTestCase {
 
         let addedExerciseHeader = app.buttons["ExerciseHeader-1"]
         XCTAssertTrue(addedExerciseHeader.waitForExistence(timeout: 3))
-        XCTAssertLessThanOrEqual(addedExerciseHeader.frame.minY, 150)
+        XCTAssertTrue(
+            waitForElement(addedExerciseHeader, maxYOrigin: 150, timeout: 3),
+            "Expected ExerciseHeader-1 to scroll near the top, got minY \(addedExerciseHeader.frame.minY)"
+        )
+    }
+
+    @MainActor
+    func testWorkoutOptionsDisablesReorderWithOneExercise() {
+        let app = makeApp()
+        app.launch()
+
+        app.buttons["StartBlankWorkoutButton"].tap()
+        XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
+        addBenchPress(in: app)
+        dismissKeyboardIfNeeded(in: app)
+
+        openWorkoutOptions(in: app)
+        let reorderButton = app.buttons["Reorder Exercises"]
+        XCTAssertTrue(reorderButton.waitForExistence(timeout: 3))
+        XCTAssertFalse(reorderButton.isEnabled)
+    }
+
+    @MainActor
+    func testReorderingActiveWorkoutExercisesChangesCardOrder() {
+        let app = makeApp()
+        app.launch()
+
+        app.buttons["StartBlankWorkoutButton"].tap()
+        XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
+
+        addExercise("Back Squat, Strength • Barbell • Quads", in: app)
+        dismissKeyboardIfNeeded(in: app)
+        addExercise("Bench Press, Strength • Barbell • Chest", in: app)
+        dismissKeyboardIfNeeded(in: app)
+        addExercise("Conventional Deadlift, Strength • Barbell • Posterior Chain", in: app)
+        dismissKeyboardIfNeeded(in: app)
+        addExercise("Overhead Press, Strength • Barbell • Shoulders", in: app)
+        dismissKeyboardIfNeeded(in: app)
+
+        assertActiveWorkoutExerciseOrder(
+            ["Back Squat", "Bench Press", "Conventional Deadlift", "Overhead Press"],
+            in: app
+        )
+
+        openWorkoutOptions(in: app)
+        let reorderButton = app.buttons["Reorder Exercises"]
+        XCTAssertTrue(reorderButton.waitForExistence(timeout: 3))
+        reorderButton.tap()
+
+        XCTAssertTrue(waitForReorderExercisesList(in: app, timeout: 3))
+        moveReorderExercise(named: "Overhead Press", before: "Back Squat", in: app)
+        let doneButton = app.buttons["DoneReorderExercisesButton"]
+        XCTAssertTrue(doneButton.waitForExistence(timeout: 3))
+        doneButton.tap()
+
+        assertActiveWorkoutExerciseOrder(
+            ["Overhead Press", "Back Squat", "Bench Press", "Conventional Deadlift"],
+            in: app
+        )
     }
 
     @MainActor
@@ -207,7 +265,7 @@ final class LiftingLogUITests: XCTestCase {
         let firstSetCompletionButton = app.buttons["SetCompletionButton-0-0"]
         XCTAssertTrue(firstSetCompletionButton.waitForExistence(timeout: 3))
         firstSetCompletionButton.tap()
-        app.buttons["FinishWorkoutButton"].tap()
+        openFinishWorkoutSheet(in: app)
         XCTAssertTrue(app.buttons["SaveWorkoutButton"].waitForExistence(timeout: 3))
         app.buttons["SaveWorkoutButton"].tap()
 
@@ -292,6 +350,7 @@ final class LiftingLogUITests: XCTestCase {
     private func makeApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--uitest-in-memory-store"]
+        app.terminate()
         return app
     }
 
@@ -308,6 +367,27 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
+    private func openWorkoutOptions(in app: XCUIApplication) {
+        let optionsButton = app.buttons["WorkoutOptionsButton"]
+        XCTAssertTrue(optionsButton.waitForExistence(timeout: 3))
+        optionsButton.tap()
+    }
+
+    @MainActor
+    private func openFinishWorkoutSheet(in app: XCUIApplication) {
+        openWorkoutOptions(in: app)
+        let finishButton = app.buttons["Finish Workout"]
+        XCTAssertTrue(finishButton.waitForExistence(timeout: 3))
+        for _ in 0..<2 {
+            finishButton.tap()
+            if app.buttons["SaveWorkoutButton"].waitForExistence(timeout: 1)
+                || app.buttons["KeepGoingButton"].waitForExistence(timeout: 1) {
+                return
+            }
+        }
+    }
+
+    @MainActor
     private func createCompletedBenchWorkout(in app: XCUIApplication, title: String) {
         app.buttons["StartBlankWorkoutButton"].tap()
         XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
@@ -316,7 +396,7 @@ final class LiftingLogUITests: XCTestCase {
         fillFirstBenchSet(in: app)
         app.buttons["SetCompletionButton-0-0"].tap()
         dismissKeyboardIfNeeded(in: app)
-        app.buttons["FinishWorkoutButton"].tap()
+        openFinishWorkoutSheet(in: app)
         XCTAssertTrue(app.buttons["SaveWorkoutButton"].waitForExistence(timeout: 3))
         for _ in 0..<2 {
             app.buttons["SaveWorkoutButton"].tap()
@@ -344,7 +424,7 @@ final class LiftingLogUITests: XCTestCase {
         app.buttons["SetCompletionButton-0-0"].tap()
         dismissKeyboardIfNeeded(in: app)
 
-        app.buttons["FinishWorkoutButton"].tap()
+        openFinishWorkoutSheet(in: app)
         XCTAssertTrue(app.buttons["SaveWorkoutButton"].waitForExistence(timeout: 3))
         app.buttons["SaveWorkoutButton"].tap()
 
@@ -370,7 +450,7 @@ final class LiftingLogUITests: XCTestCase {
         replaceText(in: app.textFields[fieldIdentifier], with: "")
         dismissKeyboardIfNeeded(in: app)
 
-        app.buttons["FinishWorkoutButton"].tap()
+        openFinishWorkoutSheet(in: app)
         XCTAssertTrue(app.buttons["SaveWorkoutButton"].waitForExistence(timeout: 3))
         app.buttons["SaveWorkoutButton"].tap()
 
@@ -406,7 +486,17 @@ final class LiftingLogUITests: XCTestCase {
             if addButton.exists && addButton.isHittable {
                 addButton.tap()
                 if app.navigationBars["Add Exercise"].waitForExistence(timeout: 1) {
-                    app.buttons[exerciseButtonLabel].tap()
+                    for _ in 0..<8 {
+                        let exerciseButton = app.buttons[exerciseButtonLabel]
+                        if exerciseButton.exists && exerciseButton.isHittable {
+                            exerciseButton.tap()
+                            return
+                        }
+
+                        app.swipeUp()
+                    }
+
+                    XCTFail("Could not find exercise button \(exerciseButtonLabel)")
                     return
                 }
             }
@@ -418,10 +508,108 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
+    private func assertActiveWorkoutExerciseOrder(_ expectedNames: [String], in app: XCUIApplication) {
+        for (index, expectedName) in expectedNames.enumerated() {
+            let header = app.buttons["ExerciseHeader-\(index)"]
+            XCTAssertTrue(header.waitForExistence(timeout: 3))
+            XCTAssertTrue(
+                header.label.contains(expectedName),
+                "Expected ExerciseHeader-\(index) to contain \(expectedName), got \(header.label)"
+            )
+        }
+    }
+
+    @MainActor
+    private func moveReorderExercise(named sourceName: String, before destinationName: String, in app: XCUIApplication) {
+        let list = reorderExercisesList(in: app)
+        XCTAssertTrue(list.exists)
+
+        for _ in 0..<2 {
+            let sourceRow = reorderExerciseRow(named: sourceName, in: app)
+            let destinationRow = reorderExerciseRow(named: destinationName, in: app)
+
+            XCTAssertTrue(sourceRow.waitForExistence(timeout: 3))
+            XCTAssertTrue(destinationRow.waitForExistence(timeout: 3))
+
+            if sourceRow.frame.minY < destinationRow.frame.minY {
+                return
+            }
+
+            let destinationY = max(destinationRow.frame.minY - 12, list.frame.minY + 1)
+            let sourceCoordinate = sourceRow.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5))
+            let destinationCoordinate = sourceRow.coordinate(
+                withNormalizedOffset: CGVector(
+                    dx: 0.92,
+                    dy: (destinationY - sourceRow.frame.minY) / sourceRow.frame.height
+                )
+            )
+            sourceCoordinate.press(forDuration: 1.0, thenDragTo: destinationCoordinate)
+        }
+
+        let sourceRow = reorderExerciseRow(named: sourceName, in: app)
+        let destinationRow = reorderExerciseRow(named: destinationName, in: app)
+        XCTAssertLessThan(sourceRow.frame.minY, destinationRow.frame.minY)
+    }
+
+    @MainActor
+    private func waitForReorderExercisesList(in app: XCUIApplication, timeout: TimeInterval) -> Bool {
+        let collectionView = app.collectionViews["ReorderExercisesList"]
+        let table = app.tables["ReorderExercisesList"]
+
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if collectionView.exists || table.exists {
+                return true
+            }
+
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < deadline
+
+        if collectionView.exists || table.exists {
+            return true
+        }
+
+        XCTFail("ReorderExercisesList did not appear as a collection view or table")
+        return false
+    }
+
+    @MainActor
+    private func reorderExercisesList(in app: XCUIApplication) -> XCUIElement {
+        let collectionView = app.collectionViews["ReorderExercisesList"]
+        if collectionView.exists {
+            return collectionView
+        }
+
+        return app.tables["ReorderExercisesList"]
+    }
+
+    @MainActor
+    private func reorderExerciseRow(named name: String, in app: XCUIApplication) -> XCUIElement {
+        reorderExercisesList(in: app)
+            .descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@", name))
+            .firstMatch
+    }
+
+    @MainActor
     private func dismissKeyboardIfNeeded(in app: XCUIApplication) {
         if app.keyboards.firstMatch.waitForExistence(timeout: 1) {
             app.buttons["DismissKeyboardButton"].tap()
         }
+    }
+
+    @MainActor
+    private func waitForElement(_ element: XCUIElement, maxYOrigin: CGFloat, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if element.exists && element.frame.minY <= maxYOrigin {
+                return true
+            }
+
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < deadline
+
+        return element.exists && element.frame.minY <= maxYOrigin
     }
 
     @MainActor

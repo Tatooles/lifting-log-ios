@@ -16,6 +16,7 @@ struct WorkoutSessionView: View {
     @Bindable var engine: ActiveWorkoutEngine
     @Bindable var navigationState: AppNavigationState
     @State private var isFinishSheetPresented = false
+    @State private var isReorderExercisesPresented = false
     @State private var isAddExercisePresented = false
     @State private var selectedHistoryExercise: LoggedExercise?
     @State private var pendingFocusedField: WorkoutField?
@@ -23,7 +24,7 @@ struct WorkoutSessionView: View {
     @State private var recentlyAddedExerciseID: UUID?
     @State private var collapsedExerciseIDs: Set<UUID> = []
     @FocusState private var focusedField: WorkoutField?
-    private let contentBottomPadding: CGFloat = 24
+    private let contentBottomPadding: CGFloat = 180
 
     var body: some View {
         ScrollViewReader { scrollProxy in
@@ -115,10 +116,15 @@ struct WorkoutSessionView: View {
                     WorkoutHeaderView(
                         elapsedSeconds: metrics.durationSeconds,
                         completedSets: metrics.completedSetCount,
-                        totalSets: metrics.totalSetCount
-                    ) {
-                        isFinishSheetPresented = true
-                    }
+                        totalSets: metrics.totalSetCount,
+                        canReorderExercises: session.sortedLoggedExercises.count >= 2,
+                        onFinish: {
+                            isFinishSheetPresented = true
+                        },
+                        onReorderExercises: {
+                            isReorderExercisesPresented = true
+                        }
+                    )
                 }
             }
             .onChange(of: isAddExercisePresented) { _, isPresented in
@@ -213,6 +219,9 @@ struct WorkoutSessionView: View {
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isFinishSheetPresented) {
             FinishWorkoutSheet(session: session, engine: engine)
+        }
+        .sheet(isPresented: $isReorderExercisesPresented) {
+            ReorderExercisesSheet(session: session, engine: engine)
         }
         .sheet(isPresented: $isAddExercisePresented) {
             AddExerciseSheet(session: session, engine: engine) { loggedExercise in
