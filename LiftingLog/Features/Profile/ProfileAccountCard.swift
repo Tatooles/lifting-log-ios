@@ -54,15 +54,19 @@ struct ProfileAccountCard: View {
                     Button {
                         authIsPresented = true
                     } label: {
-                        Text(displayState.actionTitle)
-                            .font(.system(size: 14, weight: .bold))
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 9)
-                            .background(AppTheme.accentGradient)
-                            .foregroundStyle(AppTheme.textPrimary)
-                            .clipShape(Capsule())
+                        Label {
+                            Text(displayState.actionTitle)
+                        } icon: {
+                            Image(systemName: "person.crop.circle.badge.plus")
+                        }
+                        .font(.system(size: 14, weight: .bold))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(AppTheme.accentGradient)
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("ProfileSignInButton")
