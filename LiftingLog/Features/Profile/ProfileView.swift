@@ -27,14 +27,7 @@ struct ProfileView: View {
                     .foregroundStyle(AppTheme.textPrimary)
                     .accessibilityIdentifier("ProfileTitle")
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Kevin")
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                    Text("Offline lifting log")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
+                ProfileAccountCard()
 
                 HStack(spacing: 10) {
                     statCard(title: "Workouts", value: "\(completedWorkoutCount)")

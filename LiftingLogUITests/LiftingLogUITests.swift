@@ -300,6 +300,24 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
+    func testSignedOutProfileShowsOptionalAuthAndWorkoutStillWorks() {
+        let app = makeApp()
+        app.launch()
+
+        app.buttons["ProfileTab"].tap()
+        XCTAssertTrue(app.staticTexts["ProfileTitle"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["ProfileAccountTitle"].waitForExistence(timeout: 3))
+        XCTAssertEqual(app.staticTexts["ProfileAccountTitle"].label, "Local lifting log")
+        XCTAssertTrue(app.staticTexts["ProfileAccountSubtitle"].label.contains("back up and sync"))
+        XCTAssertTrue(app.buttons["ProfileSignInButton"].exists)
+
+        app.buttons["WorkoutTab"].tap()
+        XCTAssertTrue(app.buttons["StartBlankWorkoutButton"].waitForExistence(timeout: 3))
+        app.buttons["StartBlankWorkoutButton"].tap()
+        XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
     func testExerciseLibraryCreateEditAndRemoveCustomExercise() {
         let app = makeApp()
         app.launch()

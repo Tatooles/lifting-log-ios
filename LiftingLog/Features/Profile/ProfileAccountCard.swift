@@ -37,7 +37,11 @@ struct ProfileAccountCard: View {
 
                 Spacer(minLength: 10)
 
-                UserButton(signedOutContent: {
+                if displayState.isSignedIn {
+                    UserButton()
+                        .frame(minWidth: 36, minHeight: 36)
+                        .accessibilityIdentifier("ProfileUserButton")
+                } else {
                     Button {
                         authIsPresented = true
                     } label: {
@@ -51,9 +55,7 @@ struct ProfileAccountCard: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("ProfileSignInButton")
-                })
-                .frame(minWidth: 36, minHeight: 36)
-                .accessibilityIdentifier("ProfileUserButton")
+                }
             }
         }
         .prefetchClerkImages()
