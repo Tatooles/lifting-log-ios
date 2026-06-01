@@ -5,6 +5,10 @@ settings:
   base:
     SWIFT_VERSION: 6.0
     IPHONEOS_DEPLOYMENT_TARGET: 17.0
+packages:
+  Clerk:
+    url: https://github.com/clerk/clerk-ios
+    from: 1.1.3
 targets:
   LiftingLog:
     type: application
@@ -15,10 +19,16 @@ targets:
       ProvisioningStyle: Automatic
     sources:
       - path: LiftingLog
+    dependencies:
+      - package: Clerk
+        product: ClerkKit
+      - package: Clerk
+        product: ClerkKitUI
     settings:
       base:
         PRODUCT_NAME: LiftingLog
         PRODUCT_BUNDLE_IDENTIFIER: com.kevintatooles.LiftingLog
+        CODE_SIGN_ENTITLEMENTS: LiftingLog/LiftingLog.entitlements
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: RJGJJ38RV9
         GENERATE_INFOPLIST_FILE: YES
