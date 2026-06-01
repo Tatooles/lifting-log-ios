@@ -28,6 +28,7 @@ targets:
       base:
         PRODUCT_NAME: LiftingLog
         PRODUCT_BUNDLE_IDENTIFIER: com.kevintatooles.LiftingLog
+        CODE_SIGN_ENTITLEMENTS: LiftingLog/LiftingLog.entitlements
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: RJGJJ38RV9
         GENERATE_INFOPLIST_FILE: YES
