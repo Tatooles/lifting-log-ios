@@ -309,7 +309,7 @@ final class LiftingLogUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["ProfileTitle"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["ProfileAccountTitle"].waitForExistence(timeout: 3))
         XCTAssertEqual(app.staticTexts["ProfileAccountTitle"].label, "Local lifting log")
-        XCTAssertTrue(app.staticTexts["ProfileAccountSubtitle"].label.contains("back up and sync"))
+        XCTAssertTrue(app.staticTexts["ProfileAccountSubtitle"].label.contains("workouts backed up"))
         XCTAssertTrue(app.buttons["ProfileSignInButton"].exists)
 
         app.buttons["WorkoutTab"].tap()
