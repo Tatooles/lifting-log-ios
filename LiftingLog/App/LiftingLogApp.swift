@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import ClerkKit
 
 @main
 struct LiftingLogApp: App {
@@ -8,6 +9,8 @@ struct LiftingLogApp: App {
     @State private var activeWorkoutEngine = ActiveWorkoutEngine()
 
     init() {
+        Clerk.configure(publishableKey: ClerkConfiguration.publishableKey)
+
         do {
             let arguments = ProcessInfo.processInfo.arguments
             let useInMemoryStore = arguments.contains("--uitest-in-memory-store")
@@ -29,6 +32,7 @@ struct LiftingLogApp: App {
                 activeWorkoutEngine: activeWorkoutEngine
             )
             .modelContainer(modelContainer)
+            .environment(Clerk.shared)
         }
     }
 }
