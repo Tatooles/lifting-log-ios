@@ -6,7 +6,15 @@ struct ProfileAccountCard: View {
     @Environment(Clerk.self) private var clerk
     @State private var authIsPresented = false
 
+    private var forceSignedOutAuth: Bool {
+        ProcessInfo.processInfo.arguments.contains("--uitest-force-signed-out-auth")
+    }
+
     private var displayState: AccountDisplayState {
+        if forceSignedOutAuth {
+            return .signedOut
+        }
+
         guard let user = clerk.user else {
             return .signedOut
         }

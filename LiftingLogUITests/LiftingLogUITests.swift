@@ -302,6 +302,7 @@ final class LiftingLogUITests: XCTestCase {
     @MainActor
     func testSignedOutProfileShowsOptionalAuthAndWorkoutStillWorks() {
         let app = makeApp()
+        app.launchArguments.append("--uitest-force-signed-out-auth")
         app.launch()
 
         app.buttons["ProfileTab"].tap()
