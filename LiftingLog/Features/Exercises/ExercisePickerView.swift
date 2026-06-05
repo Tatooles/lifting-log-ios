@@ -60,7 +60,7 @@ struct ExercisePickerView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(exercise.name)
                 .font(.system(size: 17, weight: .semibold))
-            Text("\(exercise.category.displayName) • \(exercise.equipment.displayName) • \(exercise.primaryMuscle)")
+            Text(exercise.metadataDisplayText)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(.secondary)
         }

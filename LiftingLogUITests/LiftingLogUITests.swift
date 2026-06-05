@@ -44,7 +44,7 @@ final class LiftingLogUITests: XCTestCase {
 
         app.buttons["AddExerciseButton"].tap()
         XCTAssertTrue(app.navigationBars["Add Exercise"].waitForExistence(timeout: 3))
-        app.buttons["Bench Press, Strength • Barbell • Chest"].tap()
+        app.buttons["Bench Press, Barbell • Chest"].tap()
 
         let firstWeightField = app.textFields["SetWeightField-0-0"]
         XCTAssertTrue(firstWeightField.waitForExistence(timeout: 3))
@@ -71,9 +71,9 @@ final class LiftingLogUITests: XCTestCase {
         app.buttons["StartBlankWorkoutButton"].tap()
         XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
 
-        addExercise("Back Squat, Strength • Barbell • Quads", in: app)
+        addExercise("Back Squat, Barbell • Quads", in: app)
         dismissKeyboardIfNeeded(in: app)
-        addExercise("Bench Press, Strength • Barbell • Chest", in: app)
+        addExercise("Bench Press, Barbell • Chest", in: app)
         dismissKeyboardIfNeeded(in: app)
 
         let addedExerciseHeader = app.buttons["ExerciseHeader-1"]
@@ -108,13 +108,13 @@ final class LiftingLogUITests: XCTestCase {
         app.buttons["StartBlankWorkoutButton"].tap()
         XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
 
-        addExercise("Back Squat, Strength • Barbell • Quads", in: app)
+        addExercise("Back Squat, Barbell • Quads", in: app)
         dismissKeyboardIfNeeded(in: app)
-        addExercise("Bench Press, Strength • Barbell • Chest", in: app)
+        addExercise("Bench Press, Barbell • Chest", in: app)
         dismissKeyboardIfNeeded(in: app)
-        addExercise("Conventional Deadlift, Strength • Barbell • Posterior Chain", in: app)
+        addExercise("Conventional Deadlift, Barbell • Glutes", in: app)
         dismissKeyboardIfNeeded(in: app)
-        addExercise("Overhead Press, Strength • Barbell • Shoulders", in: app)
+        addExercise("Overhead Press, Barbell • Shoulders", in: app)
         dismissKeyboardIfNeeded(in: app)
 
         assertActiveWorkoutExerciseOrder(
@@ -258,7 +258,7 @@ final class LiftingLogUITests: XCTestCase {
 
         app.buttons["StartBlankWorkoutButton"].tap()
         XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
-        addExercise("Bench Press, Strength • Barbell • Chest", in: app)
+        addExercise("Bench Press, Barbell • Chest", in: app)
         dismissKeyboardIfNeeded(in: app)
         app.buttons["WorkoutTab"].tap()
 
@@ -356,20 +356,49 @@ final class LiftingLogUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Create Exercise"].waitForExistence(timeout: 3))
         app.textFields["ExerciseNameField"].tap()
         app.textFields["ExerciseNameField"].typeText("Aardvark Row")
-        app.textFields["ExercisePrimaryMuscleField"].tap()
-        app.textFields["ExercisePrimaryMuscleField"].typeText("Back")
+        selectPickerValue(identifier: "ExercisePrimaryMuscleGroupPicker", value: "Upper Back", in: app)
         app.buttons["ExerciseEditorSaveButton"].tap()
 
-        XCTAssertTrue(app.buttons["ExerciseLibraryRow-Aardvark Row"].waitForExistence(timeout: 3))
-        app.buttons["ExerciseLibraryRow-Aardvark Row"].tap()
+        XCTAssertTrue(app.buttons["ExerciseLibraryRow-Aardvark Row-Barbell"].waitForExistence(timeout: 3))
+        app.buttons["ExerciseLibraryRow-Aardvark Row-Barbell"].tap()
         XCTAssertTrue(app.navigationBars["Edit Exercise"].waitForExistence(timeout: 3))
         replaceText(in: app.textFields["ExerciseNameField"], with: "Aardvark Paused Row")
         app.buttons["ExerciseEditorSaveButton"].tap()
 
-        XCTAssertTrue(app.buttons["ExerciseLibraryRow-Aardvark Paused Row"].waitForExistence(timeout: 3))
-        app.buttons["ExerciseLibraryRow-Aardvark Paused Row"].swipeLeft()
+        XCTAssertTrue(app.buttons["ExerciseLibraryRow-Aardvark Paused Row-Barbell"].waitForExistence(timeout: 3))
+        app.buttons["ExerciseLibraryRow-Aardvark Paused Row-Barbell"].swipeLeft()
         app.buttons["Remove"].tap()
-        XCTAssertFalse(app.buttons["ExerciseLibraryRow-Aardvark Paused Row"].waitForExistence(timeout: 1))
+        XCTAssertFalse(app.buttons["ExerciseLibraryRow-Aardvark Paused Row-Barbell"].waitForExistence(timeout: 1))
+    }
+
+    @MainActor
+    func testExerciseLibraryAllowsSameNameWithDifferentEquipmentAndRejectsExactDuplicate() {
+        let app = makeApp()
+        app.launch()
+
+        app.buttons["ProfileTab"].tap()
+        app.buttons["ProfileExerciseLibraryLink"].tap()
+        XCTAssertTrue(app.navigationBars["Exercises"].waitForExistence(timeout: 3))
+
+        createExercise(name: "Variant Press", equipment: "Barbell", muscle: "Chest", in: app)
+        createExercise(name: "Variant Press", equipment: "Dumbbell", muscle: "Chest", in: app)
+
+        app.searchFields.firstMatch.tap()
+        app.searchFields.firstMatch.typeText("Variant Press")
+        XCTAssertTrue(app.buttons["ExerciseLibraryRow-Variant Press-Barbell"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["ExerciseLibraryRow-Variant Press-Dumbbell"].waitForExistence(timeout: 3))
+        app.buttons["Clear text"].tap()
+        app.buttons["Cancel"].tap()
+
+        app.buttons["CreateExerciseButton"].tap()
+        XCTAssertTrue(app.navigationBars["Create Exercise"].waitForExistence(timeout: 3))
+        app.textFields["ExerciseNameField"].tap()
+        app.textFields["ExerciseNameField"].typeText("Variant Press")
+        selectPickerValue(identifier: "ExerciseEquipmentPicker", value: "Barbell", in: app)
+        selectPickerValue(identifier: "ExercisePrimaryMuscleGroupPicker", value: "Chest", in: app)
+        app.buttons["ExerciseEditorSaveButton"].tap()
+
+        XCTAssertTrue(app.staticTexts["An active exercise with that name and equipment already exists."].waitForExistence(timeout: 3))
     }
 
     @MainActor
@@ -508,7 +537,7 @@ final class LiftingLogUITests: XCTestCase {
 
     @MainActor
     private func addBenchPress(in app: XCUIApplication) {
-        addExercise("Bench Press, Strength • Barbell • Chest", in: app)
+        addExercise("Bench Press, Barbell • Chest", in: app)
         XCTAssertTrue(app.textFields["SetWeightField-0-0"].waitForExistence(timeout: 3))
     }
 
@@ -664,5 +693,36 @@ final class LiftingLogUITests: XCTestCase {
             field.typeText(deleteText)
         }
         field.typeText(text)
+    }
+
+    @MainActor
+    private func createExercise(name: String, equipment: String, muscle: String, in app: XCUIApplication) {
+        app.buttons["CreateExerciseButton"].tap()
+        XCTAssertTrue(app.navigationBars["Create Exercise"].waitForExistence(timeout: 3))
+        app.textFields["ExerciseNameField"].tap()
+        app.textFields["ExerciseNameField"].typeText(name)
+        selectPickerValue(identifier: "ExerciseEquipmentPicker", value: equipment, in: app)
+        selectPickerValue(identifier: "ExercisePrimaryMuscleGroupPicker", value: muscle, in: app)
+        app.buttons["ExerciseEditorSaveButton"].tap()
+    }
+
+    @MainActor
+    private func selectPickerValue(identifier: String, value: String, in app: XCUIApplication) {
+        let picker = app.buttons[identifier]
+        if picker.waitForExistence(timeout: 1) {
+            picker.tap()
+            app.buttons[value].tap()
+            return
+        }
+
+        let segmentedPicker = app.segmentedControls[identifier]
+        if segmentedPicker.waitForExistence(timeout: 1) {
+            segmentedPicker.buttons[value].tap()
+            return
+        }
+
+        let staticValue = app.staticTexts[value]
+        XCTAssertTrue(staticValue.waitForExistence(timeout: 3))
+        staticValue.tap()
     }
 }
