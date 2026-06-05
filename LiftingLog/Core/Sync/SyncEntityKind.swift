@@ -1,12 +1,12 @@
-enum SyncEntityKind: Equatable {
-    case userSettings
-    case exercise
-    case workoutSession
-    case loggedExercise
-    case loggedSet
-    case workoutTemplate
-    case healthDataLink
-    case seedMetadata
+enum SyncEntityKind: String, CaseIterable, Equatable, Codable, Hashable {
+    case userSettings = "userSettings"
+    case exercise = "exercises"
+    case workoutSession = "workoutSessions"
+    case loggedExercise = "loggedExercises"
+    case loggedSet = "loggedSets"
+    case workoutTemplate = "workoutTemplates"
+    case healthDataLink = "healthDataLinks"
+    case seedMetadata = "seedMetadata"
 
     static let v1Synced: [SyncEntityKind] = [
         .userSettings,
@@ -21,4 +21,8 @@ enum SyncEntityKind: Equatable {
         .healthDataLink,
         .seedMetadata,
     ]
+
+    var isV1Synced: Bool {
+        Self.v1Synced.contains(self)
+    }
 }
