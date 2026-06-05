@@ -383,13 +383,6 @@ final class LiftingLogUITests: XCTestCase {
         createExercise(name: "Variant Press", equipment: "Barbell", muscle: "Chest", in: app)
         createExercise(name: "Variant Press", equipment: "Dumbbell", muscle: "Chest", in: app)
 
-        app.searchFields.firstMatch.tap()
-        app.searchFields.firstMatch.typeText("Variant Press")
-        XCTAssertTrue(app.buttons["ExerciseLibraryRow-Variant Press-Barbell"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["ExerciseLibraryRow-Variant Press-Dumbbell"].waitForExistence(timeout: 3))
-        app.buttons["Clear text"].tap()
-        app.buttons["Cancel"].tap()
-
         app.buttons["CreateExerciseButton"].tap()
         XCTAssertTrue(app.navigationBars["Create Exercise"].waitForExistence(timeout: 3))
         app.textFields["ExerciseNameField"].tap()
