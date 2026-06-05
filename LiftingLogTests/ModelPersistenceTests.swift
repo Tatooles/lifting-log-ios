@@ -24,6 +24,28 @@ final class ModelPersistenceTests: XCTestCase {
         XCTAssertEqual(fetched.first?.category, .strength)
     }
 
+    func testExerciseMuscleGroupDisplayNamesAndFallback() throws {
+        XCTAssertEqual(ExerciseMuscleGroup.chest.displayName, "Chest")
+        XCTAssertEqual(ExerciseMuscleGroup.upperBack.displayName, "Upper Back")
+        XCTAssertEqual(ExerciseMuscleGroup.lowerBack.displayName, "Lower Back")
+        XCTAssertEqual(ExerciseMuscleGroup.fullBody.displayName, "Full Body")
+        XCTAssertEqual(ExerciseMuscleGroup(rawValue: "futureValue") ?? .other, .other)
+    }
+
+    func testExerciseMuscleGroupMapsLegacyValues() throws {
+        XCTAssertEqual(ExerciseMuscleGroup.legacyGroup(for: "Quads"), .quads)
+        XCTAssertEqual(ExerciseMuscleGroup.legacyGroup(for: "Rear Delts"), .shoulders)
+        XCTAssertEqual(ExerciseMuscleGroup.legacyGroup(for: "Abdominals"), .core)
+        XCTAssertEqual(ExerciseMuscleGroup.legacyGroup(for: "Lower Back"), .lowerBack)
+        XCTAssertEqual(ExerciseMuscleGroup.legacyGroup(for: "Unknown Muscle"), .other)
+    }
+
+    func testExpandedExerciseEquipmentDisplayNames() throws {
+        XCTAssertEqual(ExerciseEquipment.smithMachine.displayName, "Smith Machine")
+        XCTAssertEqual(ExerciseEquipment.resistanceBand.displayName, "Resistance Band")
+        XCTAssertEqual(ExerciseEquipment.medicineBall.displayName, "Medicine Ball")
+    }
+
     func testWorkoutSessionPersistsLoggedExerciseAndSetRelationships() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
