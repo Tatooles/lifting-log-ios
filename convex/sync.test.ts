@@ -45,6 +45,7 @@ function exerciseRecord(overrides: Partial<ExerciseRecord> = {}): ExerciseRecord
     categoryRaw: "strength",
     equipmentRaw: "barbell",
     primaryMuscleRaw: "Chest",
+    primaryMuscleGroupRaw: "chest",
     notes: "",
     isArchived: false,
     isSeeded: false,
@@ -74,16 +75,10 @@ type ExerciseRecord = {
   clientId: string;
   seedIdentifier: string | null;
   name: string;
-  categoryRaw: "strength" | "cardio" | "mobility" | "other";
-  equipmentRaw:
-    | "barbell"
-    | "dumbbell"
-    | "machine"
-    | "cable"
-    | "bodyweight"
-    | "kettlebell"
-    | "other";
+  categoryRaw: string;
+  equipmentRaw: string;
   primaryMuscleRaw: string;
+  primaryMuscleGroupRaw: string;
   notes: string;
   isArchived: boolean;
   isSeeded: boolean;
@@ -172,6 +167,30 @@ describe("sync access control", () => {
 });
 
 describe("sync conflict behavior", () => {
+  test("future exercise taxonomy strings round-trip through sync", async () => {
+    const t = testDb().withIdentity(userA);
+    const record = exerciseRecord({
+      categoryRaw: "plyometrics",
+      equipmentRaw: "gravity-boots",
+      primaryMuscleRaw: "Future Chest",
+      primaryMuscleGroupRaw: "future-upper-body",
+    });
+
+    await t.mutation(api.sync.upsertExercise, { record });
+
+    const changes = await t.query(api.sync.fetchChanges, {
+      cursors: zeroCursors,
+    });
+
+    expect(changes.exercises).toHaveLength(1);
+    expect(changes.exercises[0]).toMatchObject({
+      categoryRaw: "plyometrics",
+      equipmentRaw: "gravity-boots",
+      primaryMuscleRaw: "Future Chest",
+      primaryMuscleGroupRaw: "future-upper-body",
+    });
+  });
+
   test("non-finite numbers are rejected before records are written", async () => {
     const t = testDb().withIdentity(userA);
 
