@@ -18,6 +18,38 @@ final class SeedDataServiceTests: XCTestCase {
         XCTAssertEqual(backSquat.equipment, .barbell)
     }
 
+    func testSeedServiceUsesControlledPrimaryMuscleGroups() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+
+        try SeedDataService.seedIfNeeded(context: context)
+
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        XCTAssertEqual(exercises.first { $0.seedIdentifier == "back-squat" }?.primaryMuscleGroup, .quads)
+        XCTAssertEqual(exercises.first { $0.seedIdentifier == "conventional-deadlift" }?.primaryMuscleGroup, .glutes)
+        XCTAssertEqual(exercises.first { $0.seedIdentifier == "pull-up" }?.primaryMuscleGroup, .lats)
+        XCTAssertEqual(exercises.first { $0.seedIdentifier == "barbell-row" }?.primaryMuscleGroup, .upperBack)
+        XCTAssertEqual(exercises.first { $0.seedIdentifier == "face-pull" }?.primaryMuscleGroup, .shoulders)
+    }
+
+    func testSeedServiceMigratesLegacyPrimaryMuscleStrings() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(
+            name: "Legacy Face Pull",
+            category: .strength,
+            equipment: .cable,
+            primaryMuscleGroup: .other
+        )
+        exercise.primaryMuscleRaw = "Rear Delts"
+        exercise.primaryMuscleGroupRaw = ExerciseMuscleGroup.other.rawValue
+        context.insert(exercise)
+
+        try SeedDataService.seedIfNeeded(context: context)
+
+        XCTAssertEqual(exercise.primaryMuscleGroup, .shoulders)
+    }
+
     func testSeedServiceIsIdempotent() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
