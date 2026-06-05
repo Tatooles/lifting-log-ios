@@ -757,10 +757,13 @@ final class LiftingLogUITests: XCTestCase {
 
     @MainActor
     private func replaceText(in field: XCUIElement, with text: String) {
-        field.tap()
         if let existingText = field.value as? String, !existingText.isEmpty {
-            let deleteText = String(repeating: XCUIKeyboardKey.delete.rawValue, count: existingText.count)
+            field.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+            field.typeKey("a", modifierFlags: .command)
+            let deleteText = String(repeating: XCUIKeyboardKey.delete.rawValue, count: existingText.count + 1)
             field.typeText(deleteText)
+        } else {
+            field.tap()
         }
         field.typeText(text)
     }
