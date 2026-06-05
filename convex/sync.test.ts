@@ -363,6 +363,40 @@ describe("sync conflict behavior", () => {
     });
   });
 
+  test("legacy stored logged exercise docs without snapshot metadata are normalized in changes", async () => {
+    const t = testDb();
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("loggedExercises", {
+        ownerTokenIdentifier: userA.tokenIdentifier,
+        clientId: "legacy-logged-exercise",
+        sessionClientId: "session-1",
+        exerciseClientId: "exercise-1",
+        orderIndex: 0,
+        exerciseSnapshotName: "Bench Press",
+        notes: "",
+        referenceNotes: null,
+        createdAt: 1,
+        updatedAt: 2,
+        deletedAt: null,
+        serverUpdatedAt: 3,
+      });
+    });
+
+    const changes = await t
+      .withIdentity(userA)
+      .query(api.sync.fetchChanges, { cursors: zeroCursors });
+
+    expect(changes.loggedExercises).toHaveLength(1);
+    expect(changes.loggedExercises[0]).toMatchObject({
+      clientId: "legacy-logged-exercise",
+      exerciseSnapshotName: "Bench Press",
+      exerciseSnapshotEquipmentRaw: "other",
+      exerciseSnapshotPrimaryMuscleGroupRaw: "other",
+      hasSnapshotMetadata: false,
+    });
+  });
+
   test("legacy logged exercise update payloads preserve existing snapshot metadata", async () => {
     const t = testDb().withIdentity(userA);
 

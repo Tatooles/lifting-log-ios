@@ -22,6 +22,11 @@ type NormalizedExercisePayload = ExercisePayload & {
 type NormalizedExerciseRecord = Doc<"exercises"> & {
   primaryMuscleGroupRaw: string;
 };
+type NormalizedLoggedExerciseRecord = Doc<"loggedExercises"> & {
+  exerciseSnapshotEquipmentRaw: string;
+  exerciseSnapshotPrimaryMuscleGroupRaw: string;
+  hasSnapshotMetadata: boolean;
+};
 type NormalizedLoggedExercisePayload = LoggedExercisePayload & {
   exerciseSnapshotEquipmentRaw: string;
   exerciseSnapshotPrimaryMuscleGroupRaw: string;
@@ -137,6 +142,21 @@ function normalizeExerciseRecord(record: Doc<"exercises">): NormalizedExerciseRe
 function normalizeLoggedExercisePayload(
   record: LoggedExercisePayload,
 ): NormalizedLoggedExercisePayload {
+  return {
+    ...record,
+    exerciseSnapshotEquipmentRaw:
+      record.exerciseSnapshotEquipmentRaw ?? defaultExerciseSnapshotEquipmentRaw,
+    exerciseSnapshotPrimaryMuscleGroupRaw:
+      record.exerciseSnapshotPrimaryMuscleGroupRaw ??
+      defaultExerciseSnapshotPrimaryMuscleGroupRaw,
+    hasSnapshotMetadata:
+      record.hasSnapshotMetadata ?? defaultHasSnapshotMetadata,
+  };
+}
+
+function normalizeLoggedExerciseRecord(
+  record: Doc<"loggedExercises">,
+): NormalizedLoggedExerciseRecord {
   return {
     ...record,
     exerciseSnapshotEquipmentRaw:
@@ -842,7 +862,9 @@ export const fetchChanges = query({
     const userSettings = userSettingsPage.records;
     const exercises = exercisePage.records.map(normalizeExerciseRecord);
     const workoutSessions = workoutSessionPage.records;
-    const loggedExercises = loggedExercisePage.records;
+    const loggedExercises = loggedExercisePage.records.map(
+      normalizeLoggedExerciseRecord,
+    );
     const loggedSets = loggedSetPage.records;
 
     return {
