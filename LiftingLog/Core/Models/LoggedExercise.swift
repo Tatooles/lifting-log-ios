@@ -6,6 +6,8 @@ final class LoggedExercise: Identifiable {
     @Attribute(.unique) var id: UUID
     var orderIndex: Int
     var exerciseSnapshotName: String
+    var exerciseSnapshotEquipmentRaw: String = ExerciseEquipment.other.rawValue
+    var exerciseSnapshotPrimaryMuscleGroupRaw: String = ExerciseMuscleGroup.other.rawValue
     var notes: String
     var referenceNotes: String?
     var createdAt: Date
@@ -20,6 +22,8 @@ final class LoggedExercise: Identifiable {
         orderIndex: Int,
         exercise: Exercise? = nil,
         exerciseSnapshotName: String? = nil,
+        exerciseSnapshotEquipmentRaw: String? = nil,
+        exerciseSnapshotPrimaryMuscleGroupRaw: String? = nil,
         notes: String = "",
         referenceNotes: String? = nil,
         createdAt: Date = .now,
@@ -31,6 +35,8 @@ final class LoggedExercise: Identifiable {
         self.orderIndex = orderIndex
         self.exercise = exercise
         self.exerciseSnapshotName = exerciseSnapshotName ?? exercise?.name ?? "Exercise"
+        self.exerciseSnapshotEquipmentRaw = exerciseSnapshotEquipmentRaw ?? exercise?.equipmentRaw ?? ExerciseEquipment.other.rawValue
+        self.exerciseSnapshotPrimaryMuscleGroupRaw = exerciseSnapshotPrimaryMuscleGroupRaw ?? exercise?.primaryMuscleGroupRaw ?? ExerciseMuscleGroup.other.rawValue
         self.notes = notes
         self.referenceNotes = referenceNotes
         self.createdAt = createdAt
@@ -51,6 +57,18 @@ final class LoggedExercise: Identifiable {
 
     var isDeleted: Bool {
         deletedAt != nil
+    }
+
+    var snapshotEquipment: ExerciseEquipment {
+        ExerciseEquipment(rawValue: exerciseSnapshotEquipmentRaw) ?? .other
+    }
+
+    var snapshotPrimaryMuscleGroup: ExerciseMuscleGroup {
+        ExerciseMuscleGroup(rawValue: exerciseSnapshotPrimaryMuscleGroupRaw) ?? .other
+    }
+
+    var metadataDisplayText: String {
+        "\(snapshotEquipment.displayName) • \(snapshotPrimaryMuscleGroup.displayName)"
     }
 
     func touch(now: Date = .now) {

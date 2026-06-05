@@ -86,7 +86,7 @@ final class HistoryPersistenceTests: XCTestCase {
     func testDeletingCompletedWorkoutTombstonesSessionLoggedExercisesAndSets() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
-        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscle: "Chest")
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
         let session = WorkoutSession(title: "Push", startedAt: .now, status: .completed, source: .blank)
         let firstLoggedExercise = LoggedExercise(orderIndex: 0, exercise: exercise, exerciseSnapshotName: exercise.name)
         firstLoggedExercise.sets = [
@@ -123,7 +123,7 @@ final class HistoryPersistenceTests: XCTestCase {
     func testExerciseHistoryCountsCompletedSetsOnly() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
-        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscle: "Chest")
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
         let session = WorkoutSession(title: "Push", startedAt: .now, status: .completed, source: .blank)
         let loggedExercise = LoggedExercise(orderIndex: 0, exercise: exercise, exerciseSnapshotName: exercise.name)
         loggedExercise.sets = [
@@ -141,7 +141,7 @@ final class HistoryPersistenceTests: XCTestCase {
     }
 
     func testExerciseHistorySummaryIgnoresTombstonedWorkoutGraphRecords() throws {
-        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscle: "Chest")
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
         let visibleSession = WorkoutSession(title: "Visible Push", startedAt: Date(timeIntervalSince1970: 100), status: .completed, source: .blank)
         let visibleLoggedExercise = LoggedExercise(orderIndex: 0, exercise: exercise, exerciseSnapshotName: exercise.name)
         visibleLoggedExercise.sets = [
@@ -173,7 +173,7 @@ final class HistoryPersistenceTests: XCTestCase {
     func testExerciseHistorySummaryUsesSnapshotNameAfterExerciseRename() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
-        let exercise = Exercise(name: "Barbell Bench Press", category: .strength, equipment: .barbell, primaryMuscle: "Chest")
+        let exercise = Exercise(name: "Barbell Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
         let session = WorkoutSession(title: "Push", startedAt: .now, status: .completed, source: .blank)
         let loggedExercise = LoggedExercise(orderIndex: 0, exercise: exercise, exerciseSnapshotName: "Bench Press")
         loggedExercise.sets = [LoggedSet(orderIndex: 0, weight: 185, reps: 5, rpe: 8, isCompleted: true)]
@@ -190,7 +190,7 @@ final class HistoryPersistenceTests: XCTestCase {
     func testStartingFromPastWorkoutDoesNotMutateOriginalPastWorkout() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
-        let exercise = Exercise(name: "Back Squat", category: .strength, equipment: .barbell, primaryMuscle: "Quads")
+        let exercise = Exercise(name: "Back Squat", category: .strength, equipment: .barbell, primaryMuscleGroup: .quads)
         let past = WorkoutSession(title: "Leg Day", startedAt: .now, status: .completed, source: .blank)
         let loggedExercise = LoggedExercise(orderIndex: 0, exercise: exercise, exerciseSnapshotName: exercise.name)
         loggedExercise.sets = [LoggedSet(orderIndex: 0, weight: 315, reps: 5, rpe: 8, isCompleted: true)]
@@ -209,7 +209,7 @@ final class HistoryPersistenceTests: XCTestCase {
     func testExerciseHistoryGroupsCompletedSetsByWorkoutSession() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
-        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscle: "Chest")
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
         let newerSession = WorkoutSession(
             title: "Push B",
             startedAt: Date(timeIntervalSince1970: 200),
@@ -282,7 +282,7 @@ final class HistoryPersistenceTests: XCTestCase {
     func testExerciseHistoryGroupsSortTitleAscendingWhenStartedAtMatches() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
-        let exercise = Exercise(name: "Deadlift", category: .strength, equipment: .barbell, primaryMuscle: "Back")
+        let exercise = Exercise(name: "Deadlift", category: .strength, equipment: .barbell, primaryMuscleGroup: .upperBack)
         let startedAt = Date(timeIntervalSince1970: 400)
         let bSession = WorkoutSession(title: "B Session", startedAt: startedAt, status: .completed, source: .blank)
         let aSession = WorkoutSession(title: "A Session", startedAt: startedAt, status: .completed, source: .blank)
@@ -306,7 +306,7 @@ final class HistoryPersistenceTests: XCTestCase {
     func testExerciseHistoryGroupCarriesExerciseNotes() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
-        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscle: "Chest")
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
         let session = WorkoutSession(
             title: "Push Notes",
             startedAt: Date(timeIntervalSince1970: 500),
@@ -336,7 +336,7 @@ final class HistoryPersistenceTests: XCTestCase {
     func testExerciseHistoryGroupPreservesNotesForDuplicateLoggedExercises() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
-        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscle: "Chest")
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
         let session = WorkoutSession(
             title: "Duplicate Bench",
             startedAt: Date(timeIntervalSince1970: 600),
@@ -392,7 +392,7 @@ final class HistoryPersistenceTests: XCTestCase {
 
     func testExerciseHistoryRoutePrefersExerciseID() throws {
         let exerciseID = UUID()
-        let exercise = Exercise(id: exerciseID, name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscle: "Chest")
+        let exercise = Exercise(id: exerciseID, name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
         let loggedExercise = LoggedExercise(orderIndex: 0, exercise: exercise, exerciseSnapshotName: "Bench Snapshot")
 
         let route = ExerciseHistoryRoute(loggedExercise: loggedExercise)
@@ -412,7 +412,7 @@ final class HistoryPersistenceTests: XCTestCase {
     }
 
     func testExerciseHistorySummaryCanBeFoundFromRoute() throws {
-        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscle: "Chest")
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
         let session = WorkoutSession(title: "Push", startedAt: .now, status: .completed, source: .blank)
         let loggedExercise = LoggedExercise(orderIndex: 0, exercise: exercise, exerciseSnapshotName: "Bench Press")
         loggedExercise.sets = [LoggedSet(orderIndex: 0, weight: 185, reps: 5, rpe: 8, isCompleted: true)]
@@ -425,7 +425,7 @@ final class HistoryPersistenceTests: XCTestCase {
     }
 
     func testRecentExerciseHistoryGroupsCapToThreeNewestSessions() throws {
-        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscle: "Chest")
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
         let sessions = (1...4).map { index in
             let session = WorkoutSession(
                 title: "Push \(index)",
@@ -446,7 +446,7 @@ final class HistoryPersistenceTests: XCTestCase {
     }
 
     func testExerciseHistoryGroupExposesTrimmedExerciseNotes() throws {
-        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscle: "Chest")
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
         let session = WorkoutSession(title: "Push", startedAt: .now, status: .completed, source: .blank)
         let loggedExercise = LoggedExercise(orderIndex: 0, exercise: exercise, exerciseSnapshotName: exercise.name, notes: "  Felt strong  ")
         loggedExercise.sets = [LoggedSet(orderIndex: 0, weight: 185, reps: 5, rpe: 8, isCompleted: true)]

@@ -8,7 +8,8 @@ final class Exercise: Identifiable {
     var name: String
     var categoryRaw: String
     var equipmentRaw: String
-    var primaryMuscleRaw: String
+    var primaryMuscleRaw: String = ""
+    var primaryMuscleGroupRaw: String = ExerciseMuscleGroup.other.rawValue
     var notes: String
     var isArchived: Bool
     var isSeeded: Bool
@@ -22,7 +23,7 @@ final class Exercise: Identifiable {
         name: String,
         category: ExerciseCategory,
         equipment: ExerciseEquipment,
-        primaryMuscle: String,
+        primaryMuscleGroup: ExerciseMuscleGroup,
         notes: String = "",
         isArchived: Bool = false,
         isSeeded: Bool = false,
@@ -35,13 +36,45 @@ final class Exercise: Identifiable {
         self.name = name
         self.categoryRaw = category.rawValue
         self.equipmentRaw = equipment.rawValue
-        self.primaryMuscleRaw = primaryMuscle
+        self.primaryMuscleRaw = primaryMuscleGroup.displayName
+        self.primaryMuscleGroupRaw = primaryMuscleGroup.rawValue
         self.notes = notes
         self.isArchived = isArchived
         self.isSeeded = isSeeded
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.deletedAt = deletedAt
+    }
+
+    convenience init(
+        id: UUID = UUID(),
+        seedIdentifier: String? = nil,
+        name: String,
+        category: ExerciseCategory,
+        equipment: ExerciseEquipment,
+        primaryMuscle: String,
+        notes: String = "",
+        isArchived: Bool = false,
+        isSeeded: Bool = false,
+        createdAt: Date = .now,
+        updatedAt: Date = .now,
+        deletedAt: Date? = nil
+    ) {
+        self.init(
+            id: id,
+            seedIdentifier: seedIdentifier,
+            name: name,
+            category: category,
+            equipment: equipment,
+            primaryMuscleGroup: ExerciseMuscleGroup.legacyGroup(for: primaryMuscle),
+            notes: notes,
+            isArchived: isArchived,
+            isSeeded: isSeeded,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            deletedAt: deletedAt
+        )
+        self.primaryMuscleRaw = primaryMuscle
     }
 
     var isDeleted: Bool {
@@ -72,8 +105,45 @@ final class Exercise: Identifiable {
         get { primaryMuscleRaw }
         set {
             primaryMuscleRaw = newValue
+            primaryMuscleGroupRaw = ExerciseMuscleGroup.legacyGroup(for: newValue).rawValue
             touch()
         }
+    }
+
+    var primaryMuscleGroup: ExerciseMuscleGroup {
+        get { ExerciseMuscleGroup(rawValue: primaryMuscleGroupRaw) ?? .other }
+        set {
+            primaryMuscleGroupRaw = newValue.rawValue
+            primaryMuscleRaw = newValue.displayName
+            touch()
+        }
+    }
+
+    var metadataDisplayText: String {
+        "\(equipment.displayName) • \(primaryMuscleGroup.displayName)"
+    }
+
+    func hasSameActiveIdentity(name normalizedName: String, equipment candidateEquipment: ExerciseEquipment) -> Bool {
+        !isArchived
+            && !isDeleted
+            && name.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare(normalizedName) == .orderedSame
+            && equipment == candidateEquipment
+    }
+
+    func update(
+        name: String,
+        category: ExerciseCategory,
+        equipment: ExerciseEquipment,
+        primaryMuscleGroup: ExerciseMuscleGroup,
+        notes: String
+    ) {
+        self.name = name
+        self.categoryRaw = category.rawValue
+        self.equipmentRaw = equipment.rawValue
+        self.primaryMuscleGroupRaw = primaryMuscleGroup.rawValue
+        self.primaryMuscleRaw = primaryMuscleGroup.displayName
+        self.notes = notes
+        touch()
     }
 
     func update(
@@ -83,12 +153,14 @@ final class Exercise: Identifiable {
         primaryMuscle: String,
         notes: String
     ) {
-        self.name = name
-        self.categoryRaw = category.rawValue
-        self.equipmentRaw = equipment.rawValue
+        update(
+            name: name,
+            category: category,
+            equipment: equipment,
+            primaryMuscleGroup: ExerciseMuscleGroup.legacyGroup(for: primaryMuscle),
+            notes: notes
+        )
         self.primaryMuscleRaw = primaryMuscle
-        self.notes = notes
-        touch()
     }
 
     func archive() {
