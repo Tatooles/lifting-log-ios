@@ -70,9 +70,8 @@ struct WorkoutHistoryDetailView: View {
                 }
 
                 Button(role: .destructive) {
-                    session.markDeletedCascade()
                     do {
-                        try modelContext.save()
+                        try WorkoutHistoryMutationService().deleteWorkoutHistory(session, context: modelContext)
                         deleteErrorMessage = nil
                         dismiss()
                     } catch {
