@@ -44,8 +44,9 @@ final class LiftingLogUITests: XCTestCase {
 
         app.buttons["AddExerciseButton"].tap()
         XCTAssertTrue(app.navigationBars["Add Exercise"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["ExercisePickerRow-Bench Press-Barbell"].waitForExistence(timeout: 3))
-        app.buttons["Bench Press, Barbell • Chest"].tap()
+        let benchPressRow = app.buttons["ExercisePickerRow-Bench Press-Barbell"]
+        XCTAssertTrue(benchPressRow.waitForExistence(timeout: 3))
+        benchPressRow.tap()
 
         let firstWeightField = app.textFields["SetWeightField-0-0"]
         XCTAssertTrue(firstWeightField.waitForExistence(timeout: 3))

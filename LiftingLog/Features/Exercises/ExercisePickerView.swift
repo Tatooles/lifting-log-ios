@@ -33,7 +33,6 @@ struct ExercisePickerView: View {
                         exerciseRow(exercise)
                     }
                     .accessibilityIdentifier("ExercisePickerRow-\(exercise.name)-\(exercise.equipment.displayName)")
-                    .buttonStyle(.plain)
                 }
             }
         }
