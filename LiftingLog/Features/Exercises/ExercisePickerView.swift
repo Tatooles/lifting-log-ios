@@ -32,6 +32,11 @@ struct ExercisePickerView: View {
                     } label: {
                         exerciseRow(exercise)
                     }
+                    .contentShape(Rectangle())
+                    .simultaneousGesture(TapGesture().onEnded {
+                        onSelect(exercise)
+                    })
+                    .accessibilityIdentifier("ExercisePickerRow-\(exercise.name)-\(exercise.equipment.displayName)")
                     .buttonStyle(.plain)
                 }
             }
