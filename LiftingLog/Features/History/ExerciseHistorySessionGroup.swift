@@ -80,7 +80,7 @@ struct ExerciseHistorySessionGroup: Identifiable {
         }
 
         return loggedExercise.exerciseSnapshotName.caseInsensitiveCompare(summary.name) == .orderedSame
-            && loggedExercise.exerciseSnapshotEquipmentRaw == summary.equipmentRaw
+            && loggedExercise.effectiveSnapshotEquipmentRaw == summary.equipmentRaw
     }
 
     private static func groupByLoggedExercise(

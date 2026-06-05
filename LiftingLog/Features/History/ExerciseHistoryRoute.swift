@@ -27,7 +27,7 @@ struct ExerciseHistoryRoute: Hashable, Identifiable {
         self.init(
             exerciseID: loggedExercise.exercise?.id,
             name: loggedExercise.exerciseSnapshotName,
-            equipmentRaw: loggedExercise.exerciseSnapshotEquipmentRaw
+            equipmentRaw: loggedExercise.effectiveSnapshotEquipmentRaw
         )
     }
 }

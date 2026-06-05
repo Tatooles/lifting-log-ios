@@ -60,15 +60,31 @@ final class LoggedExercise: Identifiable {
     }
 
     var snapshotEquipment: ExerciseEquipment {
-        ExerciseEquipment(rawValue: exerciseSnapshotEquipmentRaw) ?? .other
+        ExerciseEquipment(rawValue: effectiveSnapshotEquipmentRaw) ?? .other
     }
 
     var snapshotPrimaryMuscleGroup: ExerciseMuscleGroup {
-        ExerciseMuscleGroup(rawValue: exerciseSnapshotPrimaryMuscleGroupRaw) ?? .other
+        ExerciseMuscleGroup(rawValue: effectiveSnapshotPrimaryMuscleGroupRaw) ?? .other
     }
 
     var metadataDisplayText: String {
         "\(snapshotEquipment.displayName) • \(snapshotPrimaryMuscleGroup.displayName)"
+    }
+
+    var effectiveSnapshotEquipmentRaw: String {
+        guard exerciseSnapshotEquipmentRaw == ExerciseEquipment.other.rawValue else {
+            return exerciseSnapshotEquipmentRaw
+        }
+
+        return exercise?.equipmentRaw ?? exerciseSnapshotEquipmentRaw
+    }
+
+    var effectiveSnapshotPrimaryMuscleGroupRaw: String {
+        guard exerciseSnapshotPrimaryMuscleGroupRaw == ExerciseMuscleGroup.other.rawValue else {
+            return exerciseSnapshotPrimaryMuscleGroupRaw
+        }
+
+        return exercise?.primaryMuscleGroup.rawValue ?? exerciseSnapshotPrimaryMuscleGroupRaw
     }
 
     func touch(now: Date = .now) {

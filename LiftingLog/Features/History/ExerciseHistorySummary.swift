@@ -33,7 +33,7 @@ struct ExerciseHistorySummary: Identifiable, Hashable {
                     key = "exercise-\(id.uuidString)"
                     exerciseID = id
                 } else {
-                    key = "snapshot-\(loggedExercise.exerciseSnapshotName.lowercased())-\(loggedExercise.exerciseSnapshotEquipmentRaw.lowercased())"
+                    key = "snapshot-\(loggedExercise.exerciseSnapshotName.lowercased())-\(loggedExercise.effectiveSnapshotEquipmentRaw.lowercased())"
                     exerciseID = nil
                 }
 
@@ -42,8 +42,8 @@ struct ExerciseHistorySummary: Identifiable, Hashable {
                     if session.startedAt > existing.lastPerformedAt {
                         existing.lastPerformedAt = session.startedAt
                         existing.name = loggedExercise.exerciseSnapshotName
-                        existing.equipmentRaw = loggedExercise.exerciseSnapshotEquipmentRaw
-                        existing.primaryMuscleGroupRaw = loggedExercise.exerciseSnapshotPrimaryMuscleGroupRaw
+                        existing.equipmentRaw = loggedExercise.effectiveSnapshotEquipmentRaw
+                        existing.primaryMuscleGroupRaw = loggedExercise.effectiveSnapshotPrimaryMuscleGroupRaw
                     }
                     grouped[key] = existing
                 } else {
@@ -51,8 +51,8 @@ struct ExerciseHistorySummary: Identifiable, Hashable {
                         id: key,
                         exerciseID: exerciseID,
                         name: loggedExercise.exerciseSnapshotName,
-                        equipmentRaw: loggedExercise.exerciseSnapshotEquipmentRaw,
-                        primaryMuscleGroupRaw: loggedExercise.exerciseSnapshotPrimaryMuscleGroupRaw,
+                        equipmentRaw: loggedExercise.effectiveSnapshotEquipmentRaw,
+                        primaryMuscleGroupRaw: loggedExercise.effectiveSnapshotPrimaryMuscleGroupRaw,
                         lastPerformedAt: session.startedAt,
                         completedSetCount: completedSetCount
                     )

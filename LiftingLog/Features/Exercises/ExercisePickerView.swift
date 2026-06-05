@@ -22,7 +22,11 @@ struct ExercisePickerView: View {
                     isCreatingExercise = true
                 } label: {
                     Label("Create Exercise", systemImage: "plus.circle")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(AppTheme.accentBright)
                 }
+                .listRowBackground(AppTheme.surface)
+                .listRowSeparatorTint(AppTheme.border)
             }
 
             Section {
@@ -32,7 +36,10 @@ struct ExercisePickerView: View {
                     } label: {
                         exerciseRow(exercise)
                     }
+                    .buttonStyle(.plain)
                     .accessibilityIdentifier("ExercisePickerRow-\(exercise.name)-\(exercise.equipment.displayName)")
+                    .listRowBackground(AppTheme.surface)
+                    .listRowSeparatorTint(AppTheme.border)
                 }
             }
         }
@@ -60,9 +67,10 @@ struct ExercisePickerView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(exercise.name)
                 .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(AppTheme.textPrimary)
             Text(exercise.metadataDisplayText)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppTheme.textSecondary)
         }
         .padding(.vertical, 4)
     }
