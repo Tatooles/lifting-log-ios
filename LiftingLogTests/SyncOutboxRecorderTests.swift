@@ -358,6 +358,235 @@ final class SyncOutboxRecorderTests: XCTestCase {
         XCTAssertEqual(entries.map(\.operation), [.create, .update])
     }
 
+    func testBootstrapCreatesEntriesForExistingV1Records() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let recorder = SyncOutboxRecorder()
+        let now = Date(timeIntervalSince1970: 1_000)
+        let settings = UserSettings(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000002001")!,
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 100)
+        )
+        let exercise = Exercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000002002")!,
+            name: "Bench Press",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Chest",
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 100)
+        )
+        let archivedExercise = Exercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000002012")!,
+            name: "Archived Squat",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Quads",
+            isArchived: true,
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 100)
+        )
+        let loggedSet = LoggedSet(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000002005")!,
+            orderIndex: 0,
+            weight: 185,
+            reps: 5,
+            isCompleted: true,
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 100)
+        )
+        let loggedExercise = LoggedExercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000002004")!,
+            orderIndex: 0,
+            exercise: exercise,
+            exerciseSnapshotName: exercise.name,
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 100),
+            sets: [loggedSet]
+        )
+        let session = WorkoutSession(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000002003")!,
+            title: "Push",
+            startedAt: Date(timeIntervalSince1970: 100),
+            status: .completed,
+            source: .blank,
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 100),
+            loggedExercises: [loggedExercise]
+        )
+        let discardedSession = WorkoutSession(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000002013")!,
+            title: "Discarded Pull",
+            startedAt: Date(timeIntervalSince1970: 200),
+            status: .discarded,
+            source: .blank,
+            createdAt: Date(timeIntervalSince1970: 200),
+            updatedAt: Date(timeIntervalSince1970: 200)
+        )
+
+        context.insert(settings)
+        context.insert(exercise)
+        context.insert(archivedExercise)
+        context.insert(session)
+        context.insert(discardedSession)
+        try context.save()
+
+        try recorder.bootstrapV1SyncableRecords(ownerTokenIdentifier: "issuer|owner_a", context: context, now: now)
+        try context.save()
+
+        let entries = try fetchEntries(context)
+        XCTAssertEqual(entries.count, 7)
+        try assertBootstrapEntry(entries, entityKind: .userSettings, entityID: settings.id, operation: .create, ownerTokenIdentifier: "issuer|owner_a", updatedAt: now)
+        try assertBootstrapEntry(entries, entityKind: .exercise, entityID: exercise.id, operation: .create, ownerTokenIdentifier: "issuer|owner_a", updatedAt: now)
+        try assertBootstrapEntry(entries, entityKind: .exercise, entityID: archivedExercise.id, operation: .create, ownerTokenIdentifier: "issuer|owner_a", updatedAt: now)
+        try assertBootstrapEntry(entries, entityKind: .workoutSession, entityID: session.id, operation: .create, ownerTokenIdentifier: "issuer|owner_a", updatedAt: now)
+        try assertBootstrapEntry(entries, entityKind: .workoutSession, entityID: discardedSession.id, operation: .create, ownerTokenIdentifier: "issuer|owner_a", updatedAt: now)
+        try assertBootstrapEntry(entries, entityKind: .loggedExercise, entityID: loggedExercise.id, operation: .create, ownerTokenIdentifier: "issuer|owner_a", updatedAt: now)
+        try assertBootstrapEntry(entries, entityKind: .loggedSet, entityID: loggedSet.id, operation: .create, ownerTokenIdentifier: "issuer|owner_a", updatedAt: now)
+    }
+
+    func testBootstrapUsesDeleteForTombstonedRecords() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let recorder = SyncOutboxRecorder()
+        let now = Date(timeIntervalSince1970: 1_100)
+        let deletedAt = Date(timeIntervalSince1970: 900)
+        let exercise = Exercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000002006")!,
+            name: "Deleted Deadlift",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Back",
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: deletedAt,
+            deletedAt: deletedAt
+        )
+
+        context.insert(exercise)
+        try context.save()
+
+        try recorder.bootstrapV1SyncableRecords(ownerTokenIdentifier: nil, context: context, now: now)
+        try context.save()
+
+        let entries = try fetchEntries(context)
+        XCTAssertEqual(entries.count, 1)
+        try assertBootstrapEntry(entries, entityKind: .exercise, entityID: exercise.id, operation: .delete, ownerTokenIdentifier: nil, updatedAt: now)
+    }
+
+    func testBootstrapSkipsActiveWorkoutGraph() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let recorder = SyncOutboxRecorder()
+        let now = Date(timeIntervalSince1970: 1_200)
+        let loggedSet = LoggedSet(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000002009")!,
+            orderIndex: 0,
+            weight: 95,
+            reps: 8,
+            isCompleted: true
+        )
+        let loggedExercise = LoggedExercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000002008")!,
+            orderIndex: 0,
+            exerciseSnapshotName: "Row",
+            sets: [loggedSet]
+        )
+        let session = WorkoutSession(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000002007")!,
+            title: "Active Pull",
+            startedAt: Date(timeIntervalSince1970: 100),
+            status: .active,
+            source: .blank,
+            loggedExercises: [loggedExercise]
+        )
+
+        context.insert(session)
+        try context.save()
+
+        try recorder.bootstrapV1SyncableRecords(ownerTokenIdentifier: nil, context: context, now: now)
+        try context.save()
+
+        XCTAssertTrue(try fetchEntries(context).isEmpty)
+    }
+
+    func testBootstrapDoesNotDuplicateExistingEntries() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let recorder = SyncOutboxRecorder()
+        let exercise = Exercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000002010")!,
+            name: "Back Squat",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Quads"
+        )
+        let existingCreatedAt = Date(timeIntervalSince1970: 100)
+        let existingUpdatedAt = Date(timeIntervalSince1970: 200)
+
+        context.insert(exercise)
+        context.insert(
+            SyncOutboxEntry(
+                entityKind: .exercise,
+                entityID: exercise.id,
+                operation: .update,
+                ownerTokenIdentifier: "issuer|owner_a",
+                createdAt: existingCreatedAt,
+                updatedAt: existingUpdatedAt
+            )
+        )
+        try context.save()
+
+        try recorder.bootstrapV1SyncableRecords(ownerTokenIdentifier: "issuer|owner_a", context: context, now: Date(timeIntervalSince1970: 1_300))
+        try context.save()
+
+        let entry = try XCTUnwrap(fetchEntries(context).first)
+        XCTAssertEqual(try fetchEntries(context).count, 1)
+        XCTAssertEqual(entry.entityKind, .exercise)
+        XCTAssertEqual(entry.entityID, exercise.id)
+        XCTAssertEqual(entry.operation, .update)
+        XCTAssertEqual(entry.status, .pending)
+        XCTAssertEqual(entry.ownerTokenIdentifier, "issuer|owner_a")
+        XCTAssertEqual(entry.createdAt, existingCreatedAt)
+        XCTAssertEqual(entry.updatedAt, existingUpdatedAt)
+    }
+
+    func testBootstrapRespectsOwnerScopeWhenFindingExistingEntries() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let recorder = SyncOutboxRecorder()
+        let now = Date(timeIntervalSince1970: 1_400)
+        let exercise = Exercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000002011")!,
+            name: "Overhead Press",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Shoulders"
+        )
+
+        context.insert(exercise)
+        context.insert(
+            SyncOutboxEntry(
+                entityKind: .exercise,
+                entityID: exercise.id,
+                operation: .update,
+                ownerTokenIdentifier: "issuer|owner_a",
+                createdAt: Date(timeIntervalSince1970: 100),
+                updatedAt: Date(timeIntervalSince1970: 200)
+            )
+        )
+        try context.save()
+
+        try recorder.bootstrapV1SyncableRecords(ownerTokenIdentifier: "issuer|owner_b", context: context, now: now)
+        try context.save()
+
+        let entries = try fetchEntries(context)
+        XCTAssertEqual(entries.count, 2)
+        XCTAssertEqual(entries.map(\.ownerTokenIdentifier), ["issuer|owner_a", "issuer|owner_b"])
+        XCTAssertEqual(entries.map(\.operation), [.update, .create])
+        try assertBootstrapEntry(entries, entityKind: .exercise, entityID: exercise.id, operation: .create, ownerTokenIdentifier: "issuer|owner_b", updatedAt: now)
+    }
+
     func testExcludedEntityKindsAreIgnored() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
@@ -375,5 +604,26 @@ final class SyncOutboxRecorderTests: XCTestCase {
     private func fetchEntries(_ context: ModelContext) throws -> [SyncOutboxEntry] {
         try context.fetch(FetchDescriptor<SyncOutboxEntry>())
             .sorted { $0.createdAt < $1.createdAt }
+    }
+
+    private func assertBootstrapEntry(
+        _ entries: [SyncOutboxEntry],
+        entityKind: SyncEntityKind,
+        entityID: UUID,
+        operation: SyncOperation,
+        ownerTokenIdentifier: String?,
+        updatedAt: Date
+    ) throws {
+        let entry = try XCTUnwrap(
+            entries.first {
+                $0.entityKind == entityKind
+                    && $0.entityID == entityID
+                    && $0.ownerTokenIdentifier == ownerTokenIdentifier
+            }
+        )
+        XCTAssertEqual(entry.operation, operation)
+        XCTAssertEqual(entry.status, .pending)
+        XCTAssertEqual(entry.createdAt, updatedAt)
+        XCTAssertEqual(entry.updatedAt, updatedAt)
     }
 }
