@@ -114,13 +114,13 @@ Where exercise names are displayed in exercise-focused views, show metadata as a
 
 ```text
 Bench Press
-Barbell - Chest
+Barbell • Chest
 ```
 
 The standardized secondary text is:
 
 ```text
-Equipment - Primary Muscle Group
+Equipment • Primary Muscle Group
 ```
 
 This should appear in exercise library rows, exercise picker rows, active workout exercise cards, workout history detail, and exercise history detail/session rows where space allows. The exercise name remains the primary scan target. If a narrow row truncates secondary text, that is acceptable.
