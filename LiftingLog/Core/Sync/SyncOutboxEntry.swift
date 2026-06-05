@@ -61,23 +61,24 @@ final class SyncOutboxEntry: Identifiable {
         )
     }
 
-    var entityKind: SyncEntityKind {
-        get { SyncEntityKind(rawValue: entityKindRaw) ?? .exercise }
-        set { entityKindRaw = newValue.rawValue }
+    var entityKind: SyncEntityKind? {
+        get { SyncEntityKind(rawValue: entityKindRaw) }
+        set { entityKindRaw = newValue?.rawValue ?? "" }
     }
 
-    var operation: SyncOperation {
-        get { SyncOperation(rawValue: operationRaw) ?? .update }
-        set { operationRaw = newValue.rawValue }
+    var operation: SyncOperation? {
+        get { SyncOperation(rawValue: operationRaw) }
+        set { operationRaw = newValue?.rawValue ?? "" }
     }
 
-    var status: SyncOutboxStatus {
-        get { SyncOutboxStatus(rawValue: statusRaw) ?? .pending }
-        set { statusRaw = newValue.rawValue }
+    var status: SyncOutboxStatus? {
+        get { SyncOutboxStatus(rawValue: statusRaw) }
+        set { statusRaw = newValue?.rawValue ?? "" }
     }
 
     var isActive: Bool {
-        status != .completed
+        guard let status else { return false }
+        return status != .completed
     }
 
     var hasBeenAttempted: Bool {
