@@ -392,6 +392,13 @@ final class LiftingLogUITests: XCTestCase {
         app.buttons["ExerciseEditorSaveButton"].tap()
 
         XCTAssertTrue(app.staticTexts["An active exercise with that name and equipment already exists."].waitForExistence(timeout: 3))
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.navigationBars["Exercises"].waitForExistence(timeout: 3))
+
+        app.searchFields.firstMatch.tap()
+        app.searchFields.firstMatch.typeText("Variant Press")
+        XCTAssertTrue(app.buttons["ExerciseLibraryRow-Variant Press-Barbell"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["ExerciseLibraryRow-Variant Press-Dumbbell"].waitForExistence(timeout: 3))
     }
 
     @MainActor
