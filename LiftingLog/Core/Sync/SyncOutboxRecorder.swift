@@ -126,6 +126,10 @@ struct SyncOutboxRecorder {
     }
 
     func removeCompleted(_ entry: SyncOutboxEntry, context: ModelContext) {
+        guard entry.status == .inFlight else {
+            return
+        }
+
         context.delete(entry)
     }
 
@@ -139,12 +143,7 @@ struct SyncOutboxRecorder {
                     return false
                 }
 
-                switch entry.status {
-                case .pending, .inFlight, .failed:
-                    return true
-                case .completed, nil:
-                    return false
-                }
+                return entry.status == .pending
             }
             .sorted { lhs, rhs in
                 if lhs.updatedAt == rhs.updatedAt {

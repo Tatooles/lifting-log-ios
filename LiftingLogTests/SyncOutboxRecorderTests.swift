@@ -105,6 +105,32 @@ final class SyncOutboxRecorderTests: XCTestCase {
         XCTAssertNil(entry.lastErrorMessage)
     }
 
+    func testRemoveCompletedLeavesPendingDeleteAfterInFlightCreateChanges() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let recorder = SyncOutboxRecorder()
+        let entityID = UUID(uuidString: "00000000-0000-0000-0000-000000001018")!
+        let createdAt = Date(timeIntervalSince1970: 100)
+        let attemptedAt = Date(timeIntervalSince1970: 150)
+        let deletedAt = Date(timeIntervalSince1970: 200)
+
+        try recorder.recordCreate(entityKind: .exercise, entityID: entityID, ownerTokenIdentifier: nil, context: context, now: createdAt)
+        let createdEntry = try XCTUnwrap(fetchEntries(context).first)
+        recorder.markInFlight(createdEntry, now: attemptedAt)
+        try recorder.recordDelete(entityKind: .exercise, entityID: entityID, ownerTokenIdentifier: nil, context: context, now: deletedAt)
+
+        recorder.removeCompleted(createdEntry, context: context)
+        try context.save()
+
+        let entry = try XCTUnwrap(fetchEntries(context).first)
+        XCTAssertEqual(try fetchEntries(context).count, 1)
+        XCTAssertEqual(entry.operation, .delete)
+        XCTAssertEqual(entry.status, .pending)
+        XCTAssertEqual(entry.updatedAt, deletedAt)
+        XCTAssertEqual(entry.attemptCount, 1)
+        XCTAssertEqual(entry.lastAttemptAt, attemptedAt)
+    }
+
     func testUpdateUpgradesToDelete() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
@@ -203,6 +229,7 @@ final class SyncOutboxRecorderTests: XCTestCase {
         XCTAssertEqual(entry.updatedAt, retryAt)
         XCTAssertNil(entry.lastErrorMessage)
 
+        recorder.markInFlight(entry, now: Date(timeIntervalSince1970: 500))
         recorder.removeCompleted(entry, context: context)
         try context.save()
 
@@ -295,7 +322,12 @@ final class SyncOutboxRecorderTests: XCTestCase {
 
         let pending = try recorder.pendingEntries(context: context)
 
-        XCTAssertEqual(pending.map(\.id), [earlierInFlight.id, earlierFailed.id, laterPending.id])
+        XCTAssertEqual(pending.map(\.id), [laterPending.id])
+
+        recorder.markPendingForRetry(earlierFailed, now: Date(timeIntervalSince1970: 250))
+
+        let pendingAfterRetry = try recorder.pendingEntries(context: context)
+        XCTAssertEqual(pendingAfterRetry.map(\.id), [earlierFailed.id, laterPending.id])
     }
 
     func testDifferentOwnersDoNotCoalesce() throws {
