@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 
+@MainActor
 struct SyncOutboxRecorder {
     func recordCreate(
         entityKind: SyncEntityKind,
@@ -17,7 +18,9 @@ struct SyncOutboxRecorder {
             ownerTokenIdentifier: ownerTokenIdentifier,
             context: context
         ) {
-            entry.operation = .create
+            if entry.operation != .delete {
+                entry.operation = .create
+            }
             entry.refreshPending(now: now)
             return
         }

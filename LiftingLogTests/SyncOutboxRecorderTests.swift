@@ -137,6 +137,38 @@ final class SyncOutboxRecorderTests: XCTestCase {
         XCTAssertEqual(entry.updatedAt, deletedAt)
     }
 
+    func testCreateDoesNotOverwriteExistingDelete() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let recorder = SyncOutboxRecorder()
+        let entityID = UUID(uuidString: "00000000-0000-0000-0000-000000001017")!
+        let deletedAt = Date(timeIntervalSince1970: 100)
+        let recreatedAt = Date(timeIntervalSince1970: 200)
+
+        try recorder.recordDelete(
+            entityKind: .exercise,
+            entityID: entityID,
+            ownerTokenIdentifier: "issuer|owner_a",
+            context: context,
+            now: deletedAt
+        )
+        try recorder.recordCreate(
+            entityKind: .exercise,
+            entityID: entityID,
+            ownerTokenIdentifier: "issuer|owner_a",
+            context: context,
+            now: recreatedAt
+        )
+        try context.save()
+
+        let entry = try XCTUnwrap(fetchEntries(context).first)
+        XCTAssertEqual(try fetchEntries(context).count, 1)
+        XCTAssertEqual(entry.operation, .delete)
+        XCTAssertEqual(entry.status, .pending)
+        XCTAssertEqual(entry.createdAt, deletedAt)
+        XCTAssertEqual(entry.updatedAt, recreatedAt)
+    }
+
     func testRetryStateTransitions() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
