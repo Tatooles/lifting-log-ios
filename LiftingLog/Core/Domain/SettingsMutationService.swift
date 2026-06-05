@@ -28,13 +28,15 @@ struct SettingsMutationService {
             }
             if didConvertSet {
                 set.touch(now: now)
-                try recorder.recordUpdate(
-                    entityKind: .loggedSet,
-                    entityID: set.id,
-                    ownerTokenIdentifier: ownerTokenIdentifier,
-                    context: context,
-                    now: now
-                )
+                if set.loggedExercise?.session?.status != .active {
+                    try recorder.recordUpdate(
+                        entityKind: .loggedSet,
+                        entityID: set.id,
+                        ownerTokenIdentifier: ownerTokenIdentifier,
+                        context: context,
+                        now: now
+                    )
+                }
             }
         }
 

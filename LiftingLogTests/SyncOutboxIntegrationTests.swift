@@ -135,6 +135,50 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         XCTAssertFalse(entries.contains { $0.entityID == deletedSet.id })
     }
 
+    func testSettingsWeightUnitConversionKeepsActiveDraftSetOutboxLocalUntilFinish() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let settings = UserSettings(weightUnit: .pounds)
+        let exercise = Exercise(
+            name: "Bench Press",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Chest"
+        )
+        context.insert(settings)
+        context.insert(exercise)
+
+        let engine = ActiveWorkoutEngine()
+        let session = try engine.startBlankWorkout(context: context, now: Date(timeIntervalSince1970: 100))
+        let loggedExercise = try engine.addExercise(exercise, to: session, context: context)
+        let set = try XCTUnwrap(loggedExercise.sets.first)
+        try engine.updateSet(set, weight: 225, reps: 5, rpe: 8, context: context)
+
+        try SettingsMutationService().updateWeightUnit(
+            .kilograms,
+            settings: settings,
+            context: context,
+            now: Date(timeIntervalSince1970: 200)
+        )
+
+        XCTAssertEqual(set.weight ?? 0, 102.058, accuracy: 0.001)
+        var entries = try fetchEntries(context)
+        XCTAssertEqual(entries.count, 1)
+        assertEntry(entries, kind: .userSettings, id: settings.id, operation: .update)
+        XCTAssertFalse(entries.contains { $0.entityKind == .loggedSet })
+        XCTAssertFalse(entries.contains { $0.entityKind == .loggedExercise })
+        XCTAssertFalse(entries.contains { $0.entityKind == .workoutSession })
+
+        try engine.finishWorkout(session, context: context, now: Date(timeIntervalSince1970: 400))
+
+        entries = try fetchEntries(context)
+        XCTAssertEqual(entries.count, 4)
+        assertEntry(entries, kind: .userSettings, id: settings.id, operation: .update)
+        assertEntry(entries, kind: .workoutSession, id: session.id, operation: .create)
+        assertEntry(entries, kind: .loggedExercise, id: loggedExercise.id, operation: .create)
+        assertEntry(entries, kind: .loggedSet, id: set.id, operation: .create)
+    }
+
     func testRestTimerUpdateRecordsSettingsUpdateIntent() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
