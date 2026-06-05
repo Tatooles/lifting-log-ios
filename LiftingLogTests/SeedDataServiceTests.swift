@@ -35,11 +35,14 @@ final class SeedDataServiceTests: XCTestCase {
     func testSeedServiceMigratesLegacyPrimaryMuscleStrings() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
+        let createdAt = Date(timeIntervalSince1970: 100)
         let exercise = Exercise(
             name: "Legacy Face Pull",
             category: .strength,
             equipment: .cable,
-            primaryMuscleGroup: .other
+            primaryMuscleGroup: .other,
+            createdAt: createdAt,
+            updatedAt: createdAt
         )
         exercise.primaryMuscleRaw = "Rear Delts"
         exercise.primaryMuscleGroupRaw = ExerciseMuscleGroup.other.rawValue
@@ -47,7 +50,10 @@ final class SeedDataServiceTests: XCTestCase {
 
         try SeedDataService.seedIfNeeded(context: context)
 
+        XCTAssertEqual(exercise.primaryMuscleGroupRaw, ExerciseMuscleGroup.shoulders.rawValue)
+        XCTAssertEqual(exercise.primaryMuscleRaw, ExerciseMuscleGroup.shoulders.displayName)
         XCTAssertEqual(exercise.primaryMuscleGroup, .shoulders)
+        XCTAssertGreaterThan(exercise.updatedAt, createdAt)
     }
 
     func testSeedServiceIsIdempotent() throws {

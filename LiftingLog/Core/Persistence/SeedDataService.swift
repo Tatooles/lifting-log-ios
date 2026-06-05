@@ -42,7 +42,7 @@ enum SeedDataService {
     private static func migrateLegacyPrimaryMuscleGroups(context: ModelContext) throws {
         let exercises = try context.fetch(FetchDescriptor<Exercise>())
 
-        for exercise in exercises where exercise.primaryMuscleGroup == .other {
+        for exercise in exercises where exercise.primaryMuscleGroupRaw == ExerciseMuscleGroup.other.rawValue {
             let migrated = ExerciseMuscleGroup.legacyGroup(for: exercise.primaryMuscleRaw)
             if migrated != .other {
                 exercise.primaryMuscleGroupRaw = migrated.rawValue
