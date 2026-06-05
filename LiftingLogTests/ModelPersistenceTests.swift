@@ -132,10 +132,35 @@ final class ModelPersistenceTests: XCTestCase {
             exerciseSnapshotEquipmentRaw: ExerciseEquipment.other.rawValue,
             exerciseSnapshotPrimaryMuscleGroupRaw: ExerciseMuscleGroup.other.rawValue
         )
+        loggedExercise.hasSnapshotMetadata = false
 
         XCTAssertEqual(loggedExercise.metadataDisplayText, "Barbell • Chest")
         XCTAssertEqual(loggedExercise.effectiveSnapshotEquipmentRaw, "barbell")
         XCTAssertEqual(loggedExercise.effectiveSnapshotPrimaryMuscleGroupRaw, "chest")
+    }
+
+    func testLoggedExercisePreservesExplicitOtherSnapshotMetadata() throws {
+        let exercise = Exercise(
+            name: "Bench Press",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscleGroup: .chest
+        )
+        let loggedExercise = LoggedExercise(
+            orderIndex: 0,
+            exercise: exercise,
+            exerciseSnapshotName: "Bench Press",
+            exerciseSnapshotEquipmentRaw: ExerciseEquipment.other.rawValue,
+            exerciseSnapshotPrimaryMuscleGroupRaw: ExerciseMuscleGroup.other.rawValue
+        )
+
+        exercise.equipment = .dumbbell
+        exercise.primaryMuscleGroup = .shoulders
+
+        XCTAssertTrue(loggedExercise.hasSnapshotMetadata)
+        XCTAssertEqual(loggedExercise.metadataDisplayText, "Other • Other")
+        XCTAssertEqual(loggedExercise.effectiveSnapshotEquipmentRaw, "other")
+        XCTAssertEqual(loggedExercise.effectiveSnapshotPrimaryMuscleGroupRaw, "other")
     }
 
     func testExpandedExerciseEquipmentDisplayNames() throws {

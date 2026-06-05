@@ -8,6 +8,7 @@ final class LoggedExercise: Identifiable {
     var exerciseSnapshotName: String
     var exerciseSnapshotEquipmentRaw: String = ExerciseEquipment.other.rawValue
     var exerciseSnapshotPrimaryMuscleGroupRaw: String = ExerciseMuscleGroup.other.rawValue
+    var hasSnapshotMetadata: Bool = false
     var notes: String
     var referenceNotes: String?
     var createdAt: Date
@@ -37,6 +38,7 @@ final class LoggedExercise: Identifiable {
         self.exerciseSnapshotName = exerciseSnapshotName ?? exercise?.name ?? "Exercise"
         self.exerciseSnapshotEquipmentRaw = exerciseSnapshotEquipmentRaw ?? exercise?.equipmentRaw ?? ExerciseEquipment.other.rawValue
         self.exerciseSnapshotPrimaryMuscleGroupRaw = exerciseSnapshotPrimaryMuscleGroupRaw ?? exercise?.primaryMuscleGroup.rawValue ?? ExerciseMuscleGroup.other.rawValue
+        self.hasSnapshotMetadata = true
         self.notes = notes
         self.referenceNotes = referenceNotes
         self.createdAt = createdAt
@@ -72,6 +74,10 @@ final class LoggedExercise: Identifiable {
     }
 
     var effectiveSnapshotEquipmentRaw: String {
+        guard !hasSnapshotMetadata else {
+            return exerciseSnapshotEquipmentRaw
+        }
+
         guard exerciseSnapshotEquipmentRaw == ExerciseEquipment.other.rawValue else {
             return exerciseSnapshotEquipmentRaw
         }
@@ -80,6 +86,10 @@ final class LoggedExercise: Identifiable {
     }
 
     var effectiveSnapshotPrimaryMuscleGroupRaw: String {
+        guard !hasSnapshotMetadata else {
+            return exerciseSnapshotPrimaryMuscleGroupRaw
+        }
+
         guard exerciseSnapshotPrimaryMuscleGroupRaw == ExerciseMuscleGroup.other.rawValue else {
             return exerciseSnapshotPrimaryMuscleGroupRaw
         }

@@ -72,12 +72,13 @@ final class ActiveWorkoutEngine {
                 orderIndex: pastLoggedExercise.orderIndex,
                 exercise: pastLoggedExercise.exercise,
                 exerciseSnapshotName: pastLoggedExercise.exerciseSnapshotName,
-                exerciseSnapshotEquipmentRaw: pastLoggedExercise.exerciseSnapshotEquipmentRaw,
-                exerciseSnapshotPrimaryMuscleGroupRaw: pastLoggedExercise.exerciseSnapshotPrimaryMuscleGroupRaw,
+                exerciseSnapshotEquipmentRaw: pastLoggedExercise.effectiveSnapshotEquipmentRaw,
+                exerciseSnapshotPrimaryMuscleGroupRaw: pastLoggedExercise.effectiveSnapshotPrimaryMuscleGroupRaw,
                 referenceNotes: pastLoggedExercise.notes,
                 createdAt: now,
                 updatedAt: now
             )
+            loggedExercise.hasSnapshotMetadata = true
             loggedExercise.session = session
             context.insert(loggedExercise)
 

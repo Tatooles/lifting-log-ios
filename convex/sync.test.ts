@@ -221,6 +221,37 @@ describe("sync conflict behavior", () => {
     });
   });
 
+  test("legacy exercise update payloads preserve existing muscle group", async () => {
+    const t = testDb().withIdentity(userA);
+
+    await t.mutation(api.sync.upsertExercise, {
+      record: exerciseRecord({
+        primaryMuscleRaw: "Glutes",
+        primaryMuscleGroupRaw: "glutes",
+      }),
+    });
+
+    const { primaryMuscleGroupRaw: _primaryMuscleGroupRaw, ...legacyUpdate } =
+      exerciseRecord({
+        name: "Updated Bench Press",
+        primaryMuscleRaw: "Legacy Free Text",
+        updatedAt: 3,
+      });
+
+    await t.mutation(api.sync.upsertExercise, { record: legacyUpdate });
+
+    const changes = await t.query(api.sync.fetchChanges, {
+      cursors: zeroCursors,
+    });
+
+    expect(changes.exercises).toHaveLength(1);
+    expect(changes.exercises[0]).toMatchObject({
+      name: "Updated Bench Press",
+      primaryMuscleRaw: "Legacy Free Text",
+      primaryMuscleGroupRaw: "glutes",
+    });
+  });
+
   test("future exercise taxonomy strings round-trip through sync", async () => {
     const t = testDb().withIdentity(userA);
     const record = exerciseRecord({

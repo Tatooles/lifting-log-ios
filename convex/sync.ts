@@ -253,7 +253,6 @@ async function upsertExerciseByClientId(
   ownerTokenIdentifier: string,
   record: ExercisePayload,
 ): Promise<UpsertResult> {
-  const normalizedRecord = normalizeExercisePayload(record);
   const existing = await ctx.db
     .query("exercises")
     .withIndex("by_ownerTokenIdentifier_and_clientId", (q) =>
@@ -269,6 +268,16 @@ async function upsertExerciseByClientId(
   }
 
   const serverUpdatedAt = await nextServerUpdatedAt(ctx, ownerTokenIdentifier);
+  const normalizedRecord =
+    existing === null
+      ? normalizeExercisePayload(record)
+      : {
+          ...record,
+          primaryMuscleGroupRaw:
+            record.primaryMuscleGroupRaw ??
+            existing.primaryMuscleGroupRaw ??
+            defaultPrimaryMuscleGroupRaw,
+        };
   const nextRecord = withServerFields(
     normalizedRecord,
     ownerTokenIdentifier,
