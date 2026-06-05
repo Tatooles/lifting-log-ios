@@ -36,7 +36,7 @@ export default defineSchema({
     categoryRaw: v.string(),
     equipmentRaw: v.string(),
     primaryMuscleRaw: v.string(),
-    primaryMuscleGroupRaw: v.string(),
+    primaryMuscleGroupRaw: v.optional(v.string()),
     notes: v.string(),
     isArchived: v.boolean(),
     isSeeded: v.boolean(),

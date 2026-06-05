@@ -16,6 +16,9 @@ type ExercisePayload = Infer<typeof exercisePayloadValidator>;
 type WorkoutSessionPayload = Infer<typeof workoutSessionPayloadValidator>;
 type LoggedExercisePayload = Infer<typeof loggedExercisePayloadValidator>;
 type LoggedSetPayload = Infer<typeof loggedSetPayloadValidator>;
+type NormalizedExercisePayload = ExercisePayload & {
+  primaryMuscleGroupRaw: string;
+};
 
 type UpsertResult =
   | { status: "inserted"; serverUpdatedAt: number }
@@ -34,6 +37,7 @@ type ChangePage<TRecord extends { serverUpdatedAt: number }> = {
 
 const defaultFetchLimit = 100;
 const maxFetchLimit = 500;
+const defaultPrimaryMuscleGroupRaw = "other";
 
 function assertFiniteNumber(value: number, fieldName: string): void {
   if (!Number.isFinite(value)) {
@@ -100,6 +104,14 @@ function withServerFields<TRecord extends { clientId: string }>(
     ...record,
     ownerTokenIdentifier,
     serverUpdatedAt,
+  };
+}
+
+function normalizeExercisePayload(record: ExercisePayload): NormalizedExercisePayload {
+  return {
+    ...record,
+    primaryMuscleGroupRaw:
+      record.primaryMuscleGroupRaw ?? defaultPrimaryMuscleGroupRaw,
   };
 }
 
@@ -230,6 +242,7 @@ async function upsertExerciseByClientId(
   ownerTokenIdentifier: string,
   record: ExercisePayload,
 ): Promise<UpsertResult> {
+  const normalizedRecord = normalizeExercisePayload(record);
   const existing = await ctx.db
     .query("exercises")
     .withIndex("by_ownerTokenIdentifier_and_clientId", (q) =>
@@ -245,7 +258,11 @@ async function upsertExerciseByClientId(
   }
 
   const serverUpdatedAt = await nextServerUpdatedAt(ctx, ownerTokenIdentifier);
-  const nextRecord = withServerFields(record, ownerTokenIdentifier, serverUpdatedAt);
+  const nextRecord = withServerFields(
+    normalizedRecord,
+    ownerTokenIdentifier,
+    serverUpdatedAt,
+  );
 
   if (existing === null) {
     await ctx.db.insert("exercises", nextRecord);

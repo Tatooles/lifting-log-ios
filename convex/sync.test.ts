@@ -78,7 +78,7 @@ type ExerciseRecord = {
   categoryRaw: string;
   equipmentRaw: string;
   primaryMuscleRaw: string;
-  primaryMuscleGroupRaw: string;
+  primaryMuscleGroupRaw?: string;
   notes: string;
   isArchived: boolean;
   isSeeded: boolean;
@@ -167,6 +167,26 @@ describe("sync access control", () => {
 });
 
 describe("sync conflict behavior", () => {
+  test("legacy exercise payloads without muscle group are accepted and normalized", async () => {
+    const t = testDb().withIdentity(userA);
+    const { primaryMuscleGroupRaw: _primaryMuscleGroupRaw, ...legacyRecord } =
+      exerciseRecord({
+        primaryMuscleRaw: "Legacy Free Text",
+      });
+
+    await t.mutation(api.sync.upsertExercise, { record: legacyRecord });
+
+    const changes = await t.query(api.sync.fetchChanges, {
+      cursors: zeroCursors,
+    });
+
+    expect(changes.exercises).toHaveLength(1);
+    expect(changes.exercises[0]).toMatchObject({
+      primaryMuscleRaw: "Legacy Free Text",
+      primaryMuscleGroupRaw: "other",
+    });
+  });
+
   test("future exercise taxonomy strings round-trip through sync", async () => {
     const t = testDb().withIdentity(userA);
     const record = exerciseRecord({
