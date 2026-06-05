@@ -40,6 +40,16 @@ struct ExerciseHistorySessionGroupCard: View {
         VStack(spacing: 12) {
             ForEach(Array(group.loggedExerciseEntries.enumerated()), id: \.element.id) { index, entry in
                 VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.loggedExercise.exerciseSnapshotName)
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Text(entry.loggedExercise.metadataDisplayText)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .lineLimit(1)
+                    }
+
                     setRows(for: entry.setEntries)
 
                     if showsExerciseNotes {

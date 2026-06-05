@@ -4,6 +4,7 @@ import SwiftUI
 private struct ReorderExerciseDraft: Identifiable, Equatable {
     let id: UUID
     let name: String
+    let metadata: String
     let completedSets: Int
     let totalSets: Int
 
@@ -11,6 +12,7 @@ private struct ReorderExerciseDraft: Identifiable, Equatable {
         let visibleSets = loggedExercise.sortedSets
         id = loggedExercise.id
         name = loggedExercise.exerciseSnapshotName
+        metadata = loggedExercise.metadataDisplayText
         completedSets = visibleSets.filter(\.isCompleted).count
         totalSets = visibleSets.count
     }
@@ -33,10 +35,16 @@ struct ReorderExercisesSheet: View {
             List {
                 ForEach(draftExercises) { exercise in
                     HStack(spacing: 12) {
-                        Text(exercise.name)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(AppTheme.textPrimary)
-                            .lineLimit(1)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(exercise.name)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(AppTheme.textPrimary)
+                                .lineLimit(1)
+                            Text(exercise.metadata)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(AppTheme.textSecondary)
+                                .lineLimit(1)
+                        }
 
                         Spacer(minLength: 12)
 
@@ -58,7 +66,7 @@ struct ReorderExercisesSheet: View {
                     .contentShape(.dragPreview, RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(exercise.name)
-                    .accessibilityValue(exercise.progressText)
+                    .accessibilityValue("\(exercise.metadata), \(exercise.progressText)")
                     .accessibilityIdentifier("ReorderExerciseRow-\(exercise.id.uuidString)")
                     .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 6))
                     .listRowSeparator(.hidden)

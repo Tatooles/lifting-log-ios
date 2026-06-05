@@ -4,11 +4,19 @@ struct ExerciseHistorySummary: Identifiable, Hashable {
     var id: String
     var exerciseID: UUID?
     var name: String
+    var equipmentRaw: String
+    var primaryMuscleGroupRaw: String
     var lastPerformedAt: Date
     var completedSetCount: Int
 
     var lastPerformedLabel: String {
         WorkoutFormatters.compactDate(lastPerformedAt)
+    }
+
+    var metadataDisplayText: String {
+        let equipment = ExerciseEquipment(rawValue: equipmentRaw) ?? .other
+        let muscleGroup = ExerciseMuscleGroup(rawValue: primaryMuscleGroupRaw) ?? .other
+        return "\(equipment.displayName) • \(muscleGroup.displayName)"
     }
 
     static func makeSummaries(from sessions: [WorkoutSession]) -> [ExerciseHistorySummary] {
@@ -25,7 +33,7 @@ struct ExerciseHistorySummary: Identifiable, Hashable {
                     key = "exercise-\(id.uuidString)"
                     exerciseID = id
                 } else {
-                    key = "snapshot-\(loggedExercise.exerciseSnapshotName.lowercased())"
+                    key = "snapshot-\(loggedExercise.exerciseSnapshotName.lowercased())-\(loggedExercise.exerciseSnapshotEquipmentRaw.lowercased())"
                     exerciseID = nil
                 }
 
@@ -34,6 +42,8 @@ struct ExerciseHistorySummary: Identifiable, Hashable {
                     if session.startedAt > existing.lastPerformedAt {
                         existing.lastPerformedAt = session.startedAt
                         existing.name = loggedExercise.exerciseSnapshotName
+                        existing.equipmentRaw = loggedExercise.exerciseSnapshotEquipmentRaw
+                        existing.primaryMuscleGroupRaw = loggedExercise.exerciseSnapshotPrimaryMuscleGroupRaw
                     }
                     grouped[key] = existing
                 } else {
@@ -41,6 +51,8 @@ struct ExerciseHistorySummary: Identifiable, Hashable {
                         id: key,
                         exerciseID: exerciseID,
                         name: loggedExercise.exerciseSnapshotName,
+                        equipmentRaw: loggedExercise.exerciseSnapshotEquipmentRaw,
+                        primaryMuscleGroupRaw: loggedExercise.exerciseSnapshotPrimaryMuscleGroupRaw,
                         lastPerformedAt: session.startedAt,
                         completedSetCount: completedSetCount
                     )
@@ -62,7 +74,9 @@ struct ExerciseHistorySummary: Identifiable, Hashable {
                 return summary.exerciseID == exerciseID
             }
 
-            return summary.exerciseID == nil && summary.name.caseInsensitiveCompare(route.name) == .orderedSame
+            return summary.exerciseID == nil
+                && summary.name.caseInsensitiveCompare(route.name) == .orderedSame
+                && summary.equipmentRaw == route.equipmentRaw
         }
     }
 }

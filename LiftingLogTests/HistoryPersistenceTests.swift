@@ -269,6 +269,8 @@ final class HistoryPersistenceTests: XCTestCase {
             id: "snapshot-incline db press",
             exerciseID: nil,
             name: "incline db press",
+            equipmentRaw: ExerciseEquipment.other.rawValue,
+            primaryMuscleGroupRaw: ExerciseMuscleGroup.other.rawValue,
             lastPerformedAt: session.startedAt,
             completedSetCount: 1
         )
@@ -277,6 +279,82 @@ final class HistoryPersistenceTests: XCTestCase {
         XCTAssertEqual(groups.count, 1)
         XCTAssertEqual(groups.first?.title, "Snapshot Session")
         XCTAssertEqual(groups.first?.setEntries.first?.set.weight, 70)
+    }
+
+    func testExerciseHistorySeparatesSameNameDifferentEquipmentBySnapshotFallback() throws {
+        let barbell = LoggedExercise(
+            orderIndex: 0,
+            exerciseSnapshotName: "Bench Press",
+            exerciseSnapshotEquipmentRaw: ExerciseEquipment.barbell.rawValue,
+            exerciseSnapshotPrimaryMuscleGroupRaw: ExerciseMuscleGroup.chest.rawValue,
+            sets: [LoggedSet(orderIndex: 0, weight: 185, reps: 5, isCompleted: true)]
+        )
+        let dumbbell = LoggedExercise(
+            orderIndex: 0,
+            exerciseSnapshotName: "Bench Press",
+            exerciseSnapshotEquipmentRaw: ExerciseEquipment.dumbbell.rawValue,
+            exerciseSnapshotPrimaryMuscleGroupRaw: ExerciseMuscleGroup.chest.rawValue,
+            sets: [LoggedSet(orderIndex: 0, weight: 70, reps: 8, isCompleted: true)]
+        )
+        let barbellSession = WorkoutSession(
+            title: "Barbell Push",
+            startedAt: Date(timeIntervalSince1970: 100),
+            status: .completed,
+            source: .blank,
+            loggedExercises: [barbell]
+        )
+        let dumbbellSession = WorkoutSession(
+            title: "Dumbbell Push",
+            startedAt: Date(timeIntervalSince1970: 200),
+            status: .completed,
+            source: .blank,
+            loggedExercises: [dumbbell]
+        )
+
+        let summaries = ExerciseHistorySummary.makeSummaries(from: [barbellSession, dumbbellSession])
+
+        XCTAssertEqual(summaries.count, 2)
+        XCTAssertTrue(summaries.contains { $0.name == "Bench Press" && $0.equipmentRaw == "barbell" })
+        XCTAssertTrue(summaries.contains { $0.name == "Bench Press" && $0.equipmentRaw == "dumbbell" })
+    }
+
+    func testExerciseHistoryGroupsFallbackByNameAndEquipment() throws {
+        let summary = ExerciseHistorySummary(
+            id: "snapshot-bench press-barbell",
+            exerciseID: nil,
+            name: "Bench Press",
+            equipmentRaw: ExerciseEquipment.barbell.rawValue,
+            primaryMuscleGroupRaw: ExerciseMuscleGroup.chest.rawValue,
+            lastPerformedAt: .now,
+            completedSetCount: 1
+        )
+        let matchingLoggedExercise = LoggedExercise(
+            orderIndex: 0,
+            exerciseSnapshotName: "Bench Press",
+            exerciseSnapshotEquipmentRaw: ExerciseEquipment.barbell.rawValue,
+            exerciseSnapshotPrimaryMuscleGroupRaw: ExerciseMuscleGroup.chest.rawValue
+        )
+        matchingLoggedExercise.sets = [LoggedSet(orderIndex: 0, weight: 185, reps: 5, isCompleted: true)]
+        let nonMatchingLoggedExercise = LoggedExercise(
+            orderIndex: 1,
+            exerciseSnapshotName: "Bench Press",
+            exerciseSnapshotEquipmentRaw: ExerciseEquipment.dumbbell.rawValue,
+            exerciseSnapshotPrimaryMuscleGroupRaw: ExerciseMuscleGroup.chest.rawValue
+        )
+        nonMatchingLoggedExercise.sets = [LoggedSet(orderIndex: 0, weight: 70, reps: 8, isCompleted: true)]
+        let session = WorkoutSession(
+            title: "Mixed Push",
+            startedAt: Date(timeIntervalSince1970: 100),
+            status: .completed,
+            source: .blank,
+            loggedExercises: [matchingLoggedExercise, nonMatchingLoggedExercise]
+        )
+
+        let groups = ExerciseHistorySessionGroup.makeGroups(from: [session], matching: summary)
+
+        XCTAssertEqual(groups.count, 1)
+        XCTAssertEqual(groups.first?.loggedExerciseEntries.count, 1)
+        XCTAssertEqual(groups.first?.loggedExerciseEntries.first?.loggedExercise.exerciseSnapshotEquipmentRaw, "barbell")
     }
 
     func testExerciseHistoryGroupsSortTitleAscendingWhenStartedAtMatches() throws {
@@ -408,7 +486,7 @@ final class HistoryPersistenceTests: XCTestCase {
 
         XCTAssertNil(route.exerciseID)
         XCTAssertEqual(route.name, "Incline DB Press")
-        XCTAssertEqual(route.id, "snapshot-incline db press")
+        XCTAssertEqual(route.id, "snapshot-incline db press-other")
     }
 
     func testExerciseHistorySummaryCanBeFoundFromRoute() throws {
