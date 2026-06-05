@@ -72,6 +72,8 @@ final class ActiveWorkoutEngine {
                 orderIndex: pastLoggedExercise.orderIndex,
                 exercise: pastLoggedExercise.exercise,
                 exerciseSnapshotName: pastLoggedExercise.exerciseSnapshotName,
+                exerciseSnapshotEquipmentRaw: pastLoggedExercise.exerciseSnapshotEquipmentRaw,
+                exerciseSnapshotPrimaryMuscleGroupRaw: pastLoggedExercise.exerciseSnapshotPrimaryMuscleGroupRaw,
                 referenceNotes: pastLoggedExercise.notes,
                 createdAt: now,
                 updatedAt: now

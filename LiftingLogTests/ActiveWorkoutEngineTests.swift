@@ -55,7 +55,14 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         let context = container.mainContext
         let exercise = Exercise(name: "Back Squat", category: .strength, equipment: .barbell, primaryMuscleGroup: .quads)
         let past = WorkoutSession(title: "Leg Day", startedAt: .now, status: .completed, source: .blank)
-        let loggedExercise = LoggedExercise(orderIndex: 0, exercise: exercise, exerciseSnapshotName: exercise.name, notes: "Use belt")
+        let loggedExercise = LoggedExercise(
+            orderIndex: 0,
+            exercise: exercise,
+            exerciseSnapshotName: exercise.name,
+            exerciseSnapshotEquipmentRaw: ExerciseEquipment.smithMachine.rawValue,
+            exerciseSnapshotPrimaryMuscleGroupRaw: ExerciseMuscleGroup.glutes.rawValue,
+            notes: "Use belt"
+        )
         loggedExercise.sets = [
             LoggedSet(orderIndex: 0, weight: 315, reps: 5, rpe: 8, kind: .warmup, isCompleted: true),
             LoggedSet(orderIndex: 1, weight: 335, reps: 3, rpe: 9, kind: .working, isCompleted: true)
@@ -75,6 +82,8 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         let copiedExercise = try XCTUnwrap(newSession.loggedExercises.first)
         XCTAssertEqual(copiedExercise.orderIndex, 0)
         XCTAssertEqual(copiedExercise.exerciseSnapshotName, "Back Squat")
+        XCTAssertEqual(copiedExercise.exerciseSnapshotEquipmentRaw, "smithMachine")
+        XCTAssertEqual(copiedExercise.exerciseSnapshotPrimaryMuscleGroupRaw, "glutes")
         XCTAssertEqual(copiedExercise.notes, "")
 
         let copiedSets = copiedExercise.sortedSets

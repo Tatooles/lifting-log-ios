@@ -111,7 +111,17 @@ final class Exercise: Identifiable {
     }
 
     var primaryMuscleGroup: ExerciseMuscleGroup {
-        get { ExerciseMuscleGroup(rawValue: primaryMuscleGroupRaw) ?? .other }
+        get {
+            guard let storedGroup = ExerciseMuscleGroup(rawValue: primaryMuscleGroupRaw) else {
+                return .other
+            }
+            guard storedGroup == .other else {
+                return storedGroup
+            }
+
+            let legacyGroup = ExerciseMuscleGroup.legacyGroup(for: primaryMuscleRaw)
+            return legacyGroup == .other ? .other : legacyGroup
+        }
         set {
             primaryMuscleGroupRaw = newValue.rawValue
             primaryMuscleRaw = newValue.displayName
@@ -126,7 +136,8 @@ final class Exercise: Identifiable {
     func hasSameActiveIdentity(name normalizedName: String, equipment candidateEquipment: ExerciseEquipment) -> Bool {
         !isArchived
             && !isDeleted
-            && name.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare(normalizedName) == .orderedSame
+            && name.trimmingCharacters(in: .whitespacesAndNewlines)
+                .caseInsensitiveCompare(normalizedName.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame
             && equipment == candidateEquipment
     }
 

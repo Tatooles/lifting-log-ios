@@ -76,6 +76,21 @@ final class ModelPersistenceTests: XCTestCase {
         XCTAssertEqual(exercise.metadataDisplayText, "Other • Other")
     }
 
+    func testExercisePrimaryMuscleGroupFallsBackToLegacyRawWhenDefaulted() throws {
+        let exercise = Exercise(name: "Legacy Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .other)
+        exercise.primaryMuscleRaw = "Chest"
+        exercise.primaryMuscleGroupRaw = ExerciseMuscleGroup.other.rawValue
+
+        XCTAssertEqual(exercise.primaryMuscleGroup, .chest)
+        XCTAssertEqual(exercise.metadataDisplayText, "Barbell • Chest")
+    }
+
+    func testExerciseActiveIdentityTrimsCandidateName() throws {
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
+
+        XCTAssertTrue(exercise.hasSameActiveIdentity(name: "  Bench Press  ", equipment: .barbell))
+    }
+
     func testLoggedExerciseSnapshotsExerciseMetadata() throws {
         let exercise = Exercise(
             name: "Bench Press",
