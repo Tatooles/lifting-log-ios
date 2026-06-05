@@ -9,6 +9,7 @@ enum LiftingLogSchema {
         LoggedSet.self,
         UserSettings.self,
         HealthDataLink.self,
-        SeedMetadata.self
+        SeedMetadata.self,
+        SyncOutboxEntry.self
     ]
 }
