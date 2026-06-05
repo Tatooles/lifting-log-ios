@@ -36,7 +36,7 @@ final class LoggedExercise: Identifiable {
         self.exercise = exercise
         self.exerciseSnapshotName = exerciseSnapshotName ?? exercise?.name ?? "Exercise"
         self.exerciseSnapshotEquipmentRaw = exerciseSnapshotEquipmentRaw ?? exercise?.equipmentRaw ?? ExerciseEquipment.other.rawValue
-        self.exerciseSnapshotPrimaryMuscleGroupRaw = exerciseSnapshotPrimaryMuscleGroupRaw ?? exercise?.primaryMuscleGroupRaw ?? ExerciseMuscleGroup.other.rawValue
+        self.exerciseSnapshotPrimaryMuscleGroupRaw = exerciseSnapshotPrimaryMuscleGroupRaw ?? exercise?.primaryMuscleGroup.rawValue ?? ExerciseMuscleGroup.other.rawValue
         self.notes = notes
         self.referenceNotes = referenceNotes
         self.createdAt = createdAt
