@@ -34,6 +34,7 @@ final class ModelPersistenceTests: XCTestCase {
 
     func testExerciseMuscleGroupMapsLegacyValues() throws {
         XCTAssertEqual(ExerciseMuscleGroup.legacyGroup(for: "Quads"), .quads)
+        XCTAssertEqual(ExerciseMuscleGroup.legacyGroup(for: "Glutes"), .glutes)
         XCTAssertEqual(ExerciseMuscleGroup.legacyGroup(for: "Rear Delts"), .shoulders)
         XCTAssertEqual(ExerciseMuscleGroup.legacyGroup(for: "Abdominals"), .core)
         XCTAssertEqual(ExerciseMuscleGroup.legacyGroup(for: "Lower Back"), .lowerBack)

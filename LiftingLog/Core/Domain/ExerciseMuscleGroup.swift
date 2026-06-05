@@ -55,7 +55,7 @@ enum ExerciseMuscleGroup: String, CaseIterable, Codable, Identifiable {
         switch normalized {
         case "quads", "quadriceps": return .quads
         case "hamstrings": return .hamstrings
-        case "posterior chain": return .glutes
+        case "glutes", "gluteals", "posterior chain": return .glutes
         case "chest", "pecs", "pectorals": return .chest
         case "back", "upper back": return .upperBack
         case "lats", "latissimus dorsi": return .lats
