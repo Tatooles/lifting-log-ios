@@ -338,6 +338,68 @@ describe("sync conflict behavior", () => {
     });
   });
 
+  test("legacy logged exercise payloads without snapshot metadata are accepted and normalized", async () => {
+    const t = testDb().withIdentity(userA);
+    const {
+      exerciseSnapshotEquipmentRaw: _exerciseSnapshotEquipmentRaw,
+      exerciseSnapshotPrimaryMuscleGroupRaw:
+        _exerciseSnapshotPrimaryMuscleGroupRaw,
+      hasSnapshotMetadata: _hasSnapshotMetadata,
+      ...legacyRecord
+    } = loggedExerciseRecord();
+
+    await t.mutation(api.sync.upsertLoggedExercise, { record: legacyRecord });
+
+    const changes = await t.query(api.sync.fetchChanges, {
+      cursors: zeroCursors,
+    });
+
+    expect(changes.loggedExercises).toHaveLength(1);
+    expect(changes.loggedExercises[0]).toMatchObject({
+      clientId: "logged-exercise-1",
+      exerciseSnapshotEquipmentRaw: "other",
+      exerciseSnapshotPrimaryMuscleGroupRaw: "other",
+      hasSnapshotMetadata: false,
+    });
+  });
+
+  test("legacy logged exercise update payloads preserve existing snapshot metadata", async () => {
+    const t = testDb().withIdentity(userA);
+
+    await t.mutation(api.sync.upsertLoggedExercise, {
+      record: loggedExerciseRecord({
+        exerciseSnapshotEquipmentRaw: "smithMachine",
+        exerciseSnapshotPrimaryMuscleGroupRaw: "glutes",
+        hasSnapshotMetadata: true,
+      }),
+    });
+
+    const {
+      exerciseSnapshotEquipmentRaw: _exerciseSnapshotEquipmentRaw,
+      exerciseSnapshotPrimaryMuscleGroupRaw:
+        _exerciseSnapshotPrimaryMuscleGroupRaw,
+      hasSnapshotMetadata: _hasSnapshotMetadata,
+      ...legacyUpdate
+    } = loggedExerciseRecord({
+      notes: "Updated from old client",
+      updatedAt: 3,
+    });
+
+    await t.mutation(api.sync.upsertLoggedExercise, { record: legacyUpdate });
+
+    const changes = await t.query(api.sync.fetchChanges, {
+      cursors: zeroCursors,
+    });
+
+    expect(changes.loggedExercises).toHaveLength(1);
+    expect(changes.loggedExercises[0]).toMatchObject({
+      notes: "Updated from old client",
+      exerciseSnapshotEquipmentRaw: "smithMachine",
+      exerciseSnapshotPrimaryMuscleGroupRaw: "glutes",
+      hasSnapshotMetadata: true,
+    });
+  });
+
   test("non-finite numbers are rejected before records are written", async () => {
     const t = testDb().withIdentity(userA);
 

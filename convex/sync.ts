@@ -22,6 +22,11 @@ type NormalizedExercisePayload = ExercisePayload & {
 type NormalizedExerciseRecord = Doc<"exercises"> & {
   primaryMuscleGroupRaw: string;
 };
+type NormalizedLoggedExercisePayload = LoggedExercisePayload & {
+  exerciseSnapshotEquipmentRaw: string;
+  exerciseSnapshotPrimaryMuscleGroupRaw: string;
+  hasSnapshotMetadata: boolean;
+};
 
 type UpsertResult =
   | { status: "inserted"; serverUpdatedAt: number }
@@ -41,6 +46,9 @@ type ChangePage<TRecord extends { serverUpdatedAt: number }> = {
 const defaultFetchLimit = 100;
 const maxFetchLimit = 500;
 const defaultPrimaryMuscleGroupRaw = "other";
+const defaultExerciseSnapshotEquipmentRaw = "other";
+const defaultExerciseSnapshotPrimaryMuscleGroupRaw = "other";
+const defaultHasSnapshotMetadata = false;
 
 function assertFiniteNumber(value: number, fieldName: string): void {
   if (!Number.isFinite(value)) {
@@ -123,6 +131,42 @@ function normalizeExerciseRecord(record: Doc<"exercises">): NormalizedExerciseRe
     ...record,
     primaryMuscleGroupRaw:
       record.primaryMuscleGroupRaw ?? defaultPrimaryMuscleGroupRaw,
+  };
+}
+
+function normalizeLoggedExercisePayload(
+  record: LoggedExercisePayload,
+): NormalizedLoggedExercisePayload {
+  return {
+    ...record,
+    exerciseSnapshotEquipmentRaw:
+      record.exerciseSnapshotEquipmentRaw ?? defaultExerciseSnapshotEquipmentRaw,
+    exerciseSnapshotPrimaryMuscleGroupRaw:
+      record.exerciseSnapshotPrimaryMuscleGroupRaw ??
+      defaultExerciseSnapshotPrimaryMuscleGroupRaw,
+    hasSnapshotMetadata:
+      record.hasSnapshotMetadata ?? defaultHasSnapshotMetadata,
+  };
+}
+
+function normalizeLoggedExerciseUpdatePayload(
+  record: LoggedExercisePayload,
+  existing: Doc<"loggedExercises">,
+): NormalizedLoggedExercisePayload {
+  return {
+    ...record,
+    exerciseSnapshotEquipmentRaw:
+      record.exerciseSnapshotEquipmentRaw ??
+      existing.exerciseSnapshotEquipmentRaw ??
+      defaultExerciseSnapshotEquipmentRaw,
+    exerciseSnapshotPrimaryMuscleGroupRaw:
+      record.exerciseSnapshotPrimaryMuscleGroupRaw ??
+      existing.exerciseSnapshotPrimaryMuscleGroupRaw ??
+      defaultExerciseSnapshotPrimaryMuscleGroupRaw,
+    hasSnapshotMetadata:
+      record.hasSnapshotMetadata ??
+      existing.hasSnapshotMetadata ??
+      defaultHasSnapshotMetadata,
   };
 }
 
@@ -344,7 +388,15 @@ async function upsertLoggedExerciseByClientId(
   }
 
   const serverUpdatedAt = await nextServerUpdatedAt(ctx, ownerTokenIdentifier);
-  const nextRecord = withServerFields(record, ownerTokenIdentifier, serverUpdatedAt);
+  const normalizedRecord =
+    existing === null
+      ? normalizeLoggedExercisePayload(record)
+      : normalizeLoggedExerciseUpdatePayload(record, existing);
+  const nextRecord = withServerFields(
+    normalizedRecord,
+    ownerTokenIdentifier,
+    serverUpdatedAt,
+  );
 
   if (existing === null) {
     await ctx.db.insert("loggedExercises", nextRecord);
