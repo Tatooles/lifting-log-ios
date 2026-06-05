@@ -39,21 +39,27 @@ The v1 primary muscle group taxonomy is intentionally broad and training-focused
 - `chest`
 - `lats`
 - `upperBack`
+- `traps`
+- `lowerBack`
 - `shoulders`
 - `biceps`
 - `triceps`
+- `forearms`
 - `quads`
 - `hamstrings`
 - `glutes`
+- `abductors`
+- `adductors`
 - `calves`
 - `core`
+- `neck`
 - `fullBody`
 - `cardio`
 - `other`
 
-Display labels should use normal title case, for example `Upper Back` and `Full Body`.
+Display labels should use normal title case, for example `Upper Back`, `Lower Back`, and `Full Body`.
 
-The purpose of this taxonomy is search, filtering, and clear exercise creation, not anatomical precision. Values such as `Rear Delts` should not become their own v1 taxonomy value; seeded or migrated exercises with that value should map to `shoulders`. Broad filters are acceptable because users should get everything they expect, even if a filter returns a few extra exercises.
+The purpose of this taxonomy is search, filtering, and clear exercise creation, not anatomical precision. Use `Core`, not `Abdominals`, because it covers bracing, anti-rotation, planks, carries, and other non-crunch trunk work. `Lower Back` is still a separate value because back extensions, reverse hypers, and spinal-erector accessories are common enough to avoid overloading `Core`, `Glutes`, or `Hamstrings`. Values such as `Rear Delts` should not become their own v1 taxonomy value; seeded or migrated exercises with that value should map to `shoulders`. Broad filters are acceptable because users should get everything they expect, even if a filter returns a few extra exercises.
 
 ## Equipment
 
@@ -95,6 +101,8 @@ This allows:
 - `Shoulder Press` + `Dumbbell`
 
 The app should still reject exact active duplicates with the same normalized name and same equipment. Archived or deleted records should continue to follow the existing archive/delete behavior.
+
+Exercise history lookup should respect the same identity rule. The active workout history button should show history for the specific linked exercise when available. If it must fall back to snapshot matching, it should match at least normalized `exerciseSnapshotName + exerciseSnapshotEquipmentRaw`, not name alone. For example, `Bench Press` + `Dumbbell` history should not include `Bench Press` + `Barbell` entries.
 
 The model should not treat exercise name as a canonical movement identity. The name remains the user-facing display name. Users can create names such as `Close Grip Slingshot Pause Bench Press` today. A future movement-family system can later group that exercise under a base movement such as `Bench Press` without invalidating this design.
 
@@ -185,11 +193,19 @@ For non-seeded existing records, map known legacy strings conservatively:
 - `Posterior Chain` -> `glutes`
 - `Chest` -> `chest`
 - `Back` -> `upperBack`
+- `Lats` -> `lats`
+- `Traps` -> `traps`
+- `Lower Back` -> `lowerBack`
 - `Rear Delts` -> `shoulders`
 - `Biceps` -> `biceps`
 - `Triceps` -> `triceps`
+- `Forearms` -> `forearms`
+- `Abductors` -> `abductors`
+- `Adductors` -> `adductors`
 - `Calves` -> `calves`
 - `Core` -> `core`
+- `Abdominals` -> `core`
+- `Neck` -> `neck`
 
 Unknown existing values should display as `Other`. Where storage allows preserving an unknown raw value, preserve it rather than overwriting it. This keeps future taxonomy additions from corrupting older data.
 
@@ -209,8 +225,11 @@ Add or update tests for:
 
 - Model persistence of `primaryMuscleGroupRaw`, expanded equipment values, and fallback accessors.
 - Exercise editor picker behavior and duplicate validation using `name + equipment`.
+- UI test coverage for creating same-name exercises with different equipment and rejecting same-name, same-equipment duplicates.
 - Seed data mappings into the new primary muscle taxonomy.
 - Logged exercise snapshot creation for name, equipment, and primary muscle group.
+- Active workout history lookup for same-name exercises with different equipment.
+- UI test coverage that verifies active-workout history for one same-name equipment variant does not show another same-name equipment variant.
 - History display fallback behavior for old logged exercises without snapshot metadata.
 - Convex schema and sync payload validator changes.
 - Any SwiftData migration or compatibility path used to replace `primaryMuscleRaw`.
