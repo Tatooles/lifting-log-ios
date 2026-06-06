@@ -44,10 +44,12 @@ struct ExerciseHistorySessionGroupCard: View {
                         Text(entry.loggedExercise.exerciseSnapshotName)
                             .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(AppTheme.textPrimary)
-                        Text(entry.loggedExercise.metadataDisplayText)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .lineLimit(1)
+                        if let metadataDisplayText = entry.loggedExercise.metadataDisplayText {
+                            Text(metadataDisplayText)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(AppTheme.textSecondary)
+                                .lineLimit(1)
+                        }
                     }
 
                     setRows(for: entry.setEntries)

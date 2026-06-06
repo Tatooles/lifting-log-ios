@@ -3,17 +3,17 @@ import Foundation
 struct ExerciseHistoryRoute: Hashable, Identifiable {
     let exerciseID: UUID?
     let name: String
-    let equipmentRaw: String
+    let equipmentRaw: String?
 
     var id: String {
         if let exerciseID {
             return "exercise-\(exerciseID.uuidString)"
         }
 
-        return "snapshot-\(name.lowercased())-\(equipmentRaw.lowercased())"
+        return "snapshot-\(name.lowercased())-\((equipmentRaw ?? "unknown").lowercased())"
     }
 
-    init(exerciseID: UUID?, name: String, equipmentRaw: String = ExerciseEquipment.other.rawValue) {
+    init(exerciseID: UUID?, name: String, equipmentRaw: String? = nil) {
         self.exerciseID = exerciseID
         self.name = name
         self.equipmentRaw = equipmentRaw
@@ -27,7 +27,7 @@ struct ExerciseHistoryRoute: Hashable, Identifiable {
         self.init(
             exerciseID: loggedExercise.exercise?.id,
             name: loggedExercise.exerciseSnapshotName,
-            equipmentRaw: loggedExercise.effectiveSnapshotEquipmentRaw
+            equipmentRaw: loggedExercise.resolvedSnapshotEquipmentRaw
         )
     }
 }

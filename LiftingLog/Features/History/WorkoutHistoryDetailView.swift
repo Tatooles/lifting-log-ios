@@ -44,10 +44,12 @@ struct WorkoutHistoryDetailView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(loggedExercise.exerciseSnapshotName)
                                     .font(.system(size: 18, weight: .bold))
-                                Text(loggedExercise.metadataDisplayText)
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(AppTheme.textSecondary)
-                                    .lineLimit(1)
+                                if let metadataDisplayText = loggedExercise.metadataDisplayText {
+                                    Text(metadataDisplayText)
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundStyle(AppTheme.textSecondary)
+                                        .lineLimit(1)
+                                }
                             }
 
                             ForEach(loggedExercise.sortedSets) { set in

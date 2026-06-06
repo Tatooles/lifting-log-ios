@@ -61,19 +61,7 @@ final class LoggedExercise: Identifiable {
         deletedAt != nil
     }
 
-    var snapshotEquipment: ExerciseEquipment {
-        ExerciseEquipment(rawValue: effectiveSnapshotEquipmentRaw) ?? .other
-    }
-
-    var snapshotPrimaryMuscleGroup: ExerciseMuscleGroup {
-        ExerciseMuscleGroup(rawValue: effectiveSnapshotPrimaryMuscleGroupRaw) ?? .other
-    }
-
-    var metadataDisplayText: String {
-        "\(snapshotEquipment.displayName) • \(snapshotPrimaryMuscleGroup.displayName)"
-    }
-
-    var effectiveSnapshotEquipmentRaw: String {
+    var resolvedSnapshotEquipmentRaw: String? {
         guard !hasSnapshotMetadata else {
             return exerciseSnapshotEquipmentRaw
         }
@@ -82,10 +70,10 @@ final class LoggedExercise: Identifiable {
             return exerciseSnapshotEquipmentRaw
         }
 
-        return exercise?.equipmentRaw ?? exerciseSnapshotEquipmentRaw
+        return exercise?.equipmentRaw
     }
 
-    var effectiveSnapshotPrimaryMuscleGroupRaw: String {
+    var resolvedSnapshotPrimaryMuscleGroupRaw: String? {
         guard !hasSnapshotMetadata else {
             return exerciseSnapshotPrimaryMuscleGroupRaw
         }
@@ -94,7 +82,33 @@ final class LoggedExercise: Identifiable {
             return exerciseSnapshotPrimaryMuscleGroupRaw
         }
 
-        return exercise?.primaryMuscleGroup.rawValue ?? exerciseSnapshotPrimaryMuscleGroupRaw
+        return exercise?.primaryMuscleGroup.rawValue
+    }
+
+    var snapshotEquipment: ExerciseEquipment? {
+        guard let resolvedSnapshotEquipmentRaw else { return nil }
+        return ExerciseEquipment(rawValue: resolvedSnapshotEquipmentRaw) ?? .other
+    }
+
+    var snapshotPrimaryMuscleGroup: ExerciseMuscleGroup? {
+        guard let resolvedSnapshotPrimaryMuscleGroupRaw else { return nil }
+        return ExerciseMuscleGroup(rawValue: resolvedSnapshotPrimaryMuscleGroupRaw) ?? .other
+    }
+
+    var metadataDisplayText: String? {
+        guard let snapshotEquipment, let snapshotPrimaryMuscleGroup else {
+            return nil
+        }
+
+        return "\(snapshotEquipment.displayName) • \(snapshotPrimaryMuscleGroup.displayName)"
+    }
+
+    var effectiveSnapshotEquipmentRaw: String {
+        resolvedSnapshotEquipmentRaw ?? ExerciseEquipment.other.rawValue
+    }
+
+    var effectiveSnapshotPrimaryMuscleGroupRaw: String {
+        resolvedSnapshotPrimaryMuscleGroupRaw ?? ExerciseMuscleGroup.other.rawValue
     }
 
     func touch(now: Date = .now) {

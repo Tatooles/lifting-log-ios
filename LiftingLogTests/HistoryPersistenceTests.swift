@@ -281,6 +281,36 @@ final class HistoryPersistenceTests: XCTestCase {
         XCTAssertEqual(groups.first?.setEntries.first?.set.weight, 70)
     }
 
+    func testExerciseHistorySuppressesUnknownSnapshotMetadata() throws {
+        let loggedExercise = LoggedExercise(
+            orderIndex: 0,
+            exercise: nil,
+            exerciseSnapshotName: "Legacy Bench Press",
+            exerciseSnapshotEquipmentRaw: ExerciseEquipment.other.rawValue,
+            exerciseSnapshotPrimaryMuscleGroupRaw: ExerciseMuscleGroup.other.rawValue,
+            sets: [LoggedSet(orderIndex: 0, weight: 185, reps: 5, isCompleted: true)]
+        )
+        loggedExercise.hasSnapshotMetadata = false
+        let session = WorkoutSession(
+            title: "Legacy Push",
+            startedAt: Date(timeIntervalSince1970: 100),
+            status: .completed,
+            source: .blank,
+            loggedExercises: [loggedExercise]
+        )
+
+        let summary = try XCTUnwrap(ExerciseHistorySummary.makeSummaries(from: [session]).first)
+        let route = ExerciseHistoryRoute(loggedExercise: loggedExercise)
+
+        XCTAssertEqual(summary.name, "Legacy Bench Press")
+        XCTAssertNil(summary.equipmentRaw)
+        XCTAssertNil(summary.primaryMuscleGroupRaw)
+        XCTAssertNil(summary.metadataDisplayText)
+        XCTAssertEqual(summary.id, "snapshot-legacy bench press-unknown")
+        XCTAssertEqual(route.id, "snapshot-legacy bench press-unknown")
+        XCTAssertEqual(ExerciseHistorySummary.find(in: [summary], matching: route)?.id, summary.id)
+    }
+
     func testExerciseHistorySeparatesSameNameDifferentEquipmentBySnapshotFallback() throws {
         let barbell = LoggedExercise(
             orderIndex: 0,

@@ -68,17 +68,20 @@ final class ActiveWorkoutEngine {
         context.insert(session)
 
         for pastLoggedExercise in pastSession.sortedLoggedExercises {
+            let resolvedEquipmentRaw = pastLoggedExercise.resolvedSnapshotEquipmentRaw
+            let resolvedPrimaryMuscleGroupRaw = pastLoggedExercise.resolvedSnapshotPrimaryMuscleGroupRaw
             let loggedExercise = LoggedExercise(
                 orderIndex: pastLoggedExercise.orderIndex,
                 exercise: pastLoggedExercise.exercise,
                 exerciseSnapshotName: pastLoggedExercise.exerciseSnapshotName,
-                exerciseSnapshotEquipmentRaw: pastLoggedExercise.effectiveSnapshotEquipmentRaw,
-                exerciseSnapshotPrimaryMuscleGroupRaw: pastLoggedExercise.effectiveSnapshotPrimaryMuscleGroupRaw,
+                exerciseSnapshotEquipmentRaw: resolvedEquipmentRaw,
+                exerciseSnapshotPrimaryMuscleGroupRaw: resolvedPrimaryMuscleGroupRaw,
                 referenceNotes: pastLoggedExercise.notes,
                 createdAt: now,
                 updatedAt: now
             )
-            loggedExercise.hasSnapshotMetadata = true
+            loggedExercise.hasSnapshotMetadata =
+                resolvedEquipmentRaw != nil && resolvedPrimaryMuscleGroupRaw != nil
             loggedExercise.session = session
             context.insert(loggedExercise)
 

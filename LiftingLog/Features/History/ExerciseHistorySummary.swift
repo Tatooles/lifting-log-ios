@@ -4,8 +4,8 @@ struct ExerciseHistorySummary: Identifiable, Hashable {
     var id: String
     var exerciseID: UUID?
     var name: String
-    var equipmentRaw: String
-    var primaryMuscleGroupRaw: String
+    var equipmentRaw: String?
+    var primaryMuscleGroupRaw: String?
     var lastPerformedAt: Date
     var completedSetCount: Int
 
@@ -13,7 +13,11 @@ struct ExerciseHistorySummary: Identifiable, Hashable {
         WorkoutFormatters.compactDate(lastPerformedAt)
     }
 
-    var metadataDisplayText: String {
+    var metadataDisplayText: String? {
+        guard let equipmentRaw, let primaryMuscleGroupRaw else {
+            return nil
+        }
+
         let equipment = ExerciseEquipment(rawValue: equipmentRaw) ?? .other
         let muscleGroup = ExerciseMuscleGroup(rawValue: primaryMuscleGroupRaw) ?? .other
         return "\(equipment.displayName) • \(muscleGroup.displayName)"
@@ -33,7 +37,7 @@ struct ExerciseHistorySummary: Identifiable, Hashable {
                     key = "exercise-\(id.uuidString)"
                     exerciseID = id
                 } else {
-                    key = "snapshot-\(loggedExercise.exerciseSnapshotName.lowercased())-\(loggedExercise.effectiveSnapshotEquipmentRaw.lowercased())"
+                    key = "snapshot-\(loggedExercise.exerciseSnapshotName.lowercased())-\((loggedExercise.resolvedSnapshotEquipmentRaw ?? "unknown").lowercased())"
                     exerciseID = nil
                 }
 
@@ -42,8 +46,8 @@ struct ExerciseHistorySummary: Identifiable, Hashable {
                     if session.startedAt > existing.lastPerformedAt {
                         existing.lastPerformedAt = session.startedAt
                         existing.name = loggedExercise.exerciseSnapshotName
-                        existing.equipmentRaw = loggedExercise.effectiveSnapshotEquipmentRaw
-                        existing.primaryMuscleGroupRaw = loggedExercise.effectiveSnapshotPrimaryMuscleGroupRaw
+                        existing.equipmentRaw = loggedExercise.resolvedSnapshotEquipmentRaw
+                        existing.primaryMuscleGroupRaw = loggedExercise.resolvedSnapshotPrimaryMuscleGroupRaw
                     }
                     grouped[key] = existing
                 } else {
@@ -51,8 +55,8 @@ struct ExerciseHistorySummary: Identifiable, Hashable {
                         id: key,
                         exerciseID: exerciseID,
                         name: loggedExercise.exerciseSnapshotName,
-                        equipmentRaw: loggedExercise.effectiveSnapshotEquipmentRaw,
-                        primaryMuscleGroupRaw: loggedExercise.effectiveSnapshotPrimaryMuscleGroupRaw,
+                        equipmentRaw: loggedExercise.resolvedSnapshotEquipmentRaw,
+                        primaryMuscleGroupRaw: loggedExercise.resolvedSnapshotPrimaryMuscleGroupRaw,
                         lastPerformedAt: session.startedAt,
                         completedSetCount: completedSetCount
                     )
