@@ -10,6 +10,7 @@ enum LiftingLogSchema {
         UserSettings.self,
         HealthDataLink.self,
         SeedMetadata.self,
-        SyncOutboxEntry.self
+        SyncOutboxEntry.self,
+        SyncCursorState.self
     ]
 }
