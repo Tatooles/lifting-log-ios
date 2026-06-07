@@ -262,6 +262,27 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
     }
 
+    func testRunUsesDeleteIntentTimestampForAttemptedMissingExerciseTombstone() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exerciseID = UUID(uuidString: "00000000-0000-0000-0000-000000003011")!
+        let recorder = SyncOutboxRecorder()
+        try recorder.recordUpdate(entityKind: .exercise, entityID: exerciseID, ownerTokenIdentifier: "issuer|owner_a", context: context, now: Date(timeIntervalSince1970: 100))
+        let entry = try XCTUnwrap(context.fetch(FetchDescriptor<SyncOutboxEntry>()).first)
+        recorder.markInFlight(entry, now: Date(timeIntervalSince1970: 150))
+        try recorder.recordDelete(entityKind: .exercise, entityID: exerciseID, ownerTokenIdentifier: "issuer|owner_a", context: context, now: Date(timeIntervalSince1970: 200))
+        try context.save()
+
+        let client = FakeSettingsExerciseSyncClient()
+        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+
+        XCTAssertEqual(client.tombstones.count, 1)
+        XCTAssertEqual(client.tombstones.first?.0, .exercise)
+        XCTAssertEqual(client.tombstones.first?.1, exerciseID)
+        XCTAssertEqual(client.tombstones.first?.2, Date(timeIntervalSince1970: 200))
+        XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
+    }
+
     func testRunDoesNotTombstoneModelOwnedByDifferentOwner() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
