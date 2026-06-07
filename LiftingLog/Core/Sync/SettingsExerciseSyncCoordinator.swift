@@ -3,11 +3,11 @@ import SwiftData
 
 @MainActor
 final class SettingsExerciseSyncCoordinator {
-    nonisolated(unsafe) private let client: SettingsExerciseSyncClient
+    private let client: any SettingsExerciseSyncClient & Sendable
     private let recorder = SyncOutboxRecorder()
     private var isRunning = false
 
-    init(client: SettingsExerciseSyncClient) {
+    init(client: any SettingsExerciseSyncClient & Sendable) {
         self.client = client
     }
 
@@ -46,7 +46,7 @@ final class SettingsExerciseSyncCoordinator {
             ) {
                 entry.ownerTokenIdentifier = ownerTokenIdentifier
             }
-            if entry.ownerTokenIdentifier == ownerTokenIdentifier, entry.status == .inFlight {
+            if entry.ownerTokenIdentifier == ownerTokenIdentifier, entry.status == .inFlight || entry.status == .failed {
                 recorder.markPendingForRetry(entry, now: .now)
             }
         }
@@ -66,18 +66,20 @@ final class SettingsExerciseSyncCoordinator {
             try context.save()
 
             do {
-                try await push(entry: entry, context: context)
+                try await push(entry: entry, ownerTokenIdentifier: ownerTokenIdentifier, context: context)
                 recorder.removeCompleted(entry, context: context)
                 try context.save()
             } catch {
-                recorder.markFailed(entry, message: error.localizedDescription, now: .now)
-                try context.save()
+                if entry.status == .inFlight {
+                    recorder.markFailed(entry, message: error.localizedDescription, now: .now)
+                    try context.save()
+                }
                 break
             }
         }
     }
 
-    private func push(entry: SyncOutboxEntry, context: ModelContext) async throws {
+    private func push(entry: SyncOutboxEntry, ownerTokenIdentifier: String, context: ModelContext) async throws {
         guard let entityKind = entry.entityKind, let operation = entry.operation else { return }
 
         switch (entityKind, operation) {
@@ -86,11 +88,17 @@ final class SettingsExerciseSyncCoordinator {
                 _ = try await client.tombstone(entityKind: .userSettings, clientId: entry.entityID, deletedAt: entry.updatedAt)
                 return
             }
+            guard settings.syncOwnerTokenIdentifier == ownerTokenIdentifier else {
+                throw SettingsExerciseSyncCoordinatorError.ownerMismatch(entityKind: .userSettings, entityID: entry.entityID)
+            }
             _ = try await client.upsertUserSettings(SyncPayloadMapper.userSettingsPayload(from: settings))
         case (.exercise, .create), (.exercise, .update):
             guard let exercise = try findExercise(id: entry.entityID, context: context) else {
                 _ = try await client.tombstone(entityKind: .exercise, clientId: entry.entityID, deletedAt: entry.updatedAt)
                 return
+            }
+            guard exercise.syncOwnerTokenIdentifier == ownerTokenIdentifier else {
+                throw SettingsExerciseSyncCoordinatorError.ownerMismatch(entityKind: .exercise, entityID: entry.entityID)
             }
             _ = try await client.upsertExercise(SyncPayloadMapper.exercisePayload(from: exercise))
         case (.userSettings, .delete):
@@ -134,6 +142,40 @@ final class SettingsExerciseSyncCoordinator {
                 || exercise.syncOwnerTokenIdentifier == ownerTokenIdentifier
         default:
             return false
+        }
+    }
+}
+
+enum SettingsExerciseSyncCoordinatorError: LocalizedError {
+    case ownerMismatch(entityKind: SyncEntityKind, entityID: UUID)
+
+    var errorDescription: String? {
+        switch self {
+        case let .ownerMismatch(entityKind, entityID):
+            "Cannot sync \(entityKind.displayName) \(entityID.uuidString) because the local record belongs to a different owner."
+        }
+    }
+}
+
+private extension SyncEntityKind {
+    var displayName: String {
+        switch self {
+        case .userSettings:
+            "userSettings"
+        case .exercise:
+            "exercise"
+        case .workoutSession:
+            "workoutSession"
+        case .loggedExercise:
+            "loggedExercise"
+        case .loggedSet:
+            "loggedSet"
+        case .workoutTemplate:
+            "workoutTemplate"
+        case .healthDataLink:
+            "healthDataLink"
+        case .seedMetadata:
+            "seedMetadata"
         }
     }
 }

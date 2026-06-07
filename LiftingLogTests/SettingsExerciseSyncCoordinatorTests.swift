@@ -127,7 +127,9 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         try await coordinator.run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         XCTAssertEqual(client.upsertedSettings.count, 1)
+        XCTAssertEqual(client.upsertedSettings.first?.clientId, settings.id.uuidString.lowercased())
         XCTAssertEqual(client.upsertedExercises.count, 1)
+        XCTAssertEqual(client.upsertedExercises.first?.clientId, exercise.id.uuidString.lowercased())
         XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
     }
 
@@ -155,9 +157,121 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         XCTAssertEqual(entry.status, .failed)
         XCTAssertEqual(entry.lastErrorMessage, "offline")
     }
+
+    func testRunRetriesPreviouslyFailedEntryOnNextRun() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000003004")!,
+            name: "Deadlift",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Hamstrings"
+        )
+        exercise.syncOwnerTokenIdentifier = "issuer|owner_a"
+        context.insert(exercise)
+        let entry = SyncOutboxEntry(
+            entityKind: .exercise,
+            entityID: exercise.id,
+            operation: .update,
+            status: .failed,
+            ownerTokenIdentifier: "issuer|owner_a",
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 200)
+        )
+        entry.lastErrorMessage = "offline"
+        context.insert(entry)
+        try context.save()
+
+        let client = FakeSettingsExerciseSyncClient()
+        let coordinator = SettingsExerciseSyncCoordinator(client: client)
+        try await coordinator.run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+
+        XCTAssertEqual(client.upsertedExercises.map { $0.clientId }, [exercise.id.uuidString.lowercased()])
+        XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
+    }
+
+    func testRunDoesNotPushModelOwnedByDifferentOwner() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000003005")!,
+            name: "Press",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Shoulders"
+        )
+        exercise.syncOwnerTokenIdentifier = "issuer|owner_b"
+        context.insert(exercise)
+        try SyncOutboxRecorder().recordUpdate(entityKind: .exercise, entityID: exercise.id, ownerTokenIdentifier: "issuer|owner_a", context: context, now: Date(timeIntervalSince1970: 100))
+        try context.save()
+
+        let client = FakeSettingsExerciseSyncClient()
+        let coordinator = SettingsExerciseSyncCoordinator(client: client)
+        try await coordinator.run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+
+        XCTAssertEqual(client.upsertedExercises.count, 0)
+        let entry = try XCTUnwrap(context.fetch(FetchDescriptor<SyncOutboxEntry>()).first)
+        XCTAssertEqual(entry.status, .failed)
+        XCTAssertEqual(entry.lastErrorMessage, "Cannot sync exercise \(exercise.id.uuidString) because the local record belongs to a different owner.")
+    }
+
+    func testRunTombstonesMissingExerciseForUpdateEntry() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exerciseID = UUID(uuidString: "00000000-0000-0000-0000-000000003006")!
+        try SyncOutboxRecorder().recordUpdate(entityKind: .exercise, entityID: exerciseID, ownerTokenIdentifier: "issuer|owner_a", context: context, now: Date(timeIntervalSince1970: 100))
+        try context.save()
+
+        let client = FakeSettingsExerciseSyncClient()
+        let coordinator = SettingsExerciseSyncCoordinator(client: client)
+        try await coordinator.run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+
+        XCTAssertEqual(client.tombstones.count, 1)
+        XCTAssertEqual(client.tombstones.first?.0, .exercise)
+        XCTAssertEqual(client.tombstones.first?.1, exerciseID)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
+    }
+
+    func testRunLeavesSecondPendingEntryPendingAfterFirstEntryFailure() async throws {
+        struct PushError: LocalizedError { var errorDescription: String? { "offline" } }
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let failedExercise = Exercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000003007")!,
+            name: "Curl",
+            category: .strength,
+            equipment: .dumbbell,
+            primaryMuscle: "Biceps"
+        )
+        let pendingExercise = Exercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000003008")!,
+            name: "Row",
+            category: .strength,
+            equipment: .dumbbell,
+            primaryMuscle: "Back"
+        )
+        context.insert(failedExercise)
+        context.insert(pendingExercise)
+        let recorder = SyncOutboxRecorder()
+        try recorder.recordUpdate(entityKind: .exercise, entityID: failedExercise.id, ownerTokenIdentifier: "issuer|owner_a", context: context, now: Date(timeIntervalSince1970: 100))
+        try recorder.recordUpdate(entityKind: .exercise, entityID: pendingExercise.id, ownerTokenIdentifier: "issuer|owner_a", context: context, now: Date(timeIntervalSince1970: 200))
+        try context.save()
+
+        let client = FakeSettingsExerciseSyncClient()
+        client.error = PushError()
+        let coordinator = SettingsExerciseSyncCoordinator(client: client)
+        try await coordinator.run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+
+        let entries = try context.fetch(FetchDescriptor<SyncOutboxEntry>())
+        let failedEntry = try XCTUnwrap(entries.first { $0.entityID == failedExercise.id })
+        let pendingEntry = try XCTUnwrap(entries.first { $0.entityID == pendingExercise.id })
+        XCTAssertEqual(failedEntry.status, .failed)
+        XCTAssertEqual(pendingEntry.status, .pending)
+    }
 }
 
-final class FakeSettingsExerciseSyncClient: SettingsExerciseSyncClient {
+final class FakeSettingsExerciseSyncClient: SettingsExerciseSyncClient, @unchecked Sendable {
     var upsertedSettings: [UserSettingsSyncPayload] = []
     var upsertedExercises: [ExerciseSyncPayload] = []
     var tombstones: [(SyncEntityKind, UUID, Date)] = []
