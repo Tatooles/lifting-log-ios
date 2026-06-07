@@ -230,6 +230,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         XCTAssertEqual(client.tombstones.count, 1)
         XCTAssertEqual(client.tombstones.first?.0, .exercise)
         XCTAssertEqual(client.tombstones.first?.1, exerciseID)
+        XCTAssertEqual(client.tombstones.first?.2, Date(timeIntervalSince1970: 100))
         XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
     }
 

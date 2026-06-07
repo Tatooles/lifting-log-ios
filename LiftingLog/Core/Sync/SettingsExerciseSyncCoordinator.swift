@@ -62,11 +62,17 @@ final class SettingsExerciseSyncCoordinator {
             }
 
         for entry in entries {
+            let logicalUpdatedAt = entry.updatedAt
             recorder.markInFlight(entry, now: .now)
             try context.save()
 
             do {
-                try await push(entry: entry, ownerTokenIdentifier: ownerTokenIdentifier, context: context)
+                try await push(
+                    entry: entry,
+                    ownerTokenIdentifier: ownerTokenIdentifier,
+                    fallbackTimestamp: logicalUpdatedAt,
+                    context: context
+                )
                 recorder.removeCompleted(entry, context: context)
                 try context.save()
             } catch {
@@ -79,13 +85,18 @@ final class SettingsExerciseSyncCoordinator {
         }
     }
 
-    private func push(entry: SyncOutboxEntry, ownerTokenIdentifier: String, context: ModelContext) async throws {
+    private func push(
+        entry: SyncOutboxEntry,
+        ownerTokenIdentifier: String,
+        fallbackTimestamp: Date,
+        context: ModelContext
+    ) async throws {
         guard let entityKind = entry.entityKind, let operation = entry.operation else { return }
 
         switch (entityKind, operation) {
         case (.userSettings, .create), (.userSettings, .update):
             guard let settings = try findUserSettings(id: entry.entityID, context: context) else {
-                _ = try await client.tombstone(entityKind: .userSettings, clientId: entry.entityID, deletedAt: entry.updatedAt)
+                _ = try await client.tombstone(entityKind: .userSettings, clientId: entry.entityID, deletedAt: fallbackTimestamp)
                 return
             }
             guard settings.syncOwnerTokenIdentifier == ownerTokenIdentifier else {
@@ -94,7 +105,7 @@ final class SettingsExerciseSyncCoordinator {
             _ = try await client.upsertUserSettings(SyncPayloadMapper.userSettingsPayload(from: settings))
         case (.exercise, .create), (.exercise, .update):
             guard let exercise = try findExercise(id: entry.entityID, context: context) else {
-                _ = try await client.tombstone(entityKind: .exercise, clientId: entry.entityID, deletedAt: entry.updatedAt)
+                _ = try await client.tombstone(entityKind: .exercise, clientId: entry.entityID, deletedAt: fallbackTimestamp)
                 return
             }
             guard exercise.syncOwnerTokenIdentifier == ownerTokenIdentifier else {
@@ -106,14 +117,14 @@ final class SettingsExerciseSyncCoordinator {
             if let settings, settings.syncOwnerTokenIdentifier != ownerTokenIdentifier {
                 throw SettingsExerciseSyncCoordinatorError.ownerMismatch(entityKind: .userSettings, entityID: entry.entityID)
             }
-            let deletedAt = settings?.deletedAt ?? entry.updatedAt
+            let deletedAt = settings?.deletedAt ?? fallbackTimestamp
             _ = try await client.tombstone(entityKind: .userSettings, clientId: entry.entityID, deletedAt: deletedAt)
         case (.exercise, .delete):
             let exercise = try findExercise(id: entry.entityID, context: context)
             if let exercise, exercise.syncOwnerTokenIdentifier != ownerTokenIdentifier {
                 throw SettingsExerciseSyncCoordinatorError.ownerMismatch(entityKind: .exercise, entityID: entry.entityID)
             }
-            let deletedAt = exercise?.deletedAt ?? entry.updatedAt
+            let deletedAt = exercise?.deletedAt ?? fallbackTimestamp
             _ = try await client.tombstone(entityKind: .exercise, clientId: entry.entityID, deletedAt: deletedAt)
         default:
             return
