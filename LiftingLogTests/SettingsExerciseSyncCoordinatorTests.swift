@@ -233,6 +233,32 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
     }
 
+    func testRunDoesNotTombstoneModelOwnedByDifferentOwner() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000003009")!,
+            name: "Other Owner Squat",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Quads"
+        )
+        exercise.syncOwnerTokenIdentifier = "issuer|owner_b"
+        exercise.markDeleted(now: Date(timeIntervalSince1970: 120))
+        context.insert(exercise)
+        try SyncOutboxRecorder().recordDelete(entityKind: .exercise, entityID: exercise.id, ownerTokenIdentifier: "issuer|owner_a", context: context, now: Date(timeIntervalSince1970: 130))
+        try context.save()
+
+        let client = FakeSettingsExerciseSyncClient()
+        let coordinator = SettingsExerciseSyncCoordinator(client: client)
+        try await coordinator.run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+
+        XCTAssertTrue(client.tombstones.isEmpty)
+        let entry = try XCTUnwrap(context.fetch(FetchDescriptor<SyncOutboxEntry>()).first)
+        XCTAssertEqual(entry.status, .failed)
+        XCTAssertEqual(entry.lastErrorMessage, "Cannot sync exercise \(exercise.id.uuidString) because the local record belongs to a different owner.")
+    }
+
     func testRunLeavesSecondPendingEntryPendingAfterFirstEntryFailure() async throws {
         struct PushError: LocalizedError { var errorDescription: String? { "offline" } }
         let container = try SwiftDataTestSupport.makeInMemoryContainer()

@@ -102,10 +102,18 @@ final class SettingsExerciseSyncCoordinator {
             }
             _ = try await client.upsertExercise(SyncPayloadMapper.exercisePayload(from: exercise))
         case (.userSettings, .delete):
-            let deletedAt = try findUserSettings(id: entry.entityID, context: context)?.deletedAt ?? entry.updatedAt
+            let settings = try findUserSettings(id: entry.entityID, context: context)
+            if let settings, settings.syncOwnerTokenIdentifier != ownerTokenIdentifier {
+                throw SettingsExerciseSyncCoordinatorError.ownerMismatch(entityKind: .userSettings, entityID: entry.entityID)
+            }
+            let deletedAt = settings?.deletedAt ?? entry.updatedAt
             _ = try await client.tombstone(entityKind: .userSettings, clientId: entry.entityID, deletedAt: deletedAt)
         case (.exercise, .delete):
-            let deletedAt = try findExercise(id: entry.entityID, context: context)?.deletedAt ?? entry.updatedAt
+            let exercise = try findExercise(id: entry.entityID, context: context)
+            if let exercise, exercise.syncOwnerTokenIdentifier != ownerTokenIdentifier {
+                throw SettingsExerciseSyncCoordinatorError.ownerMismatch(entityKind: .exercise, entityID: entry.entityID)
+            }
+            let deletedAt = exercise?.deletedAt ?? entry.updatedAt
             _ = try await client.tombstone(entityKind: .exercise, clientId: entry.entityID, deletedAt: deletedAt)
         default:
             return
