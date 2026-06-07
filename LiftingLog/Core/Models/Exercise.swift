@@ -18,6 +18,7 @@ final class Exercise: Identifiable {
     var notes: String
     var isArchived: Bool
     var isSeeded: Bool
+    var syncOwnerTokenIdentifier: String?
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
@@ -32,6 +33,7 @@ final class Exercise: Identifiable {
         notes: String = "",
         isArchived: Bool = false,
         isSeeded: Bool = false,
+        syncOwnerTokenIdentifier: String? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now,
         deletedAt: Date? = nil
@@ -46,6 +48,7 @@ final class Exercise: Identifiable {
         self.notes = notes
         self.isArchived = isArchived
         self.isSeeded = isSeeded
+        self.syncOwnerTokenIdentifier = syncOwnerTokenIdentifier
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.deletedAt = deletedAt
@@ -61,6 +64,7 @@ final class Exercise: Identifiable {
         notes: String = "",
         isArchived: Bool = false,
         isSeeded: Bool = false,
+        syncOwnerTokenIdentifier: String? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now,
         deletedAt: Date? = nil
@@ -75,6 +79,7 @@ final class Exercise: Identifiable {
             notes: notes,
             isArchived: isArchived,
             isSeeded: isSeeded,
+            syncOwnerTokenIdentifier: syncOwnerTokenIdentifier,
             createdAt: createdAt,
             updatedAt: updatedAt,
             deletedAt: deletedAt

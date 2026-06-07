@@ -7,6 +7,7 @@ final class UserSettings: Identifiable {
     var weightUnitRaw: String
     var defaultRestTimerSeconds: Int
     var hasCompletedOnboarding: Bool
+    var syncOwnerTokenIdentifier: String?
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
@@ -16,6 +17,7 @@ final class UserSettings: Identifiable {
         weightUnit: MeasurementUnit = .pounds,
         defaultRestTimerSeconds: Int = 90,
         hasCompletedOnboarding: Bool = true,
+        syncOwnerTokenIdentifier: String? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now,
         deletedAt: Date? = nil
@@ -24,6 +26,7 @@ final class UserSettings: Identifiable {
         self.weightUnitRaw = weightUnit.rawValue
         self.defaultRestTimerSeconds = defaultRestTimerSeconds
         self.hasCompletedOnboarding = hasCompletedOnboarding
+        self.syncOwnerTokenIdentifier = syncOwnerTokenIdentifier
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.deletedAt = deletedAt
