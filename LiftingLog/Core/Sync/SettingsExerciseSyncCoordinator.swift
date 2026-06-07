@@ -86,9 +86,6 @@ final class SettingsExerciseSyncCoordinator {
     }
 
     private func logicalFallbackTimestamp(for entry: SyncOutboxEntry) -> Date {
-        if entry.operation == .delete {
-            return entry.updatedAt
-        }
         return entry.hasBeenAttempted ? entry.createdAt : entry.updatedAt
     }
 

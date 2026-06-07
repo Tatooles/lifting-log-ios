@@ -98,7 +98,7 @@ final class SyncOutboxRecorderTests: XCTestCase {
         XCTAssertEqual(try fetchEntries(context).count, 1)
         XCTAssertEqual(entry.operation, .delete)
         XCTAssertEqual(entry.status, .pending)
-        XCTAssertEqual(entry.createdAt, createdAt)
+        XCTAssertEqual(entry.createdAt, deletedAt)
         XCTAssertEqual(entry.updatedAt, deletedAt)
         XCTAssertEqual(entry.lastAttemptAt, attemptedAt)
         XCTAssertEqual(entry.attemptCount, 1)
@@ -126,6 +126,7 @@ final class SyncOutboxRecorderTests: XCTestCase {
         XCTAssertEqual(try fetchEntries(context).count, 1)
         XCTAssertEqual(entry.operation, .delete)
         XCTAssertEqual(entry.status, .pending)
+        XCTAssertEqual(entry.createdAt, deletedAt)
         XCTAssertEqual(entry.updatedAt, deletedAt)
         XCTAssertEqual(entry.attemptCount, 1)
         XCTAssertEqual(entry.lastAttemptAt, attemptedAt)
@@ -159,7 +160,7 @@ final class SyncOutboxRecorderTests: XCTestCase {
         XCTAssertEqual(try fetchEntries(context).count, 1)
         XCTAssertEqual(entry.operation, .delete)
         XCTAssertEqual(entry.status, .pending)
-        XCTAssertEqual(entry.createdAt, updatedAt)
+        XCTAssertEqual(entry.createdAt, deletedAt)
         XCTAssertEqual(entry.updatedAt, deletedAt)
     }
 
