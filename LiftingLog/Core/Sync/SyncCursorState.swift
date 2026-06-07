@@ -4,6 +4,7 @@ import SwiftData
 @Model
 final class SyncCursorState: Identifiable {
     @Attribute(.unique) var id: UUID
+    @Attribute(.unique)
     var ownerTokenIdentifier: String
     var userSettingsCursor: Double
     var exercisesCursor: Double
@@ -21,9 +22,12 @@ final class SyncCursorState: Identifiable {
     }
 
     static func state(for ownerTokenIdentifier: String, context: ModelContext) throws -> SyncCursorState {
-        let existing = try context.fetch(FetchDescriptor<SyncCursorState>())
-            .first { $0.ownerTokenIdentifier == ownerTokenIdentifier }
-        if let existing {
+        let descriptor = FetchDescriptor<SyncCursorState>(
+            predicate: #Predicate { state in
+                state.ownerTokenIdentifier == ownerTokenIdentifier
+            }
+        )
+        if let existing = try context.fetch(descriptor).first {
             return existing
         }
 
