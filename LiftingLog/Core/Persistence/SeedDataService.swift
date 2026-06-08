@@ -15,18 +15,26 @@ enum SeedDataService {
 
     private static func ensureSettings(context: ModelContext, ownerTokenIdentifier: String?) throws {
         let settings = try context.fetch(FetchDescriptor<UserSettings>())
-        if UserSettings.visibleSettingsRecords(from: settings, ownerTokenIdentifier: ownerTokenIdentifier).isEmpty {
+        let visibleSettings: [UserSettings]
+        if let ownerTokenIdentifier {
+            visibleSettings = UserSettings.visibleSettingsRecords(from: settings, ownerTokenIdentifier: ownerTokenIdentifier)
+        } else {
+            visibleSettings = UserSettings.visibleSettingsRecords(from: settings)
+        }
+        if visibleSettings.isEmpty {
             context.insert(UserSettings(syncOwnerTokenIdentifier: ownerTokenIdentifier))
         }
     }
 
     private static func ensureExercises(context: ModelContext, ownerTokenIdentifier: String?) throws {
         let existing = try context.fetch(FetchDescriptor<Exercise>())
-        let existingSeedIdentifiers = Set(
-            existing
-                .filter { $0.isVisible(to: ownerTokenIdentifier) }
-                .compactMap(\.seedIdentifier)
-        )
+        let ownerVisibleExisting: [Exercise]
+        if let ownerTokenIdentifier {
+            ownerVisibleExisting = existing.filter { $0.isVisible(to: ownerTokenIdentifier) }
+        } else {
+            ownerVisibleExisting = existing
+        }
+        let existingSeedIdentifiers = Set(ownerVisibleExisting.compactMap(\.seedIdentifier))
 
         for seed in exerciseSeeds where !existingSeedIdentifiers.contains(seed.seedIdentifier) {
             context.insert(
