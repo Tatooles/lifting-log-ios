@@ -5,34 +5,61 @@ enum SeedDataService {
     static let exerciseSeedKey = "exerciseSeed"
     static let exerciseSeedVersion = 1
 
-    static func seedIfNeeded(context: ModelContext, ownerTokenIdentifier: String? = nil) throws {
-        try ensureSettings(context: context, ownerTokenIdentifier: ownerTokenIdentifier)
-        try ensureExercises(context: context, ownerTokenIdentifier: ownerTokenIdentifier)
+    enum OwnerlessScope {
+        case visibleOnly
+        case allExisting
+    }
+
+    static func seedIfNeeded(
+        context: ModelContext,
+        ownerTokenIdentifier: String? = nil,
+        ownerlessScope: OwnerlessScope = .visibleOnly
+    ) throws {
+        try ensureSettings(context: context, ownerTokenIdentifier: ownerTokenIdentifier, ownerlessScope: ownerlessScope)
+        try ensureExercises(context: context, ownerTokenIdentifier: ownerTokenIdentifier, ownerlessScope: ownerlessScope)
         try migrateLegacyPrimaryMuscleGroups(context: context)
         try ensureSeedMetadata(context: context)
         try context.save()
     }
 
-    private static func ensureSettings(context: ModelContext, ownerTokenIdentifier: String?) throws {
+    private static func ensureSettings(
+        context: ModelContext,
+        ownerTokenIdentifier: String?,
+        ownerlessScope: OwnerlessScope
+    ) throws {
         let settings = try context.fetch(FetchDescriptor<UserSettings>())
         let visibleSettings: [UserSettings]
         if let ownerTokenIdentifier {
             visibleSettings = UserSettings.visibleSettingsRecords(from: settings, ownerTokenIdentifier: ownerTokenIdentifier)
         } else {
-            visibleSettings = UserSettings.visibleSettingsRecords(from: settings)
+            switch ownerlessScope {
+            case .visibleOnly:
+                visibleSettings = UserSettings.visibleSettingsRecords(from: settings, ownerTokenIdentifier: nil)
+            case .allExisting:
+                visibleSettings = UserSettings.visibleSettingsRecords(from: settings)
+            }
         }
         if visibleSettings.isEmpty {
             context.insert(UserSettings(syncOwnerTokenIdentifier: ownerTokenIdentifier))
         }
     }
 
-    private static func ensureExercises(context: ModelContext, ownerTokenIdentifier: String?) throws {
+    private static func ensureExercises(
+        context: ModelContext,
+        ownerTokenIdentifier: String?,
+        ownerlessScope: OwnerlessScope
+    ) throws {
         let existing = try context.fetch(FetchDescriptor<Exercise>())
         let ownerVisibleExisting: [Exercise]
         if let ownerTokenIdentifier {
             ownerVisibleExisting = existing.filter { $0.isVisible(to: ownerTokenIdentifier) }
         } else {
-            ownerVisibleExisting = existing
+            switch ownerlessScope {
+            case .visibleOnly:
+                ownerVisibleExisting = existing.filter { $0.isVisible(to: nil) }
+            case .allExisting:
+                ownerVisibleExisting = existing
+            }
         }
         let existingSeedIdentifiers = Set(ownerVisibleExisting.compactMap(\.seedIdentifier))
 

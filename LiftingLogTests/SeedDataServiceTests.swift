@@ -127,7 +127,22 @@ final class SeedDataServiceTests: XCTestCase {
         XCTAssertEqual(exercises.filter { $0.syncOwnerTokenIdentifier == "issuer|owner_b" && $0.isSeeded }.count, 20)
     }
 
-    func testPreAuthSeedDoesNotCreateUnownedDefaultsWhenOwnedDefaultsExist() throws {
+    func testStartupSeedDoesNotCreateUnownedDefaultsWhenOwnedDefaultsExist() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+
+        try SeedDataService.seedIfNeeded(context: context, ownerTokenIdentifier: "issuer|owner_b")
+        try SeedDataService.seedIfNeeded(context: context, ownerlessScope: .allExisting)
+
+        let settings = try context.fetch(FetchDescriptor<UserSettings>())
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        XCTAssertEqual(settings.count, 1)
+        XCTAssertEqual(exercises.filter(\.isSeeded).count, 20)
+        XCTAssertTrue(settings.allSatisfy { $0.syncOwnerTokenIdentifier == "issuer|owner_b" })
+        XCTAssertTrue(exercises.filter(\.isSeeded).allSatisfy { $0.syncOwnerTokenIdentifier == "issuer|owner_b" })
+    }
+
+    func testOwnerlessSeedCreatesVisibleLocalDefaultsWhenOnlyOwnedDefaultsExist() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
 
@@ -136,9 +151,17 @@ final class SeedDataServiceTests: XCTestCase {
 
         let settings = try context.fetch(FetchDescriptor<UserSettings>())
         let exercises = try context.fetch(FetchDescriptor<Exercise>())
-        XCTAssertEqual(settings.count, 1)
-        XCTAssertEqual(exercises.filter(\.isSeeded).count, 20)
-        XCTAssertTrue(settings.allSatisfy { $0.syncOwnerTokenIdentifier == "issuer|owner_b" })
-        XCTAssertTrue(exercises.filter(\.isSeeded).allSatisfy { $0.syncOwnerTokenIdentifier == "issuer|owner_b" })
+        XCTAssertEqual(
+            UserSettings.visibleSettingsRecords(from: settings, ownerTokenIdentifier: nil)
+                .filter { $0.syncOwnerTokenIdentifier == nil }
+                .count,
+            1
+        )
+        XCTAssertEqual(
+            Exercise.visibleActiveExercises(from: exercises, ownerTokenIdentifier: nil)
+                .filter { $0.syncOwnerTokenIdentifier == nil && $0.isSeeded }
+                .count,
+            20
+        )
     }
 }

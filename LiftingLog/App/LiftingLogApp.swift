@@ -27,7 +27,7 @@ struct LiftingLogApp: App {
                 try ModelContainerFactory.resetPersistentStoreFiles()
             }
             let container = try ModelContainerFactory.makeModelContainer(isStoredInMemoryOnly: useInMemoryStore)
-            try SeedDataService.seedIfNeeded(context: container.mainContext)
+            try SeedDataService.seedIfNeeded(context: container.mainContext, ownerlessScope: .allExisting)
             modelContainer = container
         } catch {
             fatalError("Unable to initialize Lifting Log persistence: \(error)")
