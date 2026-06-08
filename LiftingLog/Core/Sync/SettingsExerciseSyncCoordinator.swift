@@ -519,7 +519,6 @@ final class SettingsExerciseSyncCoordinator {
                 exercise.syncOwnerTokenIdentifier == nil
                     && exercise.isSeeded
                     && exercise.seedIdentifier == seedIdentifier
-                    && !exercise.isDeleted
             }
     }
 
