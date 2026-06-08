@@ -5,6 +5,7 @@ import ClerkKit
 @main
 struct LiftingLogApp: App {
     private let modelContainer: ModelContainer
+    private let uiTestSyncOwner: String?
     @State private var navigationState = AppNavigationState()
     @State private var activeWorkoutEngine = ActiveWorkoutEngine()
     @State private var syncScheduler = SyncScheduler()
@@ -13,9 +14,14 @@ struct LiftingLogApp: App {
 
     init() {
         Clerk.configure(publishableKey: ClerkConfiguration.publishableKey)
+        let arguments = ProcessInfo.processInfo.arguments
+        let uiTestSyncOwnerIndex = arguments.firstIndex(of: "--uitest-sync-owner")
+        uiTestSyncOwner = uiTestSyncOwnerIndex.flatMap { index -> String? in
+            let nextIndex = arguments.index(after: index)
+            return nextIndex < arguments.endIndex ? arguments[nextIndex] : nil
+        }
 
         do {
-            let arguments = ProcessInfo.processInfo.arguments
             let useInMemoryStore = arguments.contains("--uitest-in-memory-store")
             if arguments.contains("--uitest-reset-persistent-store") {
                 try ModelContainerFactory.resetPersistentStoreFiles()
@@ -37,7 +43,18 @@ struct LiftingLogApp: App {
             .modelContainer(modelContainer)
             .environment(Clerk.shared)
             .environment(syncScheduler)
+            .overlay(alignment: .bottom) {
+                if uiTestSyncOwner != nil {
+                    Text("UITestSyncRequestCount-\(syncScheduler.requestCount)")
+                        .font(.caption2)
+                        .accessibilityIdentifier("UITestSyncRequestCount")
+                }
+            }
             .task {
+                if let uiTestSyncOwner {
+                    syncScheduler.currentOwnerTokenIdentifier = uiTestSyncOwner
+                    return
+                }
                 configureSyncIfNeeded()
             }
         }
