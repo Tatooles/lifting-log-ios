@@ -40,6 +40,14 @@ final class UserSettings: Identifiable {
         settingsRecords.filter { !$0.isDeleted }
     }
 
+    static func visibleSettingsRecords(from settingsRecords: [UserSettings], ownerTokenIdentifier: String?) -> [UserSettings] {
+        visibleSettingsRecords(from: settingsRecords).filter { $0.isVisible(to: ownerTokenIdentifier) }
+    }
+
+    func isVisible(to ownerTokenIdentifier: String?) -> Bool {
+        syncOwnerTokenIdentifier == nil || syncOwnerTokenIdentifier == ownerTokenIdentifier
+    }
+
     var weightUnit: MeasurementUnit {
         get { MeasurementUnit(rawValue: weightUnitRaw) ?? .pounds }
         set {

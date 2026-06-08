@@ -95,6 +95,14 @@ final class Exercise: Identifiable {
         exercises.filter { !$0.isArchived && !$0.isDeleted }
     }
 
+    static func visibleActiveExercises(from exercises: [Exercise], ownerTokenIdentifier: String?) -> [Exercise] {
+        visibleActiveExercises(from: exercises).filter { $0.isVisible(to: ownerTokenIdentifier) }
+    }
+
+    func isVisible(to ownerTokenIdentifier: String?) -> Bool {
+        syncOwnerTokenIdentifier == nil || syncOwnerTokenIdentifier == ownerTokenIdentifier
+    }
+
     var category: ExerciseCategory {
         get { ExerciseCategory(rawValue: categoryRaw) ?? .other }
         set {

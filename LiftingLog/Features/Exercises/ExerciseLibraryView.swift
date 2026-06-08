@@ -10,7 +10,10 @@ struct ExerciseLibraryView: View {
     @State private var removalErrorMessage: String?
 
     private var filteredExercises: [Exercise] {
-        Exercise.visibleActiveExercises(from: exercises)
+        Exercise.visibleActiveExercises(
+            from: exercises,
+            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
+        )
             .filter { searchText.isEmpty || $0.name.localizedCaseInsensitiveContains(searchText) }
     }
 

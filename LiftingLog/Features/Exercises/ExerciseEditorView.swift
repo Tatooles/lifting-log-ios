@@ -81,7 +81,10 @@ struct ExerciseEditorView: View {
             return
         }
 
-        let duplicate = exercises.contains { existing in
+        let duplicate = Exercise.visibleActiveExercises(
+            from: exercises,
+            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
+        ).contains { existing in
             existing.id != exercise?.id
                 && existing.hasSameActiveIdentity(name: trimmedName, equipment: equipment)
         }
