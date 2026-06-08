@@ -546,7 +546,7 @@ final class ModelPersistenceTests: XCTestCase {
             ownerTokenIdentifier: nil
         )
 
-        XCTAssertEqual(signedInExercises.map(\.id), [localExercise.id, ownerExercise.id])
+        XCTAssertEqual(signedInExercises.map(\.id), [ownerExercise.id])
         XCTAssertEqual(signedOutExercises.map(\.id), [localExercise.id])
     }
 
@@ -564,7 +564,7 @@ final class ModelPersistenceTests: XCTestCase {
             ownerTokenIdentifier: nil
         )
 
-        XCTAssertEqual(signedInSettings.map(\.id), [localSettings.id, ownerSettings.id])
+        XCTAssertEqual(signedInSettings.map(\.id), [ownerSettings.id])
         XCTAssertEqual(signedOutSettings.map(\.id), [localSettings.id])
     }
 

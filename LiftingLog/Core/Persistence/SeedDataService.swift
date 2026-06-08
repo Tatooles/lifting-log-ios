@@ -30,7 +30,8 @@ enum SeedDataService {
         let settings = try context.fetch(FetchDescriptor<UserSettings>())
         let visibleSettings: [UserSettings]
         if let ownerTokenIdentifier {
-            visibleSettings = UserSettings.visibleSettingsRecords(from: settings, ownerTokenIdentifier: ownerTokenIdentifier)
+            visibleSettings = UserSettings.visibleSettingsRecords(from: settings)
+                .filter { $0.syncOwnerTokenIdentifier == nil || $0.syncOwnerTokenIdentifier == ownerTokenIdentifier }
         } else {
             switch ownerlessScope {
             case .visibleOnly:
@@ -52,7 +53,9 @@ enum SeedDataService {
         let existing = try context.fetch(FetchDescriptor<Exercise>())
         let ownerVisibleExisting: [Exercise]
         if let ownerTokenIdentifier {
-            ownerVisibleExisting = existing.filter { $0.isVisible(to: ownerTokenIdentifier) }
+            ownerVisibleExisting = existing.filter {
+                $0.syncOwnerTokenIdentifier == nil || $0.syncOwnerTokenIdentifier == ownerTokenIdentifier
+            }
         } else {
             switch ownerlessScope {
             case .visibleOnly:

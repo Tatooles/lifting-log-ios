@@ -45,7 +45,7 @@ final class UserSettings: Identifiable {
     }
 
     func isVisible(to ownerTokenIdentifier: String?) -> Bool {
-        syncOwnerTokenIdentifier == nil || syncOwnerTokenIdentifier == ownerTokenIdentifier
+        syncOwnerTokenIdentifier == ownerTokenIdentifier
     }
 
     var weightUnit: MeasurementUnit {

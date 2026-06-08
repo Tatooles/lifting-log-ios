@@ -100,7 +100,7 @@ final class Exercise: Identifiable {
     }
 
     func isVisible(to ownerTokenIdentifier: String?) -> Bool {
-        syncOwnerTokenIdentifier == nil || syncOwnerTokenIdentifier == ownerTokenIdentifier
+        syncOwnerTokenIdentifier == ownerTokenIdentifier
     }
 
     var category: ExerciseCategory {
