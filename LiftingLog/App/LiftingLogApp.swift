@@ -76,6 +76,7 @@ struct LiftingLogApp: App {
                     syncScheduler.currentOwnerTokenIdentifier = nil
                 case .authenticated:
                     syncScheduler.currentOwnerTokenIdentifier = await resolveOwnerTokenIdentifier()
+                    syncScheduler.seedDefaultsForCurrentOwner()
                     syncScheduler.requestSync()
                 }
             }

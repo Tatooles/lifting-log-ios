@@ -37,6 +37,11 @@ final class SyncScheduler {
         startSyncTask(coordinator: coordinator, modelContext: modelContext)
     }
 
+    func seedDefaultsForCurrentOwner() {
+        guard let currentOwnerTokenIdentifier, let modelContext else { return }
+        try? SeedDataService.seedIfNeeded(context: modelContext, ownerTokenIdentifier: currentOwnerTokenIdentifier)
+    }
+
     private func cancelInFlightSync() {
         guard let syncTask else { return }
         needsSync = false
