@@ -277,6 +277,63 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
     }
 
+    func testFirstRunAdoptsRemoteSeedTombstoneBeforeBootstrappingLocalSeed() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let localBenchID = UUID(uuidString: "00000000-0000-0000-0000-000000003207")!
+        let remoteBenchID = UUID(uuidString: "00000000-0000-0000-0000-000000003208")!
+
+        let bench = Exercise(
+            id: localBenchID,
+            seedIdentifier: "bench-press",
+            name: "Bench Press",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Chest",
+            isSeeded: true
+        )
+        context.insert(bench)
+        try context.save()
+
+        let client = FakeSettingsExerciseSyncClient()
+        client.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [
+                    ExerciseSyncRecord(
+                        clientId: remoteBenchID.uuidString.lowercased(),
+                        createdAt: 10,
+                        updatedAt: 20,
+                        deletedAt: 25,
+                        serverUpdatedAt: 31,
+                        seedIdentifier: "bench-press",
+                        name: "Bench Press",
+                        categoryRaw: "strength",
+                        equipmentRaw: "barbell",
+                        primaryMuscleRaw: "Chest",
+                        primaryMuscleGroupRaw: "chest",
+                        notes: "",
+                        isArchived: false,
+                        isSeeded: true
+                    )
+                ],
+                cursors: SyncChangeCursors(userSettings: 0, exercises: 31),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            )
+        ]
+
+        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+
+        let syncedExercises = try context.fetch(FetchDescriptor<Exercise>())
+        let syncedExercise = try XCTUnwrap(syncedExercises.first)
+        XCTAssertEqual(syncedExercises.count, 1)
+        XCTAssertEqual(syncedExercise.id, remoteBenchID)
+        XCTAssertEqual(syncedExercise.syncOwnerTokenIdentifier, "issuer|owner_a")
+        XCTAssertEqual(syncedExercise.deletedAt, Date(timeIntervalSince1970: 25))
+        XCTAssertTrue(client.upsertedExercises.isEmpty)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
+    }
+
     func testFirstRunRetargetsSignedOutEditsToPulledRemoteDefaults() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

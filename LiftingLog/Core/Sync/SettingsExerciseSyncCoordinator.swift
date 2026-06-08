@@ -413,7 +413,7 @@ final class SettingsExerciseSyncCoordinator {
                     continue
                 }
                 apply(record, to: exercise, ownerTokenIdentifier: ownerTokenIdentifier)
-            } else if incomingDeletedAt == nil {
+            } else {
                 if let seedIdentifier = record.seedIdentifier,
                    let exercise = try adoptableSeedExercise(seedIdentifier: seedIdentifier, context: context) {
                     let localID = exercise.id
@@ -436,6 +436,8 @@ final class SettingsExerciseSyncCoordinator {
                     }
                     continue
                 }
+
+                guard incomingDeletedAt == nil else { continue }
 
                 let exercise = Exercise(
                     id: id,
