@@ -17,14 +17,39 @@ final class SettingsExerciseSyncCoordinator {
         isRunning = true
         defer { isRunning = false }
 
-        try prepareForSync(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
-        let didCompletePush = try await pushPendingEntries(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
-        guard didCompletePush else { return }
-        try await pullChanges(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
+        let state = try SyncCursorState.state(for: ownerTokenIdentifier, context: context)
+        let bootstrapScope: BootstrapScope
+        let didPullBeforePush: Bool
+        if state.hasBootstrappedSettingsExercises {
+            bootstrapScope = .allOwned
+            didPullBeforePush = false
+        } else {
+            let summary = try await pullChanges(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
+            bootstrapScope = summary.hasRemoteRecords ? .unownedOnly : .allOwned
+            didPullBeforePush = true
+        }
+
+        try prepareForSync(ownerTokenIdentifier: ownerTokenIdentifier, context: context, bootstrapScope: bootstrapScope)
+        let pushResult = try await pushPendingEntries(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
+        guard pushResult.didComplete else { return }
+        if pushResult.didPush || !didPullBeforePush {
+            _ = try await pullChanges(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
+        }
     }
 
-    func prepareForSync(ownerTokenIdentifier: String, context: ModelContext) throws {
+    func prepareForSync(
+        ownerTokenIdentifier: String,
+        context: ModelContext,
+        bootstrapScope: BootstrapScope = .allOwned
+    ) throws {
         let state = try SyncCursorState.state(for: ownerTokenIdentifier, context: context)
+        let bootstrapCandidates = try state.hasBootstrappedSettingsExercises
+            ? BootstrapCandidates()
+            : candidatesForBootstrap(
+                ownerTokenIdentifier: ownerTokenIdentifier,
+                scope: bootstrapScope,
+                context: context
+            )
 
         for settings in try context.fetch(FetchDescriptor<UserSettings>()) {
             if settings.syncOwnerTokenIdentifier == nil {
@@ -56,19 +81,61 @@ final class SettingsExerciseSyncCoordinator {
         }
 
         if !state.hasBootstrappedSettingsExercises {
-            try bootstrapSettingsExercisesForSync(ownerTokenIdentifier: ownerTokenIdentifier, context: context, now: .now)
+            try bootstrapSettingsExercisesForSync(
+                ownerTokenIdentifier: ownerTokenIdentifier,
+                candidates: bootstrapCandidates,
+                context: context,
+                now: .now
+            )
             state.hasBootstrappedSettingsExercises = true
         }
 
         try context.save()
     }
 
+    private func candidatesForBootstrap(
+        ownerTokenIdentifier: String,
+        scope: BootstrapScope,
+        context: ModelContext
+    ) throws -> BootstrapCandidates {
+        switch scope {
+        case .allOwned:
+            return BootstrapCandidates(
+                settingsIDs: Set(
+                    try context.fetch(FetchDescriptor<UserSettings>())
+                        .filter { $0.syncOwnerTokenIdentifier == nil || $0.syncOwnerTokenIdentifier == ownerTokenIdentifier }
+                        .map(\.id)
+                ),
+                exerciseIDs: Set(
+                    try context.fetch(FetchDescriptor<Exercise>())
+                        .filter { $0.syncOwnerTokenIdentifier == nil || $0.syncOwnerTokenIdentifier == ownerTokenIdentifier }
+                        .map(\.id)
+                )
+            )
+        case .unownedOnly:
+            return BootstrapCandidates(
+                settingsIDs: Set(
+                    try context.fetch(FetchDescriptor<UserSettings>())
+                        .filter { $0.syncOwnerTokenIdentifier == nil }
+                        .map(\.id)
+                ),
+                exerciseIDs: Set(
+                    try context.fetch(FetchDescriptor<Exercise>())
+                        .filter { $0.syncOwnerTokenIdentifier == nil }
+                        .map(\.id)
+                )
+            )
+        }
+    }
+
     private func bootstrapSettingsExercisesForSync(
         ownerTokenIdentifier: String,
+        candidates: BootstrapCandidates,
         context: ModelContext,
         now: Date
     ) throws {
-        for settings in try context.fetch(FetchDescriptor<UserSettings>()) where settings.syncOwnerTokenIdentifier == ownerTokenIdentifier {
+        for settings in try context.fetch(FetchDescriptor<UserSettings>())
+            where settings.syncOwnerTokenIdentifier == ownerTokenIdentifier && candidates.settingsIDs.contains(settings.id) {
             try recordBootstrapEntry(
                 entityKind: .userSettings,
                 entityID: settings.id,
@@ -79,7 +146,8 @@ final class SettingsExerciseSyncCoordinator {
             )
         }
 
-        for exercise in try context.fetch(FetchDescriptor<Exercise>()) where exercise.syncOwnerTokenIdentifier == ownerTokenIdentifier {
+        for exercise in try context.fetch(FetchDescriptor<Exercise>())
+            where exercise.syncOwnerTokenIdentifier == ownerTokenIdentifier && candidates.exerciseIDs.contains(exercise.id) {
             try recordBootstrapEntry(
                 entityKind: .exercise,
                 entityID: exercise.id,
@@ -118,7 +186,7 @@ final class SettingsExerciseSyncCoordinator {
         }
     }
 
-    private func pushPendingEntries(ownerTokenIdentifier: String, context: ModelContext) async throws -> Bool {
+    private func pushPendingEntries(ownerTokenIdentifier: String, context: ModelContext) async throws -> SyncPushResult {
         let entries = try recorder.pendingEntries(context: context)
             .filter { entry in
                 entry.ownerTokenIdentifier == ownerTokenIdentifier
@@ -144,11 +212,11 @@ final class SettingsExerciseSyncCoordinator {
                     recorder.markFailed(entry, message: error.localizedDescription, now: .now)
                     try context.save()
                 }
-                return false
+                return SyncPushResult(didComplete: false, didPush: true)
             }
         }
 
-        return true
+        return SyncPushResult(didComplete: true, didPush: !entries.isEmpty)
     }
 
     private func logicalFallbackTimestamp(for entry: SyncOutboxEntry) -> Date {
@@ -211,8 +279,9 @@ final class SettingsExerciseSyncCoordinator {
             .first { $0.id == id }
     }
 
-    private func pullChanges(ownerTokenIdentifier: String, context: ModelContext) async throws {
+    private func pullChanges(ownerTokenIdentifier: String, context: ModelContext) async throws -> SyncPullSummary {
         let state = try SyncCursorState.state(for: ownerTokenIdentifier, context: context)
+        var summary = SyncPullSummary()
         var hasMore = true
 
         while hasMore {
@@ -224,15 +293,18 @@ final class SettingsExerciseSyncCoordinator {
                 limit: 100
             )
 
+            summary.record(response)
             try apply(userSettingsRecords: response.userSettings, ownerTokenIdentifier: ownerTokenIdentifier, context: context)
             try apply(exerciseRecords: response.exercises, ownerTokenIdentifier: ownerTokenIdentifier, context: context)
 
-            state.userSettingsCursor = response.cursors.userSettings
-            state.exercisesCursor = response.cursors.exercises
+            state.userSettingsCursor = max(state.userSettingsCursor, response.cursors.userSettings)
+            state.exercisesCursor = max(state.exercisesCursor, response.cursors.exercises)
             try context.save()
 
             hasMore = response.hasMore.userSettings || response.hasMore.exercises
         }
+
+        return summary
     }
 
     private func apply(
@@ -260,6 +332,28 @@ final class SettingsExerciseSyncCoordinator {
                 }
                 apply(record, to: settings, ownerTokenIdentifier: ownerTokenIdentifier)
             } else if incomingDeletedAt == nil {
+                if let settings = try adoptableUserSettings(context: context) {
+                    let localID = settings.id
+                    let hasLocalIntent = try hasActiveOutboxEntry(
+                        entityKind: .userSettings,
+                        entityID: localID,
+                        context: context
+                    )
+                    settings.id = id
+                    settings.syncOwnerTokenIdentifier = ownerTokenIdentifier
+                    try retargetOutboxEntries(
+                        entityKind: .userSettings,
+                        from: localID,
+                        to: id,
+                        ownerTokenIdentifier: ownerTokenIdentifier,
+                        context: context
+                    )
+                    if !hasLocalIntent {
+                        apply(record, to: settings, ownerTokenIdentifier: ownerTokenIdentifier)
+                    }
+                    continue
+                }
+
                 let settings = UserSettings(
                     id: id,
                     weightUnit: MeasurementUnit(rawValue: record.weightUnitRaw) ?? .pounds,
@@ -315,6 +409,29 @@ final class SettingsExerciseSyncCoordinator {
                 }
                 apply(record, to: exercise, ownerTokenIdentifier: ownerTokenIdentifier)
             } else if incomingDeletedAt == nil {
+                if let seedIdentifier = record.seedIdentifier,
+                   let exercise = try adoptableSeedExercise(seedIdentifier: seedIdentifier, context: context) {
+                    let localID = exercise.id
+                    let hasLocalIntent = try hasActiveOutboxEntry(
+                        entityKind: .exercise,
+                        entityID: localID,
+                        context: context
+                    )
+                    exercise.id = id
+                    exercise.syncOwnerTokenIdentifier = ownerTokenIdentifier
+                    try retargetOutboxEntries(
+                        entityKind: .exercise,
+                        from: localID,
+                        to: id,
+                        ownerTokenIdentifier: ownerTokenIdentifier,
+                        context: context
+                    )
+                    if !hasLocalIntent {
+                        apply(record, to: exercise, ownerTokenIdentifier: ownerTokenIdentifier)
+                    }
+                    continue
+                }
+
                 let exercise = Exercise(
                     id: id,
                     seedIdentifier: record.seedIdentifier,
@@ -381,6 +498,53 @@ final class SettingsExerciseSyncCoordinator {
             return false
         }
     }
+
+    private func adoptableUserSettings(context: ModelContext) throws -> UserSettings? {
+        try context.fetch(FetchDescriptor<UserSettings>())
+            .first { settings in
+                settings.syncOwnerTokenIdentifier == nil && !settings.isDeleted
+            }
+    }
+
+    private func adoptableSeedExercise(seedIdentifier: String, context: ModelContext) throws -> Exercise? {
+        try context.fetch(FetchDescriptor<Exercise>())
+            .first { exercise in
+                exercise.syncOwnerTokenIdentifier == nil
+                    && exercise.isSeeded
+                    && exercise.seedIdentifier == seedIdentifier
+                    && !exercise.isDeleted
+            }
+    }
+
+    private func hasActiveOutboxEntry(
+        entityKind: SyncEntityKind,
+        entityID: UUID,
+        context: ModelContext
+    ) throws -> Bool {
+        try context.fetch(FetchDescriptor<SyncOutboxEntry>())
+            .contains { entry in
+                entry.entityKind == entityKind
+                    && entry.entityID == entityID
+                    && entry.isActive
+                    && entry.operation != nil
+            }
+    }
+
+    private func retargetOutboxEntries(
+        entityKind: SyncEntityKind,
+        from oldID: UUID,
+        to newID: UUID,
+        ownerTokenIdentifier: String,
+        context: ModelContext
+    ) throws {
+        for entry in try context.fetch(FetchDescriptor<SyncOutboxEntry>())
+            where entry.entityKind == entityKind && entry.entityID == oldID && entry.isActive {
+            entry.entityID = newID
+            if entry.ownerTokenIdentifier == nil {
+                entry.ownerTokenIdentifier = ownerTokenIdentifier
+            }
+        }
+    }
 }
 
 enum SettingsExerciseSyncCoordinatorError: LocalizedError {
@@ -392,6 +556,35 @@ enum SettingsExerciseSyncCoordinatorError: LocalizedError {
             "Cannot sync \(entityKind.displayName) \(entityID.uuidString) because the local record belongs to a different owner."
         }
     }
+}
+
+enum BootstrapScope {
+    case allOwned
+    case unownedOnly
+}
+
+private struct BootstrapCandidates {
+    var settingsIDs: Set<UUID> = []
+    var exerciseIDs: Set<UUID> = []
+}
+
+private struct SyncPullSummary {
+    var hasUserSettings = false
+    var hasExercises = false
+
+    var hasRemoteRecords: Bool {
+        hasUserSettings || hasExercises
+    }
+
+    mutating func record(_ response: SyncFetchChangesResponse) {
+        hasUserSettings = hasUserSettings || !response.userSettings.isEmpty
+        hasExercises = hasExercises || !response.exercises.isEmpty
+    }
+}
+
+private struct SyncPushResult {
+    var didComplete: Bool
+    var didPush: Bool
 }
 
 private extension SyncEntityKind {

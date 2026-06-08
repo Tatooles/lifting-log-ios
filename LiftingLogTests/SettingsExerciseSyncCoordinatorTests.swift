@@ -176,6 +176,204 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
     }
 
+    func testFirstRunPullsRemoteDefaultsBeforeBootstrappingLocalDefaults() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let localSettingsID = UUID(uuidString: "00000000-0000-0000-0000-000000003201")!
+        let remoteSettingsID = UUID(uuidString: "00000000-0000-0000-0000-000000003202")!
+        let localBenchID = UUID(uuidString: "00000000-0000-0000-0000-000000003203")!
+        let remoteBenchID = UUID(uuidString: "00000000-0000-0000-0000-000000003204")!
+        let localSquatID = UUID(uuidString: "00000000-0000-0000-0000-000000003205")!
+        let remoteSquatID = UUID(uuidString: "00000000-0000-0000-0000-000000003206")!
+
+        let settings = UserSettings(id: localSettingsID)
+        let bench = Exercise(
+            id: localBenchID,
+            seedIdentifier: "bench-press",
+            name: "Bench Press",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Chest",
+            isSeeded: true
+        )
+        let squat = Exercise(
+            id: localSquatID,
+            seedIdentifier: "back-squat",
+            name: "Back Squat",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Quads",
+            isSeeded: true
+        )
+        context.insert(settings)
+        context.insert(bench)
+        context.insert(squat)
+        try context.save()
+
+        let client = FakeSettingsExerciseSyncClient()
+        client.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [
+                    UserSettingsSyncRecord(
+                        clientId: remoteSettingsID.uuidString.lowercased(),
+                        createdAt: 10,
+                        updatedAt: 20,
+                        deletedAt: nil,
+                        serverUpdatedAt: 30,
+                        weightUnitRaw: "kilograms",
+                        defaultRestTimerSeconds: 120,
+                        hasCompletedOnboarding: true
+                    )
+                ],
+                exercises: [
+                    ExerciseSyncRecord(
+                        clientId: remoteBenchID.uuidString.lowercased(),
+                        createdAt: 10,
+                        updatedAt: 20,
+                        deletedAt: nil,
+                        serverUpdatedAt: 31,
+                        seedIdentifier: "bench-press",
+                        name: "Remote Bench",
+                        categoryRaw: "strength",
+                        equipmentRaw: "barbell",
+                        primaryMuscleRaw: "Chest",
+                        primaryMuscleGroupRaw: "chest",
+                        notes: "",
+                        isArchived: false,
+                        isSeeded: true
+                    ),
+                    ExerciseSyncRecord(
+                        clientId: remoteSquatID.uuidString.lowercased(),
+                        createdAt: 11,
+                        updatedAt: 21,
+                        deletedAt: nil,
+                        serverUpdatedAt: 32,
+                        seedIdentifier: "back-squat",
+                        name: "Remote Squat",
+                        categoryRaw: "strength",
+                        equipmentRaw: "barbell",
+                        primaryMuscleRaw: "Quads",
+                        primaryMuscleGroupRaw: "quads",
+                        notes: "",
+                        isArchived: false,
+                        isSeeded: true
+                    )
+                ],
+                cursors: SyncChangeCursors(userSettings: 30, exercises: 32),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            )
+        ]
+
+        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+
+        let syncedSettings = try context.fetch(FetchDescriptor<UserSettings>())
+        let syncedExercises = try context.fetch(FetchDescriptor<Exercise>())
+        XCTAssertTrue(client.upsertedSettings.isEmpty)
+        XCTAssertTrue(client.upsertedExercises.isEmpty)
+        XCTAssertEqual(syncedSettings.map(\.id), [remoteSettingsID])
+        XCTAssertEqual(syncedSettings.first?.weightUnitRaw, "kilograms")
+        XCTAssertEqual(Set(syncedExercises.map(\.id)), Set([remoteBenchID, remoteSquatID]))
+        XCTAssertEqual(Set(syncedExercises.map(\.name)), Set(["Remote Bench", "Remote Squat"]))
+        XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
+    }
+
+    func testFirstRunRetargetsSignedOutEditsToPulledRemoteDefaults() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let localSettingsID = UUID(uuidString: "00000000-0000-0000-0000-000000003211")!
+        let remoteSettingsID = UUID(uuidString: "00000000-0000-0000-0000-000000003212")!
+        let localBenchID = UUID(uuidString: "00000000-0000-0000-0000-000000003213")!
+        let remoteBenchID = UUID(uuidString: "00000000-0000-0000-0000-000000003214")!
+
+        let settings = UserSettings(
+            id: localSettingsID,
+            weightUnit: .pounds,
+            defaultRestTimerSeconds: 180,
+            updatedAt: Date(timeIntervalSince1970: 200)
+        )
+        let bench = Exercise(
+            id: localBenchID,
+            seedIdentifier: "bench-press",
+            name: "Local Renamed Bench",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Chest",
+            isSeeded: true,
+            updatedAt: Date(timeIntervalSince1970: 210)
+        )
+        context.insert(settings)
+        context.insert(bench)
+        let recorder = SyncOutboxRecorder()
+        try recorder.recordUpdate(
+            entityKind: .userSettings,
+            entityID: settings.id,
+            ownerTokenIdentifier: nil,
+            context: context,
+            now: Date(timeIntervalSince1970: 200)
+        )
+        try recorder.recordUpdate(
+            entityKind: .exercise,
+            entityID: bench.id,
+            ownerTokenIdentifier: nil,
+            context: context,
+            now: Date(timeIntervalSince1970: 210)
+        )
+        try context.save()
+
+        let client = FakeSettingsExerciseSyncClient()
+        client.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [
+                    UserSettingsSyncRecord(
+                        clientId: remoteSettingsID.uuidString.lowercased(),
+                        createdAt: 10,
+                        updatedAt: 20,
+                        deletedAt: nil,
+                        serverUpdatedAt: 30,
+                        weightUnitRaw: "kilograms",
+                        defaultRestTimerSeconds: 120,
+                        hasCompletedOnboarding: true
+                    )
+                ],
+                exercises: [
+                    ExerciseSyncRecord(
+                        clientId: remoteBenchID.uuidString.lowercased(),
+                        createdAt: 10,
+                        updatedAt: 20,
+                        deletedAt: nil,
+                        serverUpdatedAt: 31,
+                        seedIdentifier: "bench-press",
+                        name: "Remote Bench",
+                        categoryRaw: "strength",
+                        equipmentRaw: "barbell",
+                        primaryMuscleRaw: "Chest",
+                        primaryMuscleGroupRaw: "chest",
+                        notes: "",
+                        isArchived: false,
+                        isSeeded: true
+                    )
+                ],
+                cursors: SyncChangeCursors(userSettings: 30, exercises: 31),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            )
+        ]
+
+        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+
+        let syncedSettings = try context.fetch(FetchDescriptor<UserSettings>())
+        let syncedExercises = try context.fetch(FetchDescriptor<Exercise>())
+        XCTAssertEqual(syncedSettings.map(\.id), [remoteSettingsID])
+        XCTAssertEqual(syncedSettings.first?.weightUnitRaw, "pounds")
+        XCTAssertEqual(syncedSettings.first?.defaultRestTimerSeconds, 180)
+        XCTAssertEqual(syncedExercises.map(\.id), [remoteBenchID])
+        XCTAssertEqual(syncedExercises.first?.name, "Local Renamed Bench")
+        XCTAssertEqual(client.upsertedSettings.map(\.clientId), [remoteSettingsID.uuidString.lowercased()])
+        XCTAssertEqual(client.upsertedSettings.first?.defaultRestTimerSeconds, 180)
+        XCTAssertEqual(client.upsertedExercises.map(\.clientId), [remoteBenchID.uuidString.lowercased()])
+        XCTAssertEqual(client.upsertedExercises.first?.name, "Local Renamed Bench")
+        XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
+    }
+
     func testFirstRunDoesNotBootstrapRowsOwnedByDifferentOwner() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
@@ -756,6 +954,7 @@ final class FakeSettingsExerciseSyncClient: SettingsExerciseSyncClient, @uncheck
     )
     var onFetchChanges: (() -> Void)?
     var error: Error?
+    var fetchError: Error?
 
     func upsertUserSettings(_ record: UserSettingsSyncPayload) async throws -> SyncMutationResult {
         if let error { throw error }
@@ -776,7 +975,7 @@ final class FakeSettingsExerciseSyncClient: SettingsExerciseSyncClient, @uncheck
     }
 
     func fetchChanges(cursors: SyncChangeCursors, limit: Int) async throws -> SyncFetchChangesResponse {
-        if let error { throw error }
+        if let fetchError { throw fetchError }
         fetchRequests.append((cursors, limit))
         onFetchChanges?()
         if !fetchResponses.isEmpty {
