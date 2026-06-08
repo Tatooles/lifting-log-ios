@@ -314,6 +314,209 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
     }
 
+    func testRunPullsRemoteExerciseAndAdvancesCursor() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let client = FakeSettingsExerciseSyncClient()
+        client.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [
+                    ExerciseSyncRecord(
+                        clientId: "00000000-0000-0000-0000-000000004001",
+                        createdAt: 10,
+                        updatedAt: 20,
+                        deletedAt: nil,
+                        serverUpdatedAt: 30,
+                        seedIdentifier: nil,
+                        name: "Remote Bench",
+                        categoryRaw: "strength",
+                        equipmentRaw: "barbell",
+                        primaryMuscleRaw: "Chest",
+                        primaryMuscleGroupRaw: "chest",
+                        notes: "",
+                        isArchived: false,
+                        isSeeded: false
+                    )
+                ],
+                cursors: SyncChangeCursors(userSettings: 0, exercises: 30),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            )
+        ]
+
+        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        let cursor = try XCTUnwrap(context.fetch(FetchDescriptor<SyncCursorState>()).first)
+        XCTAssertEqual(exercises.count, 1)
+        XCTAssertEqual(exercises.first?.name, "Remote Bench")
+        XCTAssertEqual(exercises.first?.syncOwnerTokenIdentifier, "issuer|owner_a")
+        XCTAssertEqual(cursor.exercisesCursor, 30)
+    }
+
+    func testRunKeepsLocalNewerExerciseWhenRemoteIsOlder() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000004002")!,
+            name: "Local Name",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Chest",
+            syncOwnerTokenIdentifier: "issuer|owner_a",
+            updatedAt: Date(timeIntervalSince1970: 50)
+        )
+        context.insert(exercise)
+        try context.save()
+
+        let client = FakeSettingsExerciseSyncClient()
+        client.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [
+                    ExerciseSyncRecord(
+                        clientId: exercise.id.uuidString.lowercased(),
+                        createdAt: 10,
+                        updatedAt: 20,
+                        deletedAt: nil,
+                        serverUpdatedAt: 30,
+                        seedIdentifier: nil,
+                        name: "Remote Older Name",
+                        categoryRaw: "strength",
+                        equipmentRaw: "barbell",
+                        primaryMuscleRaw: "Chest",
+                        primaryMuscleGroupRaw: "chest",
+                        notes: "",
+                        isArchived: false,
+                        isSeeded: false
+                    )
+                ],
+                cursors: SyncChangeCursors(userSettings: 0, exercises: 30),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            )
+        ]
+
+        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+
+        XCTAssertEqual(exercise.name, "Local Name")
+    }
+
+    func testRunAppliesRemoteSettingsWithoutOutboxCascade() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let settings = UserSettings(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000004003")!,
+            weightUnit: .pounds,
+            syncOwnerTokenIdentifier: "issuer|owner_a",
+            updatedAt: Date(timeIntervalSince1970: 10)
+        )
+        context.insert(settings)
+        try context.save()
+
+        let client = FakeSettingsExerciseSyncClient()
+        client.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [
+                    UserSettingsSyncRecord(
+                        clientId: settings.id.uuidString.lowercased(),
+                        createdAt: 10,
+                        updatedAt: 20,
+                        deletedAt: nil,
+                        serverUpdatedAt: 25,
+                        weightUnitRaw: "kilograms",
+                        defaultRestTimerSeconds: 150,
+                        hasCompletedOnboarding: true
+                    )
+                ],
+                exercises: [],
+                cursors: SyncChangeCursors(userSettings: 25, exercises: 0),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            )
+        ]
+
+        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+
+        XCTAssertEqual(settings.weightUnit, .kilograms)
+        XCTAssertEqual(settings.defaultRestTimerSeconds, 150)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
+    }
+
+    func testRunPullsUntilNoMoreAndUsesAdvancedCursors() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let client = FakeSettingsExerciseSyncClient()
+        client.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [],
+                cursors: SyncChangeCursors(userSettings: 10, exercises: 20),
+                hasMore: SyncHasMore(userSettings: false, exercises: true)
+            ),
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [],
+                cursors: SyncChangeCursors(userSettings: 10, exercises: 40),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            )
+        ]
+
+        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+
+        let cursor = try XCTUnwrap(context.fetch(FetchDescriptor<SyncCursorState>()).first)
+        XCTAssertEqual(client.fetchRequests.map(\.cursors.exercises), [0, 20])
+        XCTAssertEqual(cursor.userSettingsCursor, 10)
+        XCTAssertEqual(cursor.exercisesCursor, 40)
+    }
+
+    func testRunDoesNotApplyRemoteExerciseToDifferentOwnerLocalRow() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000004004")!,
+            name: "Other Owner Name",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Chest",
+            syncOwnerTokenIdentifier: "issuer|owner_b",
+            updatedAt: Date(timeIntervalSince1970: 10)
+        )
+        context.insert(exercise)
+        try context.save()
+
+        let client = FakeSettingsExerciseSyncClient()
+        client.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [
+                    ExerciseSyncRecord(
+                        clientId: exercise.id.uuidString.lowercased(),
+                        createdAt: 10,
+                        updatedAt: 20,
+                        deletedAt: nil,
+                        serverUpdatedAt: 30,
+                        seedIdentifier: nil,
+                        name: "Remote Owner A Name",
+                        categoryRaw: "strength",
+                        equipmentRaw: "barbell",
+                        primaryMuscleRaw: "Chest",
+                        primaryMuscleGroupRaw: "chest",
+                        notes: "",
+                        isArchived: false,
+                        isSeeded: false
+                    )
+                ],
+                cursors: SyncChangeCursors(userSettings: 0, exercises: 30),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            )
+        ]
+
+        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+
+        XCTAssertEqual(exercise.name, "Other Owner Name")
+        XCTAssertEqual(exercise.syncOwnerTokenIdentifier, "issuer|owner_b")
+        XCTAssertEqual(try context.fetch(FetchDescriptor<Exercise>()).count, 1)
+    }
+
     func testRunDoesNotTombstoneModelOwnedByDifferentOwner() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
@@ -382,6 +585,8 @@ final class FakeSettingsExerciseSyncClient: SettingsExerciseSyncClient, @uncheck
     var upsertedSettings: [UserSettingsSyncPayload] = []
     var upsertedExercises: [ExerciseSyncPayload] = []
     var tombstones: [(SyncEntityKind, UUID, Date)] = []
+    var fetchRequests: [(cursors: SyncChangeCursors, limit: Int)] = []
+    var fetchResponses: [SyncFetchChangesResponse] = []
     var fetchResponse = SyncFetchChangesResponse(
         userSettings: [],
         exercises: [],
@@ -410,6 +615,10 @@ final class FakeSettingsExerciseSyncClient: SettingsExerciseSyncClient, @uncheck
 
     func fetchChanges(cursors: SyncChangeCursors, limit: Int) async throws -> SyncFetchChangesResponse {
         if let error { throw error }
+        fetchRequests.append((cursors, limit))
+        if !fetchResponses.isEmpty {
+            return fetchResponses.removeFirst()
+        }
         return fetchResponse
     }
 }

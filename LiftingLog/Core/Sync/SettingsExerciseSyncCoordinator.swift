@@ -18,7 +18,9 @@ final class SettingsExerciseSyncCoordinator {
         defer { isRunning = false }
 
         try prepareForSync(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
-        try await pushPendingEntries(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
+        let didCompletePush = try await pushPendingEntries(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
+        guard didCompletePush else { return }
+        try await pullChanges(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
     }
 
     func prepareForSync(ownerTokenIdentifier: String, context: ModelContext) throws {
@@ -54,7 +56,7 @@ final class SettingsExerciseSyncCoordinator {
         try context.save()
     }
 
-    private func pushPendingEntries(ownerTokenIdentifier: String, context: ModelContext) async throws {
+    private func pushPendingEntries(ownerTokenIdentifier: String, context: ModelContext) async throws -> Bool {
         let entries = try recorder.pendingEntries(context: context)
             .filter { entry in
                 entry.ownerTokenIdentifier == ownerTokenIdentifier
@@ -80,9 +82,11 @@ final class SettingsExerciseSyncCoordinator {
                     recorder.markFailed(entry, message: error.localizedDescription, now: .now)
                     try context.save()
                 }
-                break
+                return false
             }
         }
+
+        return true
     }
 
     private func logicalFallbackTimestamp(for entry: SyncOutboxEntry) -> Date {
@@ -143,6 +147,152 @@ final class SettingsExerciseSyncCoordinator {
     private func findExercise(id: UUID, context: ModelContext) throws -> Exercise? {
         try context.fetch(FetchDescriptor<Exercise>())
             .first { $0.id == id }
+    }
+
+    private func pullChanges(ownerTokenIdentifier: String, context: ModelContext) async throws {
+        let state = try SyncCursorState.state(for: ownerTokenIdentifier, context: context)
+        var hasMore = true
+
+        while hasMore {
+            let response = try await client.fetchChanges(
+                cursors: SyncChangeCursors(
+                    userSettings: state.userSettingsCursor,
+                    exercises: state.exercisesCursor
+                ),
+                limit: 100
+            )
+
+            try apply(userSettingsRecords: response.userSettings, ownerTokenIdentifier: ownerTokenIdentifier, context: context)
+            try apply(exerciseRecords: response.exercises, ownerTokenIdentifier: ownerTokenIdentifier, context: context)
+
+            state.userSettingsCursor = response.cursors.userSettings
+            state.exercisesCursor = response.cursors.exercises
+            try context.save()
+
+            hasMore = response.hasMore.userSettings || response.hasMore.exercises
+        }
+    }
+
+    private func apply(
+        userSettingsRecords records: [UserSettingsSyncRecord],
+        ownerTokenIdentifier: String,
+        context: ModelContext
+    ) throws {
+        for record in records {
+            guard let id = UUID(uuidString: record.clientId) else { continue }
+            let incomingUpdatedAt = Date(timeIntervalSince1970: record.updatedAt)
+            let incomingDeletedAt = record.deletedAt.map(Date.init(timeIntervalSince1970:))
+
+            if let settings = try findUserSettings(id: id, context: context) {
+                guard settings.syncOwnerTokenIdentifier == nil || settings.syncOwnerTokenIdentifier == ownerTokenIdentifier else {
+                    continue
+                }
+                guard SyncConflictResolver.decision(
+                    localUpdatedAt: settings.updatedAt,
+                    localDeletedAt: settings.deletedAt,
+                    incomingUpdatedAt: incomingUpdatedAt,
+                    incomingDeletedAt: incomingDeletedAt
+                ) == .applyIncoming else {
+                    continue
+                }
+                apply(record, to: settings, ownerTokenIdentifier: ownerTokenIdentifier)
+            } else if incomingDeletedAt == nil {
+                let settings = UserSettings(
+                    id: id,
+                    weightUnit: MeasurementUnit(rawValue: record.weightUnitRaw) ?? .pounds,
+                    defaultRestTimerSeconds: record.defaultRestTimerSeconds,
+                    hasCompletedOnboarding: record.hasCompletedOnboarding,
+                    syncOwnerTokenIdentifier: ownerTokenIdentifier,
+                    createdAt: Date(timeIntervalSince1970: record.createdAt),
+                    updatedAt: incomingUpdatedAt,
+                    deletedAt: nil
+                )
+                settings.weightUnitRaw = record.weightUnitRaw
+                context.insert(settings)
+            }
+        }
+    }
+
+    private func apply(
+        _ record: UserSettingsSyncRecord,
+        to settings: UserSettings,
+        ownerTokenIdentifier: String
+    ) {
+        settings.syncOwnerTokenIdentifier = ownerTokenIdentifier
+        settings.weightUnitRaw = record.weightUnitRaw
+        settings.defaultRestTimerSeconds = record.defaultRestTimerSeconds
+        settings.hasCompletedOnboarding = record.hasCompletedOnboarding
+        settings.createdAt = Date(timeIntervalSince1970: record.createdAt)
+        settings.updatedAt = Date(timeIntervalSince1970: record.updatedAt)
+        settings.deletedAt = record.deletedAt.map(Date.init(timeIntervalSince1970:))
+    }
+
+    private func apply(
+        exerciseRecords records: [ExerciseSyncRecord],
+        ownerTokenIdentifier: String,
+        context: ModelContext
+    ) throws {
+        for record in records {
+            guard let id = UUID(uuidString: record.clientId) else { continue }
+            let incomingUpdatedAt = Date(timeIntervalSince1970: record.updatedAt)
+            let incomingDeletedAt = record.deletedAt.map(Date.init(timeIntervalSince1970:))
+
+            if let exercise = try findExercise(id: id, context: context) {
+                guard exercise.syncOwnerTokenIdentifier == nil || exercise.syncOwnerTokenIdentifier == ownerTokenIdentifier else {
+                    continue
+                }
+                guard SyncConflictResolver.decision(
+                    localUpdatedAt: exercise.updatedAt,
+                    localDeletedAt: exercise.deletedAt,
+                    incomingUpdatedAt: incomingUpdatedAt,
+                    incomingDeletedAt: incomingDeletedAt
+                ) == .applyIncoming else {
+                    continue
+                }
+                apply(record, to: exercise, ownerTokenIdentifier: ownerTokenIdentifier)
+            } else if incomingDeletedAt == nil {
+                let exercise = Exercise(
+                    id: id,
+                    seedIdentifier: record.seedIdentifier,
+                    name: record.name,
+                    category: ExerciseCategory(rawValue: record.categoryRaw) ?? .other,
+                    equipment: ExerciseEquipment(rawValue: record.equipmentRaw) ?? .other,
+                    primaryMuscleGroup: ExerciseMuscleGroup(rawValue: record.primaryMuscleGroupRaw) ?? .other,
+                    notes: record.notes,
+                    isArchived: record.isArchived,
+                    isSeeded: record.isSeeded,
+                    syncOwnerTokenIdentifier: ownerTokenIdentifier,
+                    createdAt: Date(timeIntervalSince1970: record.createdAt),
+                    updatedAt: incomingUpdatedAt,
+                    deletedAt: nil
+                )
+                exercise.categoryRaw = record.categoryRaw
+                exercise.equipmentRaw = record.equipmentRaw
+                exercise.primaryMuscleRaw = record.primaryMuscleRaw
+                exercise.primaryMuscleGroupRaw = record.primaryMuscleGroupRaw
+                context.insert(exercise)
+            }
+        }
+    }
+
+    private func apply(
+        _ record: ExerciseSyncRecord,
+        to exercise: Exercise,
+        ownerTokenIdentifier: String
+    ) {
+        exercise.syncOwnerTokenIdentifier = ownerTokenIdentifier
+        exercise.seedIdentifier = record.seedIdentifier
+        exercise.name = record.name
+        exercise.categoryRaw = record.categoryRaw
+        exercise.equipmentRaw = record.equipmentRaw
+        exercise.primaryMuscleRaw = record.primaryMuscleRaw
+        exercise.primaryMuscleGroupRaw = record.primaryMuscleGroupRaw
+        exercise.notes = record.notes
+        exercise.isArchived = record.isArchived
+        exercise.isSeeded = record.isSeeded
+        exercise.createdAt = Date(timeIntervalSince1970: record.createdAt)
+        exercise.updatedAt = Date(timeIntervalSince1970: record.updatedAt)
+        exercise.deletedAt = record.deletedAt.map(Date.init(timeIntervalSince1970:))
     }
 
     private func canClaim(
