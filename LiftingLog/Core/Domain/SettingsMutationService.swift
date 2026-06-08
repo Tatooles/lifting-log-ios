@@ -19,7 +19,10 @@ struct SettingsMutationService {
     ) throws {
         let previousUnit = settings.weightUnit
         guard previousUnit != newUnit else { return }
-        let effectiveOwner = ownerTokenIdentifier ?? syncScheduler?.currentOwnerTokenIdentifier
+        let effectiveOwner = try mutationOwner(
+            currentOwner: settings.syncOwnerTokenIdentifier,
+            requestedOwner: ownerTokenIdentifier ?? syncScheduler?.currentOwnerTokenIdentifier
+        )
 
         let sets = try context.fetch(FetchDescriptor<LoggedSet>())
         for set in sets where !set.isDeleted {
@@ -68,7 +71,10 @@ struct SettingsMutationService {
         now: Date = .now
     ) throws {
         guard settings.defaultRestTimerSeconds != seconds else { return }
-        let effectiveOwner = ownerTokenIdentifier ?? syncScheduler?.currentOwnerTokenIdentifier
+        let effectiveOwner = try mutationOwner(
+            currentOwner: settings.syncOwnerTokenIdentifier,
+            requestedOwner: ownerTokenIdentifier ?? syncScheduler?.currentOwnerTokenIdentifier
+        )
 
         settings.syncOwnerTokenIdentifier = effectiveOwner ?? settings.syncOwnerTokenIdentifier
         settings.defaultRestTimerSeconds = seconds
@@ -83,4 +89,14 @@ struct SettingsMutationService {
         try context.save()
         syncScheduler?.requestSync()
     }
+
+    private func mutationOwner(currentOwner: String?, requestedOwner: String?) throws -> String? {
+        guard let currentOwner else { return requestedOwner }
+        guard let requestedOwner, requestedOwner != currentOwner else { return currentOwner }
+        throw SyncMutationOwnershipError.ownerMismatch
+    }
+}
+
+enum SyncMutationOwnershipError: Error, Equatable {
+    case ownerMismatch
 }

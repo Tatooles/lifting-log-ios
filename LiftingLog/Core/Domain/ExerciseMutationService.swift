@@ -65,7 +65,10 @@ struct ExerciseMutationService {
             return
         }
 
-        let effectiveOwner = ownerTokenIdentifier ?? syncScheduler?.currentOwnerTokenIdentifier
+        let effectiveOwner = try mutationOwner(
+            currentOwner: exercise.syncOwnerTokenIdentifier,
+            requestedOwner: ownerTokenIdentifier ?? syncScheduler?.currentOwnerTokenIdentifier
+        )
         exercise.syncOwnerTokenIdentifier = effectiveOwner ?? exercise.syncOwnerTokenIdentifier
         exercise.update(
             name: name,
@@ -92,7 +95,10 @@ struct ExerciseMutationService {
         context: ModelContext,
         now: Date = .now
     ) throws {
-        let effectiveOwner = ownerTokenIdentifier ?? syncScheduler?.currentOwnerTokenIdentifier
+        let effectiveOwner = try mutationOwner(
+            currentOwner: exercise.syncOwnerTokenIdentifier,
+            requestedOwner: ownerTokenIdentifier ?? syncScheduler?.currentOwnerTokenIdentifier
+        )
         exercise.syncOwnerTokenIdentifier = effectiveOwner ?? exercise.syncOwnerTokenIdentifier
         let outcome = try exercise.archiveOrDelete(context: context, now: now)
         switch outcome {
@@ -115,5 +121,11 @@ struct ExerciseMutationService {
         }
         try context.save()
         syncScheduler?.requestSync()
+    }
+
+    private func mutationOwner(currentOwner: String?, requestedOwner: String?) throws -> String? {
+        guard let currentOwner else { return requestedOwner }
+        guard let requestedOwner, requestedOwner != currentOwner else { return currentOwner }
+        throw SyncMutationOwnershipError.ownerMismatch
     }
 }

@@ -646,6 +646,7 @@ final class FakeSettingsExerciseSyncClient: SettingsExerciseSyncClient, @uncheck
         cursors: SyncChangeCursors(userSettings: 0, exercises: 0),
         hasMore: SyncHasMore(userSettings: false, exercises: false)
     )
+    var onFetchChanges: (() -> Void)?
     var error: Error?
 
     func upsertUserSettings(_ record: UserSettingsSyncPayload) async throws -> SyncMutationResult {
@@ -669,6 +670,7 @@ final class FakeSettingsExerciseSyncClient: SettingsExerciseSyncClient, @uncheck
     func fetchChanges(cursors: SyncChangeCursors, limit: Int) async throws -> SyncFetchChangesResponse {
         if let error { throw error }
         fetchRequests.append((cursors, limit))
+        onFetchChanges?()
         if !fetchResponses.isEmpty {
             return fetchResponses.removeFirst()
         }

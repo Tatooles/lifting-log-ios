@@ -245,6 +245,72 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         XCTAssertEqual(scheduler.requestCount, 1)
     }
 
+    func testSettingsMutationRejectsDifferentCurrentOwner() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let settings = UserSettings(
+            defaultRestTimerSeconds: 90,
+            syncOwnerTokenIdentifier: "issuer|owner_a"
+        )
+        context.insert(settings)
+        try context.save()
+
+        let scheduler = SyncScheduler()
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_b"
+
+        XCTAssertThrowsError(
+            try SettingsMutationService(syncScheduler: scheduler).updateDefaultRestTimerSeconds(
+                120,
+                settings: settings,
+                context: context,
+                now: Date(timeIntervalSince1970: 100)
+            )
+        ) { error in
+            XCTAssertEqual(error as? SyncMutationOwnershipError, .ownerMismatch)
+        }
+
+        XCTAssertEqual(settings.defaultRestTimerSeconds, 90)
+        XCTAssertEqual(settings.syncOwnerTokenIdentifier, "issuer|owner_a")
+        XCTAssertTrue(try fetchEntries(context).isEmpty)
+        XCTAssertEqual(scheduler.requestCount, 0)
+    }
+
+    func testExerciseMutationRejectsDifferentCurrentOwner() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let scheduler = SyncScheduler()
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_b"
+        let exercise = Exercise(
+            name: "Owner Bench",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Chest",
+            syncOwnerTokenIdentifier: "issuer|owner_a"
+        )
+        context.insert(exercise)
+        try context.save()
+
+        XCTAssertThrowsError(
+            try ExerciseMutationService(syncScheduler: scheduler).updateExercise(
+                exercise,
+                name: "Owner Bench Updated",
+                category: .strength,
+                equipment: .barbell,
+                primaryMuscle: "Chest",
+                notes: "",
+                context: context,
+                now: Date(timeIntervalSince1970: 100)
+            )
+        ) { error in
+            XCTAssertEqual(error as? SyncMutationOwnershipError, .ownerMismatch)
+        }
+
+        XCTAssertEqual(exercise.name, "Owner Bench")
+        XCTAssertEqual(exercise.syncOwnerTokenIdentifier, "issuer|owner_a")
+        XCTAssertTrue(try fetchEntries(context).isEmpty)
+        XCTAssertEqual(scheduler.requestCount, 0)
+    }
+
     func testConfiguredSchedulerRunsRequestedSync() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
@@ -252,9 +318,13 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         let coordinator = SettingsExerciseSyncCoordinator(client: client)
         let scheduler = SyncScheduler(coordinator: coordinator, modelContext: context)
         scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+        let fetchCompleted = expectation(description: "scheduler runs sync fetch")
+        client.onFetchChanges = {
+            fetchCompleted.fulfill()
+        }
 
         scheduler.requestSync()
-        try await Task.sleep(nanoseconds: 100_000_000)
+        await fulfillment(of: [fetchCompleted], timeout: 1.0)
 
         XCTAssertEqual(scheduler.requestCount, 1)
         XCTAssertEqual(client.fetchRequests.count, 1)
