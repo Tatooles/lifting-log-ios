@@ -355,6 +355,32 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         )
     }
 
+    func testConfiguredSchedulerSeedsDefaultsForLocalMode() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        try SeedDataService.seedIfNeeded(context: context, ownerTokenIdentifier: "issuer|owner_a")
+
+        let scheduler = SyncScheduler(coordinator: SettingsExerciseSyncCoordinator(client: FakeSettingsExerciseSyncClient()), modelContext: context)
+        scheduler.currentOwnerTokenIdentifier = nil
+
+        scheduler.seedDefaultsForLocalMode()
+
+        let settings = try context.fetch(FetchDescriptor<UserSettings>())
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        XCTAssertEqual(
+            UserSettings.visibleSettingsRecords(from: settings, ownerTokenIdentifier: nil)
+                .filter { $0.syncOwnerTokenIdentifier == nil }
+                .count,
+            1
+        )
+        XCTAssertEqual(
+            Exercise.visibleActiveExercises(from: exercises, ownerTokenIdentifier: nil)
+                .filter { $0.syncOwnerTokenIdentifier == nil && $0.isSeeded }
+                .count,
+            20
+        )
+    }
+
     func testSchedulerQueuesRequestDuringActiveSync() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
