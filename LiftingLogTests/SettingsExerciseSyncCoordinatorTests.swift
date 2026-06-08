@@ -35,6 +35,68 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         XCTAssertEqual(entries.first?.ownerTokenIdentifier, "issuer|owner_a")
     }
 
+    func testBootstrappedPrepareDoesNotClaimOwnerlessSeedDefaultsWithoutLocalIntent() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let state = SyncCursorState(
+            ownerTokenIdentifier: "issuer|owner_a",
+            hasBootstrappedSettingsExercises: true
+        )
+        let exercise = Exercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000002005")!,
+            seedIdentifier: "bench-press",
+            name: "Bench Press",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Chest",
+            isSeeded: true
+        )
+        context.insert(state)
+        context.insert(exercise)
+        try context.save()
+
+        let coordinator = SettingsExerciseSyncCoordinator(client: FakeSettingsExerciseSyncClient())
+        try coordinator.prepareForSync(ownerTokenIdentifier: "issuer|owner_a", context: context)
+
+        XCTAssertNil(exercise.syncOwnerTokenIdentifier)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
+    }
+
+    func testBootstrappedPrepareClaimsOwnerlessRowsWithLocalIntent() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let state = SyncCursorState(
+            ownerTokenIdentifier: "issuer|owner_a",
+            hasBootstrappedSettingsExercises: true
+        )
+        let exercise = Exercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000002006")!,
+            seedIdentifier: "bench-press",
+            name: "Local Renamed Bench",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Chest",
+            isSeeded: true
+        )
+        context.insert(state)
+        context.insert(exercise)
+        try SyncOutboxRecorder().recordUpdate(
+            entityKind: .exercise,
+            entityID: exercise.id,
+            ownerTokenIdentifier: nil,
+            context: context,
+            now: Date(timeIntervalSince1970: 100)
+        )
+        try context.save()
+
+        let coordinator = SettingsExerciseSyncCoordinator(client: FakeSettingsExerciseSyncClient())
+        try coordinator.prepareForSync(ownerTokenIdentifier: "issuer|owner_a", context: context)
+
+        let entry = try XCTUnwrap(context.fetch(FetchDescriptor<SyncOutboxEntry>()).first)
+        XCTAssertEqual(exercise.syncOwnerTokenIdentifier, "issuer|owner_a")
+        XCTAssertEqual(entry.ownerTokenIdentifier, "issuer|owner_a")
+    }
+
     func testPrepareSkipsRowsOwnedByDifferentOwner() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

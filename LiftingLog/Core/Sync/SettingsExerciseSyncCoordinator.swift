@@ -55,13 +55,25 @@ final class SettingsExerciseSyncCoordinator {
             )
 
         for settings in try context.fetch(FetchDescriptor<UserSettings>()) {
-            if settings.syncOwnerTokenIdentifier == nil {
+            if settings.syncOwnerTokenIdentifier == nil,
+               try canClaimUnownedRecord(
+                   entityKind: .userSettings,
+                   entityID: settings.id,
+                   hasBootstrapped: state.hasBootstrappedSettingsExercises,
+                   context: context
+               ) {
                 settings.syncOwnerTokenIdentifier = ownerTokenIdentifier
             }
         }
 
         for exercise in try context.fetch(FetchDescriptor<Exercise>()) {
-            if exercise.syncOwnerTokenIdentifier == nil {
+            if exercise.syncOwnerTokenIdentifier == nil,
+               try canClaimUnownedRecord(
+                   entityKind: .exercise,
+                   entityID: exercise.id,
+                   hasBootstrapped: state.hasBootstrappedSettingsExercises,
+                   context: context
+               ) {
                 exercise.syncOwnerTokenIdentifier = ownerTokenIdentifier
             }
         }
@@ -508,6 +520,19 @@ final class SettingsExerciseSyncCoordinator {
         default:
             return false
         }
+    }
+
+    private func canClaimUnownedRecord(
+        entityKind: SyncEntityKind,
+        entityID: UUID,
+        hasBootstrapped: Bool,
+        context: ModelContext
+    ) throws -> Bool {
+        if !hasBootstrapped {
+            return true
+        }
+
+        return try hasActiveOutboxEntry(entityKind: entityKind, entityID: entityID, context: context)
     }
 
     private func adoptableUserSettings(ownerTokenIdentifier: String, context: ModelContext) throws -> UserSettings? {
