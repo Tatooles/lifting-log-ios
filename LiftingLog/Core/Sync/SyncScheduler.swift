@@ -4,7 +4,12 @@ import SwiftData
 @MainActor
 @Observable
 final class SyncScheduler {
-    var currentOwnerTokenIdentifier: String?
+    var currentOwnerTokenIdentifier: String? {
+        didSet {
+            guard oldValue != currentOwnerTokenIdentifier else { return }
+            cancelInFlightSync()
+        }
+    }
     private(set) var requestCount = 0
     private var coordinator: SettingsExerciseSyncCoordinator?
     private var modelContext: ModelContext?
@@ -29,13 +34,38 @@ final class SyncScheduler {
             return
         }
 
+        startSyncTask(coordinator: coordinator, modelContext: modelContext)
+    }
+
+    private func cancelInFlightSync() {
+        guard let syncTask else { return }
+        needsSync = false
+        syncTask.cancel()
+    }
+
+    private func startSyncTask(coordinator: SettingsExerciseSyncCoordinator, modelContext: ModelContext) {
         syncTask = Task { @MainActor in
             while true {
                 needsSync = false
-                try? await coordinator.run(ownerTokenIdentifier: currentOwnerTokenIdentifier, context: modelContext)
+                do {
+                    try await coordinator.run(ownerTokenIdentifier: currentOwnerTokenIdentifier, context: modelContext)
+                } catch is CancellationError {
+                    break
+                } catch {
+                    break
+                }
+                if Task.isCancelled {
+                    break
+                }
                 guard needsSync else { break }
             }
+
+            let shouldStartQueuedSync = needsSync && currentOwnerTokenIdentifier != nil
+            needsSync = false
             syncTask = nil
+            if shouldStartQueuedSync {
+                startSyncTask(coordinator: coordinator, modelContext: modelContext)
+            }
         }
     }
 }

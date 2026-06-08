@@ -356,6 +356,53 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         XCTAssertEqual(client.fetchRequests.last?.cursors, SyncChangeCursors(userSettings: 0, exercises: 0))
     }
 
+    func testSchedulerStopsOldOwnerSyncWhenOwnerChangesDuringRun() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000005501")!,
+            name: "Owner A Bench",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Chest",
+            syncOwnerTokenIdentifier: "issuer|owner_a"
+        )
+        context.insert(exercise)
+        try SyncOutboxRecorder().recordUpdate(
+            entityKind: .exercise,
+            entityID: exercise.id,
+            ownerTokenIdentifier: "issuer|owner_a",
+            context: context,
+            now: Date(timeIntervalSince1970: 100)
+        )
+        try context.save()
+
+        let client = FakeSettingsExerciseSyncClient()
+        let coordinator = SettingsExerciseSyncCoordinator(client: client)
+        let scheduler = SyncScheduler(coordinator: coordinator, modelContext: context)
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+        let fetchCompleted = expectation(description: "initial old-owner pull runs")
+        var didChangeOwner = false
+        client.onFetchChanges = {
+            if !didChangeOwner {
+                didChangeOwner = true
+                scheduler.currentOwnerTokenIdentifier = "issuer|owner_b"
+                fetchCompleted.fulfill()
+            }
+        }
+
+        scheduler.requestSync()
+        await fulfillment(of: [fetchCompleted], timeout: 1.0)
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        let entries = try fetchEntries(context)
+        XCTAssertTrue(client.upsertedExercises.isEmpty)
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries.first?.entityID, exercise.id)
+        XCTAssertEqual(entries.first?.ownerTokenIdentifier, "issuer|owner_a")
+        XCTAssertEqual(entries.first?.status, .pending)
+    }
+
     func testExerciseUpdateWithoutChangesDoesNotRecordOrRequestSync() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

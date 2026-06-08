@@ -16,6 +16,7 @@ final class SettingsExerciseSyncCoordinator {
         guard !isRunning else { return }
         isRunning = true
         defer { isRunning = false }
+        try Task.checkCancellation()
 
         let state = try SyncCursorState.state(for: ownerTokenIdentifier, context: context)
         let bootstrapScope: BootstrapScope
@@ -25,11 +26,13 @@ final class SettingsExerciseSyncCoordinator {
             didPullBeforePush = false
         } else {
             let summary = try await pullChanges(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
+            try Task.checkCancellation()
             bootstrapScope = summary.hasRemoteRecords ? .unownedOnly : .allOwned
             didPullBeforePush = true
         }
 
         try prepareForSync(ownerTokenIdentifier: ownerTokenIdentifier, context: context, bootstrapScope: bootstrapScope)
+        try Task.checkCancellation()
         let pushResult = try await pushPendingEntries(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
         guard pushResult.didComplete else { return }
         if pushResult.didPush || !didPullBeforePush {
@@ -194,9 +197,11 @@ final class SettingsExerciseSyncCoordinator {
             }
 
         for entry in entries {
+            try Task.checkCancellation()
             let logicalUpdatedAt = logicalFallbackTimestamp(for: entry)
             recorder.markInFlight(entry, now: .now)
             try context.save()
+            try Task.checkCancellation()
 
             do {
                 try await push(
