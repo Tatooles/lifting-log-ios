@@ -77,7 +77,10 @@ struct ProfileView: View {
                 from: settingsRecords,
                 ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
             ).isEmpty {
-                try? SeedDataService.seedIfNeeded(context: modelContext)
+                try? SeedDataService.seedIfNeeded(
+                    context: modelContext,
+                    ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
+                )
             }
         }
     }

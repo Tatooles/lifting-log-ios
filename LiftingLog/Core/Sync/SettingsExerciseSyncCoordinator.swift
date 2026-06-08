@@ -337,7 +337,7 @@ final class SettingsExerciseSyncCoordinator {
                 }
                 apply(record, to: settings, ownerTokenIdentifier: ownerTokenIdentifier)
             } else if incomingDeletedAt == nil {
-                if let settings = try adoptableUserSettings(context: context) {
+                if let settings = try adoptableUserSettings(ownerTokenIdentifier: ownerTokenIdentifier, context: context) {
                     let localID = settings.id
                     let hasLocalIntent = try hasActiveOutboxEntry(
                         entityKind: .userSettings,
@@ -415,7 +415,11 @@ final class SettingsExerciseSyncCoordinator {
                 apply(record, to: exercise, ownerTokenIdentifier: ownerTokenIdentifier)
             } else {
                 if let seedIdentifier = record.seedIdentifier,
-                   let exercise = try adoptableSeedExercise(seedIdentifier: seedIdentifier, context: context) {
+                   let exercise = try adoptableSeedExercise(
+                       seedIdentifier: seedIdentifier,
+                       ownerTokenIdentifier: ownerTokenIdentifier,
+                       context: context
+                   ) {
                     let localID = exercise.id
                     let hasLocalIntent = try hasActiveOutboxEntry(
                         entityKind: .exercise,
@@ -506,17 +510,22 @@ final class SettingsExerciseSyncCoordinator {
         }
     }
 
-    private func adoptableUserSettings(context: ModelContext) throws -> UserSettings? {
+    private func adoptableUserSettings(ownerTokenIdentifier: String, context: ModelContext) throws -> UserSettings? {
         try context.fetch(FetchDescriptor<UserSettings>())
             .first { settings in
-                settings.syncOwnerTokenIdentifier == nil && !settings.isDeleted
+                (settings.syncOwnerTokenIdentifier == nil || settings.syncOwnerTokenIdentifier == ownerTokenIdentifier)
+                    && !settings.isDeleted
             }
     }
 
-    private func adoptableSeedExercise(seedIdentifier: String, context: ModelContext) throws -> Exercise? {
+    private func adoptableSeedExercise(
+        seedIdentifier: String,
+        ownerTokenIdentifier: String,
+        context: ModelContext
+    ) throws -> Exercise? {
         try context.fetch(FetchDescriptor<Exercise>())
             .first { exercise in
-                exercise.syncOwnerTokenIdentifier == nil
+                (exercise.syncOwnerTokenIdentifier == nil || exercise.syncOwnerTokenIdentifier == ownerTokenIdentifier)
                     && exercise.isSeeded
                     && exercise.seedIdentifier == seedIdentifier
             }

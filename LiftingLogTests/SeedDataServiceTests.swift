@@ -78,4 +78,52 @@ final class SeedDataServiceTests: XCTestCase {
 
         XCTAssertEqual(try context.fetch(FetchDescriptor<UserSettings>()).count, 1)
     }
+
+    func testSeedServiceCreatesDefaultsForActiveOwnerWhenOtherOwnerRowsExist() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let otherOwnerSettings = UserSettings(syncOwnerTokenIdentifier: "issuer|owner_a")
+        let otherOwnerBench = Exercise(
+            seedIdentifier: "bench-press",
+            name: "Bench Press",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscleGroup: .chest,
+            isSeeded: true,
+            syncOwnerTokenIdentifier: "issuer|owner_a"
+        )
+        context.insert(otherOwnerSettings)
+        context.insert(otherOwnerBench)
+        try context.save()
+
+        try SeedDataService.seedIfNeeded(context: context, ownerTokenIdentifier: "issuer|owner_b")
+
+        let settings = try context.fetch(FetchDescriptor<UserSettings>())
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        XCTAssertEqual(
+            UserSettings.visibleSettingsRecords(from: settings, ownerTokenIdentifier: "issuer|owner_b").count,
+            1
+        )
+        XCTAssertEqual(
+            Exercise.visibleActiveExercises(from: exercises, ownerTokenIdentifier: "issuer|owner_b")
+                .filter(\.isSeeded)
+                .count,
+            20
+        )
+        XCTAssertEqual(otherOwnerSettings.syncOwnerTokenIdentifier, "issuer|owner_a")
+        XCTAssertEqual(otherOwnerBench.syncOwnerTokenIdentifier, "issuer|owner_a")
+    }
+
+    func testOwnerScopedSeedServiceIsIdempotent() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+
+        try SeedDataService.seedIfNeeded(context: context, ownerTokenIdentifier: "issuer|owner_b")
+        try SeedDataService.seedIfNeeded(context: context, ownerTokenIdentifier: "issuer|owner_b")
+
+        let settings = try context.fetch(FetchDescriptor<UserSettings>())
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        XCTAssertEqual(settings.filter { $0.syncOwnerTokenIdentifier == "issuer|owner_b" }.count, 1)
+        XCTAssertEqual(exercises.filter { $0.syncOwnerTokenIdentifier == "issuer|owner_b" && $0.isSeeded }.count, 20)
+    }
 }

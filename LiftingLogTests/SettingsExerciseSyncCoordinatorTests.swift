@@ -277,6 +277,81 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
     }
 
+    func testFirstRunAdoptsOwnerScopedDefaultsBeforeBootstrapping() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let ownerTokenIdentifier = "issuer|owner_b"
+        let localSettingsID = UUID(uuidString: "00000000-0000-0000-0000-000000003221")!
+        let remoteSettingsID = UUID(uuidString: "00000000-0000-0000-0000-000000003222")!
+        let localBenchID = UUID(uuidString: "00000000-0000-0000-0000-000000003223")!
+        let remoteBenchID = UUID(uuidString: "00000000-0000-0000-0000-000000003224")!
+
+        let settings = UserSettings(id: localSettingsID, syncOwnerTokenIdentifier: ownerTokenIdentifier)
+        let bench = Exercise(
+            id: localBenchID,
+            seedIdentifier: "bench-press",
+            name: "Bench Press",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Chest",
+            isSeeded: true,
+            syncOwnerTokenIdentifier: ownerTokenIdentifier
+        )
+        context.insert(settings)
+        context.insert(bench)
+        try context.save()
+
+        let client = FakeSettingsExerciseSyncClient()
+        client.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [
+                    UserSettingsSyncRecord(
+                        clientId: remoteSettingsID.uuidString.lowercased(),
+                        createdAt: 10,
+                        updatedAt: 20,
+                        deletedAt: nil,
+                        serverUpdatedAt: 30,
+                        weightUnitRaw: "kilograms",
+                        defaultRestTimerSeconds: 120,
+                        hasCompletedOnboarding: true
+                    )
+                ],
+                exercises: [
+                    ExerciseSyncRecord(
+                        clientId: remoteBenchID.uuidString.lowercased(),
+                        createdAt: 10,
+                        updatedAt: 20,
+                        deletedAt: nil,
+                        serverUpdatedAt: 31,
+                        seedIdentifier: "bench-press",
+                        name: "Remote Bench",
+                        categoryRaw: "strength",
+                        equipmentRaw: "barbell",
+                        primaryMuscleRaw: "Chest",
+                        primaryMuscleGroupRaw: "chest",
+                        notes: "",
+                        isArchived: false,
+                        isSeeded: true
+                    )
+                ],
+                cursors: SyncChangeCursors(userSettings: 30, exercises: 31),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            )
+        ]
+
+        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
+
+        let syncedSettings = try context.fetch(FetchDescriptor<UserSettings>())
+        let syncedExercises = try context.fetch(FetchDescriptor<Exercise>())
+        XCTAssertTrue(client.upsertedSettings.isEmpty)
+        XCTAssertTrue(client.upsertedExercises.isEmpty)
+        XCTAssertEqual(syncedSettings.map(\.id), [remoteSettingsID])
+        XCTAssertEqual(syncedSettings.first?.weightUnitRaw, "kilograms")
+        XCTAssertEqual(syncedExercises.map(\.id), [remoteBenchID])
+        XCTAssertEqual(syncedExercises.first?.name, "Remote Bench")
+        XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
+    }
+
     func testFirstRunAdoptsRemoteSeedTombstoneBeforeBootstrappingLocalSeed() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

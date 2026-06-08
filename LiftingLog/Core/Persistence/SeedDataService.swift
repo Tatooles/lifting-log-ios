@@ -5,24 +5,28 @@ enum SeedDataService {
     static let exerciseSeedKey = "exerciseSeed"
     static let exerciseSeedVersion = 1
 
-    static func seedIfNeeded(context: ModelContext) throws {
-        try ensureSettings(context: context)
-        try ensureExercises(context: context)
+    static func seedIfNeeded(context: ModelContext, ownerTokenIdentifier: String? = nil) throws {
+        try ensureSettings(context: context, ownerTokenIdentifier: ownerTokenIdentifier)
+        try ensureExercises(context: context, ownerTokenIdentifier: ownerTokenIdentifier)
         try migrateLegacyPrimaryMuscleGroups(context: context)
         try ensureSeedMetadata(context: context)
         try context.save()
     }
 
-    private static func ensureSettings(context: ModelContext) throws {
+    private static func ensureSettings(context: ModelContext, ownerTokenIdentifier: String?) throws {
         let settings = try context.fetch(FetchDescriptor<UserSettings>())
-        if UserSettings.visibleSettingsRecords(from: settings).isEmpty {
-            context.insert(UserSettings())
+        if UserSettings.visibleSettingsRecords(from: settings, ownerTokenIdentifier: ownerTokenIdentifier).isEmpty {
+            context.insert(UserSettings(syncOwnerTokenIdentifier: ownerTokenIdentifier))
         }
     }
 
-    private static func ensureExercises(context: ModelContext) throws {
+    private static func ensureExercises(context: ModelContext, ownerTokenIdentifier: String?) throws {
         let existing = try context.fetch(FetchDescriptor<Exercise>())
-        let existingSeedIdentifiers = Set(existing.compactMap(\.seedIdentifier))
+        let existingSeedIdentifiers = Set(
+            existing
+                .filter { $0.isVisible(to: ownerTokenIdentifier) }
+                .compactMap(\.seedIdentifier)
+        )
 
         for seed in exerciseSeeds where !existingSeedIdentifiers.contains(seed.seedIdentifier) {
             context.insert(
@@ -33,7 +37,8 @@ enum SeedDataService {
                     equipment: seed.equipment,
                     primaryMuscleGroup: seed.primaryMuscleGroup,
                     notes: seed.notes,
-                    isSeeded: true
+                    isSeeded: true,
+                    syncOwnerTokenIdentifier: ownerTokenIdentifier
                 )
             )
         }
