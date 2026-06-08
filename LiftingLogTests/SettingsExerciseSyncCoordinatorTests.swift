@@ -401,6 +401,59 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         XCTAssertEqual(exercise.name, "Local Name")
     }
 
+    func testRunAppliesNewerRemoteExerciseRestore() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000004005")!,
+            name: "Deleted Local",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Chest",
+            syncOwnerTokenIdentifier: "issuer|owner_a",
+            updatedAt: Date(timeIntervalSince1970: 20),
+            deletedAt: Date(timeIntervalSince1970: 20)
+        )
+        context.insert(exercise)
+        try context.save()
+
+        let client = FakeSettingsExerciseSyncClient()
+        client.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [
+                    ExerciseSyncRecord(
+                        clientId: exercise.id.uuidString.lowercased(),
+                        createdAt: 10,
+                        updatedAt: 40,
+                        deletedAt: nil,
+                        serverUpdatedAt: 45,
+                        seedIdentifier: nil,
+                        name: "Restored Remote",
+                        categoryRaw: "future-strength",
+                        equipmentRaw: "future-bar",
+                        primaryMuscleRaw: "Future Chest",
+                        primaryMuscleGroupRaw: "future-chest",
+                        notes: "Restored",
+                        isArchived: false,
+                        isSeeded: false
+                    )
+                ],
+                cursors: SyncChangeCursors(userSettings: 0, exercises: 45),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            )
+        ]
+
+        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+
+        XCTAssertEqual(exercise.name, "Restored Remote")
+        XCTAssertEqual(exercise.categoryRaw, "future-strength")
+        XCTAssertEqual(exercise.equipmentRaw, "future-bar")
+        XCTAssertEqual(exercise.primaryMuscleRaw, "Future Chest")
+        XCTAssertEqual(exercise.primaryMuscleGroupRaw, "future-chest")
+        XCTAssertNil(exercise.deletedAt)
+    }
+
     func testRunAppliesRemoteSettingsWithoutOutboxCascade() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

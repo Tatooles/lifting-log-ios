@@ -191,7 +191,8 @@ final class SettingsExerciseSyncCoordinator {
                     localUpdatedAt: settings.updatedAt,
                     localDeletedAt: settings.deletedAt,
                     incomingUpdatedAt: incomingUpdatedAt,
-                    incomingDeletedAt: incomingDeletedAt
+                    incomingDeletedAt: incomingDeletedAt,
+                    allowsIncomingRestore: true
                 ) == .applyIncoming else {
                     continue
                 }
@@ -245,7 +246,8 @@ final class SettingsExerciseSyncCoordinator {
                     localUpdatedAt: exercise.updatedAt,
                     localDeletedAt: exercise.deletedAt,
                     incomingUpdatedAt: incomingUpdatedAt,
-                    incomingDeletedAt: incomingDeletedAt
+                    incomingDeletedAt: incomingDeletedAt,
+                    allowsIncomingRestore: true
                 ) == .applyIncoming else {
                     continue
                 }
