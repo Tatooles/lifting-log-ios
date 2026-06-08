@@ -200,6 +200,51 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         XCTAssertEqual(entry.operation, .update)
     }
 
+    func testSettingsMutationUsesCurrentSyncOwnerAndRequestsSync() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let settings = UserSettings(defaultRestTimerSeconds: 90)
+        context.insert(settings)
+        try context.save()
+
+        let scheduler = SyncScheduler()
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+
+        try SettingsMutationService(syncScheduler: scheduler).updateDefaultRestTimerSeconds(
+            120,
+            settings: settings,
+            context: context,
+            now: Date(timeIntervalSince1970: 100)
+        )
+
+        let entry = try XCTUnwrap(fetchEntries(context).first)
+        XCTAssertEqual(settings.syncOwnerTokenIdentifier, "issuer|owner_a")
+        XCTAssertEqual(entry.ownerTokenIdentifier, "issuer|owner_a")
+        XCTAssertEqual(scheduler.requestCount, 1)
+    }
+
+    func testExerciseMutationUsesCurrentSyncOwnerAndRequestsSync() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let scheduler = SyncScheduler()
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+
+        let exercise = try ExerciseMutationService(syncScheduler: scheduler).createExercise(
+            name: "Owner Bench",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Chest",
+            notes: "",
+            context: context,
+            now: Date(timeIntervalSince1970: 100)
+        )
+
+        let entry = try XCTUnwrap(fetchEntries(context).first)
+        XCTAssertEqual(exercise.syncOwnerTokenIdentifier, "issuer|owner_a")
+        XCTAssertEqual(entry.ownerTokenIdentifier, "issuer|owner_a")
+        XCTAssertEqual(scheduler.requestCount, 1)
+    }
+
     func testFinishingWorkoutRecordsCompletedGraphCreateIntent() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

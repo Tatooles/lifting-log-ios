@@ -5,6 +5,12 @@ import SwiftData
 struct ExerciseMutationService {
     private let recorder = SyncOutboxRecorder()
 
+    private let syncScheduler: SyncScheduler?
+
+    init(syncScheduler: SyncScheduler? = nil) {
+        self.syncScheduler = syncScheduler
+    }
+
     @discardableResult
     func createExercise(
         name: String,
@@ -16,12 +22,14 @@ struct ExerciseMutationService {
         context: ModelContext,
         now: Date = .now
     ) throws -> Exercise {
+        let effectiveOwner = ownerTokenIdentifier ?? syncScheduler?.currentOwnerTokenIdentifier
         let exercise = Exercise(
             name: name,
             category: category,
             equipment: equipment,
             primaryMuscle: primaryMuscle,
             notes: notes,
+            syncOwnerTokenIdentifier: effectiveOwner,
             createdAt: now,
             updatedAt: now
         )
@@ -29,11 +37,12 @@ struct ExerciseMutationService {
         try recorder.recordCreate(
             entityKind: .exercise,
             entityID: exercise.id,
-            ownerTokenIdentifier: ownerTokenIdentifier,
+            ownerTokenIdentifier: effectiveOwner,
             context: context,
             now: now
         )
         try context.save()
+        syncScheduler?.requestSync()
         return exercise
     }
 
@@ -48,6 +57,8 @@ struct ExerciseMutationService {
         context: ModelContext,
         now: Date = .now
     ) throws {
+        let effectiveOwner = ownerTokenIdentifier ?? syncScheduler?.currentOwnerTokenIdentifier
+        exercise.syncOwnerTokenIdentifier = effectiveOwner ?? exercise.syncOwnerTokenIdentifier
         exercise.update(
             name: name,
             category: category,
@@ -59,11 +70,12 @@ struct ExerciseMutationService {
         try recorder.recordUpdate(
             entityKind: .exercise,
             entityID: exercise.id,
-            ownerTokenIdentifier: ownerTokenIdentifier,
+            ownerTokenIdentifier: effectiveOwner,
             context: context,
             now: now
         )
         try context.save()
+        syncScheduler?.requestSync()
     }
 
     func removeExercise(
@@ -72,13 +84,15 @@ struct ExerciseMutationService {
         context: ModelContext,
         now: Date = .now
     ) throws {
+        let effectiveOwner = ownerTokenIdentifier ?? syncScheduler?.currentOwnerTokenIdentifier
+        exercise.syncOwnerTokenIdentifier = effectiveOwner ?? exercise.syncOwnerTokenIdentifier
         let outcome = try exercise.archiveOrDelete(context: context, now: now)
         switch outcome {
         case .archived:
             try recorder.recordUpdate(
                 entityKind: .exercise,
                 entityID: exercise.id,
-                ownerTokenIdentifier: ownerTokenIdentifier,
+                ownerTokenIdentifier: effectiveOwner,
                 context: context,
                 now: now
             )
@@ -86,11 +100,12 @@ struct ExerciseMutationService {
             try recorder.recordDelete(
                 entityKind: .exercise,
                 entityID: exercise.id,
-                ownerTokenIdentifier: ownerTokenIdentifier,
+                ownerTokenIdentifier: effectiveOwner,
                 context: context,
                 now: now
             )
         }
         try context.save()
+        syncScheduler?.requestSync()
     }
 }

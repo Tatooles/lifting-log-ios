@@ -81,6 +81,7 @@
 		AD9B0899FA656A3E141643A6 /* ExerciseMuscleGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF74B7CE70C49E564ED00FDF /* ExerciseMuscleGroup.swift */; };
 		B01C71A13BBCC55178AEFB27 /* FormattingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97D4F05FB241C4EE29FC43EE /* FormattingTests.swift */; };
 		B4EDA8C6351F43F22CAF247B /* WorkoutSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9805F9A67B0D4ADEFD6D4446 /* WorkoutSession.swift */; };
+		B5BE5FBA5B780E38E8D8DA90 /* SyncScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45C4D9744D95F3023BC8AC26 /* SyncScheduler.swift */; };
 		B6F09A8AA3B74557E1F7D1CE /* WorkoutDataExportServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E09AE5EE2127ED66A3E3D928 /* WorkoutDataExportServiceTests.swift */; };
 		B73F5E0B75DE5B49ABE010BF /* WorkoutHistoryMutationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38550357539DB1558CE64AEA /* WorkoutHistoryMutationService.swift */; };
 		BAEFB588C834B8EBA7D71E8A /* WorkoutFocusNavigator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D57B554577381258154F3C3 /* WorkoutFocusNavigator.swift */; };
@@ -159,6 +160,7 @@
 		3CF412631A23A0921531136C /* ExerciseHistorySummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseHistorySummary.swift; sourceTree = "<group>"; };
 		3DB3484AD2211A8F31EC4FC1 /* LiftingLog.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LiftingLog.entitlements; sourceTree = "<group>"; };
 		440384EEC9EC6785B3D846A2 /* WorkoutExportFileWriterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutExportFileWriterTests.swift; sourceTree = "<group>"; };
+		45C4D9744D95F3023BC8AC26 /* SyncScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncScheduler.swift; sourceTree = "<group>"; };
 		53A0AC2A67CDFE8BE93F6F99 /* SyncEntityKind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEntityKind.swift; sourceTree = "<group>"; };
 		54AEC1C879FEDA6709B30F53 /* LoggedExercise.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoggedExercise.swift; sourceTree = "<group>"; };
 		54DE670FB152B27AC0198DE0 /* ConvexClientFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConvexClientFactory.swift; sourceTree = "<group>"; };
@@ -369,6 +371,7 @@
 				8E5333E76D8ABFABF0E8FB2D /* SyncOutboxRecorder.swift */,
 				0ABC5EBEFD6E880FE05FFB40 /* SyncOutboxStatus.swift */,
 				C70713610688DB76FC59D749 /* SyncPayloads.swift */,
+				45C4D9744D95F3023BC8AC26 /* SyncScheduler.swift */,
 			);
 			path = Sync;
 			sourceTree = "<group>";
@@ -739,6 +742,7 @@
 				000DE952D00F45696FC2F332 /* SyncOutboxRecorder.swift in Sources */,
 				3636CE56994A77E23A759B50 /* SyncOutboxStatus.swift in Sources */,
 				4DE5CFCB935600A512E5944D /* SyncPayloads.swift in Sources */,
+				B5BE5FBA5B780E38E8D8DA90 /* SyncScheduler.swift in Sources */,
 				0A987D0FF2EE82CC20EBF47A /* UserSettings.swift in Sources */,
 				E3A260F6C398D649CEF72D0F /* WorkoutDataExportService.swift in Sources */,
 				324703D4686BBA447C8BBBFF /* WorkoutExportFileWriter.swift in Sources */,
