@@ -321,6 +321,9 @@ final class SyncCoordinatorTests: XCTestCase {
                         isSeeded: true
                     )
                 ],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [],
                 cursors: SyncChangeCursors(userSettings: 30, exercises: 32),
                 hasMore: SyncHasMore(userSettings: false, exercises: false)
             )
@@ -396,6 +399,9 @@ final class SyncCoordinatorTests: XCTestCase {
                         isSeeded: true
                     )
                 ],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [],
                 cursors: SyncChangeCursors(userSettings: 30, exercises: 31),
                 hasMore: SyncHasMore(userSettings: false, exercises: false)
             )
@@ -454,6 +460,9 @@ final class SyncCoordinatorTests: XCTestCase {
                         isSeeded: true
                     )
                 ],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [],
                 cursors: SyncChangeCursors(userSettings: 0, exercises: 31),
                 hasMore: SyncHasMore(userSettings: false, exercises: false)
             )
@@ -521,6 +530,9 @@ final class SyncCoordinatorTests: XCTestCase {
                         isSeeded: true
                     )
                 ],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [],
                 cursors: SyncChangeCursors(userSettings: 0, exercises: 31),
                 hasMore: SyncHasMore(userSettings: false, exercises: false)
             )
@@ -618,6 +630,9 @@ final class SyncCoordinatorTests: XCTestCase {
                         isSeeded: true
                     )
                 ],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [],
                 cursors: SyncChangeCursors(userSettings: 30, exercises: 31),
                 hasMore: SyncHasMore(userSettings: false, exercises: false)
             )
@@ -679,12 +694,18 @@ final class SyncCoordinatorTests: XCTestCase {
             SyncFetchChangesResponse(
                 userSettings: [remoteRecord],
                 exercises: [],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [],
                 cursors: SyncChangeCursors(userSettings: 30, exercises: 0),
                 hasMore: SyncHasMore(userSettings: false, exercises: false)
             ),
             SyncFetchChangesResponse(
                 userSettings: [remoteRecord],
                 exercises: [],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [],
                 cursors: SyncChangeCursors(userSettings: 30, exercises: 0),
                 hasMore: SyncHasMore(userSettings: false, exercises: false)
             )
@@ -932,6 +953,9 @@ final class SyncCoordinatorTests: XCTestCase {
                         isSeeded: false
                     )
                 ],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [],
                 cursors: SyncChangeCursors(userSettings: 0, exercises: 30),
                 hasMore: SyncHasMore(userSettings: false, exercises: false)
             )
@@ -984,6 +1008,9 @@ final class SyncCoordinatorTests: XCTestCase {
                         isSeeded: false
                     )
                 ],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [],
                 cursors: SyncChangeCursors(userSettings: 0, exercises: 30),
                 hasMore: SyncHasMore(userSettings: false, exercises: false)
             )
@@ -1032,6 +1059,9 @@ final class SyncCoordinatorTests: XCTestCase {
                         isSeeded: false
                     )
                 ],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [],
                 cursors: SyncChangeCursors(userSettings: 0, exercises: 45),
                 hasMore: SyncHasMore(userSettings: false, exercises: false)
             )
@@ -1077,6 +1107,9 @@ final class SyncCoordinatorTests: XCTestCase {
                     )
                 ],
                 exercises: [],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [],
                 cursors: SyncChangeCursors(userSettings: 45, exercises: 0),
                 hasMore: SyncHasMore(userSettings: false, exercises: false)
             )
@@ -1118,6 +1151,9 @@ final class SyncCoordinatorTests: XCTestCase {
                     )
                 ],
                 exercises: [],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [],
                 cursors: SyncChangeCursors(userSettings: 25, exercises: 0),
                 hasMore: SyncHasMore(userSettings: false, exercises: false)
             )
@@ -1138,12 +1174,18 @@ final class SyncCoordinatorTests: XCTestCase {
             SyncFetchChangesResponse(
                 userSettings: [],
                 exercises: [],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [],
                 cursors: SyncChangeCursors(userSettings: 10, exercises: 20),
                 hasMore: SyncHasMore(userSettings: false, exercises: true)
             ),
             SyncFetchChangesResponse(
                 userSettings: [],
                 exercises: [],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [],
                 cursors: SyncChangeCursors(userSettings: 10, exercises: 40),
                 hasMore: SyncHasMore(userSettings: false, exercises: false)
             )
@@ -1194,6 +1236,9 @@ final class SyncCoordinatorTests: XCTestCase {
                         isSeeded: false
                     )
                 ],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [],
                 cursors: SyncChangeCursors(userSettings: 0, exercises: 30),
                 hasMore: SyncHasMore(userSettings: false, exercises: false)
             )
@@ -1273,15 +1318,24 @@ final class SyncCoordinatorTests: XCTestCase {
 final class FakeSyncClient: SyncClient, @unchecked Sendable {
     var upsertedSettings: [UserSettingsSyncPayload] = []
     var upsertedExercises: [ExerciseSyncPayload] = []
+    var upsertedWorkoutSessions: [WorkoutSessionSyncPayload] = []
+    var upsertedLoggedExercises: [LoggedExerciseSyncPayload] = []
+    var upsertedLoggedSets: [LoggedSetSyncPayload] = []
     var tombstones: [(SyncEntityKind, UUID, Date)] = []
     var fetchRequests: [(cursors: SyncChangeCursors, limit: Int)] = []
     var userSettingsMutationResults: [SyncMutationResult] = []
     var exerciseMutationResults: [SyncMutationResult] = []
+    var workoutSessionMutationResults: [SyncMutationResult] = []
+    var loggedExerciseMutationResults: [SyncMutationResult] = []
+    var loggedSetMutationResults: [SyncMutationResult] = []
     var tombstoneResults: [SyncMutationResult] = []
     var fetchResponses: [SyncFetchChangesResponse] = []
     var fetchResponse = SyncFetchChangesResponse(
         userSettings: [],
         exercises: [],
+        workoutSessions: [],
+        loggedExercises: [],
+        loggedSets: [],
         cursors: SyncChangeCursors(userSettings: 0, exercises: 0),
         hasMore: SyncHasMore(userSettings: false, exercises: false)
     )
@@ -1303,6 +1357,33 @@ final class FakeSyncClient: SyncClient, @unchecked Sendable {
         upsertedExercises.append(record)
         if !exerciseMutationResults.isEmpty {
             return exerciseMutationResults.removeFirst()
+        }
+        return SyncMutationResult(status: "updated", serverUpdatedAt: 1)
+    }
+
+    func upsertWorkoutSession(_ record: WorkoutSessionSyncPayload) async throws -> SyncMutationResult {
+        if let error { throw error }
+        upsertedWorkoutSessions.append(record)
+        if !workoutSessionMutationResults.isEmpty {
+            return workoutSessionMutationResults.removeFirst()
+        }
+        return SyncMutationResult(status: "updated", serverUpdatedAt: 1)
+    }
+
+    func upsertLoggedExercise(_ record: LoggedExerciseSyncPayload) async throws -> SyncMutationResult {
+        if let error { throw error }
+        upsertedLoggedExercises.append(record)
+        if !loggedExerciseMutationResults.isEmpty {
+            return loggedExerciseMutationResults.removeFirst()
+        }
+        return SyncMutationResult(status: "updated", serverUpdatedAt: 1)
+    }
+
+    func upsertLoggedSet(_ record: LoggedSetSyncPayload) async throws -> SyncMutationResult {
+        if let error { throw error }
+        upsertedLoggedSets.append(record)
+        if !loggedSetMutationResults.isEmpty {
+            return loggedSetMutationResults.removeFirst()
         }
         return SyncMutationResult(status: "updated", serverUpdatedAt: 1)
     }

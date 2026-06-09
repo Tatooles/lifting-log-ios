@@ -25,6 +25,27 @@ struct ConvexSyncClient: SyncClient, @unchecked Sendable {
         )
     }
 
+    func upsertWorkoutSession(_ record: WorkoutSessionSyncPayload) async throws -> SyncMutationResult {
+        try await client.mutation(
+            "sync:upsertWorkoutSession",
+            with: ConvexSyncArgumentMapper.upsertWorkoutSessionArgs(record)
+        )
+    }
+
+    func upsertLoggedExercise(_ record: LoggedExerciseSyncPayload) async throws -> SyncMutationResult {
+        try await client.mutation(
+            "sync:upsertLoggedExercise",
+            with: ConvexSyncArgumentMapper.upsertLoggedExerciseArgs(record)
+        )
+    }
+
+    func upsertLoggedSet(_ record: LoggedSetSyncPayload) async throws -> SyncMutationResult {
+        try await client.mutation(
+            "sync:upsertLoggedSet",
+            with: ConvexSyncArgumentMapper.upsertLoggedSetArgs(record)
+        )
+    }
+
     func tombstone(entityKind: SyncEntityKind, clientId: UUID, deletedAt: Date) async throws -> SyncMutationResult {
         return try await client.mutation(
             "sync:tombstone",
@@ -38,7 +59,7 @@ struct ConvexSyncClient: SyncClient, @unchecked Sendable {
 
     func fetchChanges(cursors: SyncChangeCursors, limit: Int) async throws -> SyncFetchChangesResponse {
         let publisher = client.subscribe(
-            to: "sync:fetchSettingsExerciseChanges",
+            to: "sync:fetchChanges",
             with: ConvexSyncArgumentMapper.fetchChangesArgs(cursors: cursors, limit: limit),
             yielding: SyncFetchChangesResponse.self
         )
@@ -58,6 +79,18 @@ enum ConvexSyncArgumentMapper {
 
     static func upsertExerciseArgs(_ record: ExerciseSyncPayload) -> [String: ConvexEncodable?] {
         ["record": exerciseRecord(record)]
+    }
+
+    static func upsertWorkoutSessionArgs(_ record: WorkoutSessionSyncPayload) -> [String: ConvexEncodable?] {
+        ["record": workoutSessionRecord(record)]
+    }
+
+    static func upsertLoggedExerciseArgs(_ record: LoggedExerciseSyncPayload) -> [String: ConvexEncodable?] {
+        ["record": loggedExerciseRecord(record)]
+    }
+
+    static func upsertLoggedSetArgs(_ record: LoggedSetSyncPayload) -> [String: ConvexEncodable?] {
+        ["record": loggedSetRecord(record)]
     }
 
     static func fetchChangesArgs(cursors: SyncChangeCursors, limit: Int) -> [String: ConvexEncodable?] {
@@ -91,6 +124,65 @@ enum ConvexSyncArgumentMapper {
             "notes": record.notes,
             "isArchived": record.isArchived,
             "isSeeded": record.isSeeded,
+        ]
+    }
+
+    static func workoutSessionRecord(_ record: WorkoutSessionSyncPayload) -> [String: ConvexEncodable?] {
+        [
+            "clientId": record.clientId,
+            "createdAt": record.createdAt,
+            "updatedAt": record.updatedAt,
+            "deletedAt": record.deletedAt,
+            "title": record.title,
+            "startedAt": record.startedAt,
+            "endedAt": record.endedAt,
+            "durationSeconds": Double(record.durationSeconds),
+            "notes": record.notes,
+            "referenceNotes": record.referenceNotes,
+            "statusRaw": record.statusRaw,
+            "sourceRaw": record.sourceRaw,
+            "sourceSessionID": record.sourceSessionID,
+            "healthLinkID": record.healthLinkID,
+        ]
+    }
+
+    static func loggedExerciseRecord(_ record: LoggedExerciseSyncPayload) -> [String: ConvexEncodable?] {
+        [
+            "clientId": record.clientId,
+            "createdAt": record.createdAt,
+            "updatedAt": record.updatedAt,
+            "deletedAt": record.deletedAt,
+            "sessionClientId": record.sessionClientId,
+            "exerciseClientId": record.exerciseClientId,
+            "orderIndex": Double(record.orderIndex),
+            "exerciseSnapshotName": record.exerciseSnapshotName,
+            "exerciseSnapshotEquipmentRaw": record.exerciseSnapshotEquipmentRaw,
+            "exerciseSnapshotPrimaryMuscleGroupRaw": record.exerciseSnapshotPrimaryMuscleGroupRaw,
+            "hasSnapshotMetadata": record.hasSnapshotMetadata,
+            "notes": record.notes,
+            "referenceNotes": record.referenceNotes,
+        ]
+    }
+
+    static func loggedSetRecord(_ record: LoggedSetSyncPayload) -> [String: ConvexEncodable?] {
+        [
+            "clientId": record.clientId,
+            "createdAt": record.createdAt,
+            "updatedAt": record.updatedAt,
+            "deletedAt": record.deletedAt,
+            "loggedExerciseClientId": record.loggedExerciseClientId,
+            "orderIndex": Double(record.orderIndex),
+            "weight": record.weight,
+            "reps": record.reps.map(Double.init),
+            "rpe": record.rpe,
+            "placeholderWeight": record.placeholderWeight,
+            "placeholderReps": record.placeholderReps.map(Double.init),
+            "placeholderRPE": record.placeholderRPE,
+            "kindRaw": record.kindRaw,
+            "isCompleted": record.isCompleted,
+            "completedAt": record.completedAt,
+            "notes": record.notes,
+            "healthLinkID": record.healthLinkID,
         ]
     }
 
