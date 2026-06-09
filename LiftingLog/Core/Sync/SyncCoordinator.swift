@@ -2,12 +2,12 @@ import Foundation
 import SwiftData
 
 @MainActor
-final class SettingsExerciseSyncCoordinator {
-    private let client: any SettingsExerciseSyncClient & Sendable
+final class SyncCoordinator {
+    private let client: any SyncClient & Sendable
     private let recorder = SyncOutboxRecorder()
     private var isRunning = false
 
-    init(client: any SettingsExerciseSyncClient & Sendable) {
+    init(client: any SyncClient & Sendable) {
         self.client = client
     }
 
@@ -260,7 +260,7 @@ final class SettingsExerciseSyncCoordinator {
                 return try await client.tombstone(entityKind: .userSettings, clientId: entry.entityID, deletedAt: fallbackTimestamp)
             }
             guard settings.syncOwnerTokenIdentifier == ownerTokenIdentifier else {
-                throw SettingsExerciseSyncCoordinatorError.ownerMismatch(entityKind: .userSettings, entityID: entry.entityID)
+                throw SyncCoordinatorError.ownerMismatch(entityKind: .userSettings, entityID: entry.entityID)
             }
             return try await client.upsertUserSettings(SyncPayloadMapper.userSettingsPayload(from: settings))
         case (.exercise, .create), (.exercise, .update):
@@ -268,20 +268,20 @@ final class SettingsExerciseSyncCoordinator {
                 return try await client.tombstone(entityKind: .exercise, clientId: entry.entityID, deletedAt: fallbackTimestamp)
             }
             guard exercise.syncOwnerTokenIdentifier == ownerTokenIdentifier else {
-                throw SettingsExerciseSyncCoordinatorError.ownerMismatch(entityKind: .exercise, entityID: entry.entityID)
+                throw SyncCoordinatorError.ownerMismatch(entityKind: .exercise, entityID: entry.entityID)
             }
             return try await client.upsertExercise(SyncPayloadMapper.exercisePayload(from: exercise))
         case (.userSettings, .delete):
             let settings = try findUserSettings(id: entry.entityID, context: context)
             if let settings, settings.syncOwnerTokenIdentifier != ownerTokenIdentifier {
-                throw SettingsExerciseSyncCoordinatorError.ownerMismatch(entityKind: .userSettings, entityID: entry.entityID)
+                throw SyncCoordinatorError.ownerMismatch(entityKind: .userSettings, entityID: entry.entityID)
             }
             let deletedAt = settings?.deletedAt ?? fallbackTimestamp
             return try await client.tombstone(entityKind: .userSettings, clientId: entry.entityID, deletedAt: deletedAt)
         case (.exercise, .delete):
             let exercise = try findExercise(id: entry.entityID, context: context)
             if let exercise, exercise.syncOwnerTokenIdentifier != ownerTokenIdentifier {
-                throw SettingsExerciseSyncCoordinatorError.ownerMismatch(entityKind: .exercise, entityID: entry.entityID)
+                throw SyncCoordinatorError.ownerMismatch(entityKind: .exercise, entityID: entry.entityID)
             }
             let deletedAt = exercise?.deletedAt ?? fallbackTimestamp
             return try await client.tombstone(entityKind: .exercise, clientId: entry.entityID, deletedAt: deletedAt)
@@ -614,7 +614,7 @@ final class SettingsExerciseSyncCoordinator {
     }
 }
 
-enum SettingsExerciseSyncCoordinatorError: LocalizedError {
+enum SyncCoordinatorError: LocalizedError {
     case ownerMismatch(entityKind: SyncEntityKind, entityID: UUID)
 
     var errorDescription: String? {

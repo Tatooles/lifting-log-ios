@@ -314,8 +314,8 @@ final class SyncOutboxIntegrationTests: XCTestCase {
     func testConfiguredSchedulerRunsRequestedSync() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
-        let client = FakeSettingsExerciseSyncClient()
-        let coordinator = SettingsExerciseSyncCoordinator(client: client)
+        let client = FakeSyncClient()
+        let coordinator = SyncCoordinator(client: client)
         let scheduler = SyncScheduler(coordinator: coordinator, modelContext: context)
         scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
         let fetchCompleted = expectation(description: "scheduler runs sync fetch")
@@ -336,7 +336,7 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         let context = container.mainContext
         try SeedDataService.seedIfNeeded(context: context, ownerTokenIdentifier: "issuer|owner_a")
 
-        let scheduler = SyncScheduler(coordinator: SettingsExerciseSyncCoordinator(client: FakeSettingsExerciseSyncClient()), modelContext: context)
+        let scheduler = SyncScheduler(coordinator: SyncCoordinator(client: FakeSyncClient()), modelContext: context)
         scheduler.currentOwnerTokenIdentifier = "issuer|owner_b"
 
         scheduler.seedDefaultsForCurrentOwner()
@@ -360,7 +360,7 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         let context = container.mainContext
         try SeedDataService.seedIfNeeded(context: context)
 
-        let scheduler = SyncScheduler(coordinator: SettingsExerciseSyncCoordinator(client: FakeSettingsExerciseSyncClient()), modelContext: context)
+        let scheduler = SyncScheduler(coordinator: SyncCoordinator(client: FakeSyncClient()), modelContext: context)
         scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
 
         scheduler.seedDefaultsForCurrentOwner()
@@ -396,7 +396,7 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         state.hasBootstrappedSettingsExercises = true
         try context.save()
 
-        let scheduler = SyncScheduler(coordinator: SettingsExerciseSyncCoordinator(client: FakeSettingsExerciseSyncClient()), modelContext: context)
+        let scheduler = SyncScheduler(coordinator: SyncCoordinator(client: FakeSyncClient()), modelContext: context)
         scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
 
         scheduler.seedDefaultsForCurrentOwner()
@@ -420,7 +420,7 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         let context = container.mainContext
         try SeedDataService.seedIfNeeded(context: context, ownerTokenIdentifier: "issuer|owner_a")
 
-        let scheduler = SyncScheduler(coordinator: SettingsExerciseSyncCoordinator(client: FakeSettingsExerciseSyncClient()), modelContext: context)
+        let scheduler = SyncScheduler(coordinator: SyncCoordinator(client: FakeSyncClient()), modelContext: context)
         scheduler.currentOwnerTokenIdentifier = nil
 
         scheduler.seedDefaultsForLocalMode()
@@ -444,8 +444,8 @@ final class SyncOutboxIntegrationTests: XCTestCase {
     func testSchedulerQueuesRequestDuringActiveSync() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
-        let client = FakeSettingsExerciseSyncClient()
-        let coordinator = SettingsExerciseSyncCoordinator(client: client)
+        let client = FakeSyncClient()
+        let coordinator = SyncCoordinator(client: client)
         let scheduler = SyncScheduler(coordinator: coordinator, modelContext: context)
         scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
         let fetchCompleted = expectation(description: "scheduler runs queued sync fetch")
@@ -487,8 +487,8 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         )
         try context.save()
 
-        let client = FakeSettingsExerciseSyncClient()
-        let coordinator = SettingsExerciseSyncCoordinator(client: client)
+        let client = FakeSyncClient()
+        let coordinator = SyncCoordinator(client: client)
         let scheduler = SyncScheduler(coordinator: coordinator, modelContext: context)
         scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
         let fetchCompleted = expectation(description: "initial old-owner pull runs")

@@ -1,6 +1,6 @@
 import Foundation
 
-protocol SettingsExerciseSyncClient {
+protocol SyncClient {
     func upsertUserSettings(_ record: UserSettingsSyncPayload) async throws -> SyncMutationResult
     func upsertExercise(_ record: ExerciseSyncPayload) async throws -> SyncMutationResult
     func tombstone(entityKind: SyncEntityKind, clientId: UUID, deletedAt: Date) async throws -> SyncMutationResult

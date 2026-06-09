@@ -3,7 +3,7 @@ import XCTest
 @testable import LiftingLog
 
 @MainActor
-final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
+final class SyncCoordinatorTests: XCTestCase {
     func testFirstRunClaimsUnownedSettingsExercisesAndOutboxEntries() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
@@ -26,7 +26,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         )
         try context.save()
 
-        let coordinator = SettingsExerciseSyncCoordinator(client: FakeSettingsExerciseSyncClient())
+        let coordinator = SyncCoordinator(client: FakeSyncClient())
         try coordinator.prepareForSync(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         let entries = try context.fetch(FetchDescriptor<SyncOutboxEntry>())
@@ -55,7 +55,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         context.insert(exercise)
         try context.save()
 
-        let coordinator = SettingsExerciseSyncCoordinator(client: FakeSettingsExerciseSyncClient())
+        let coordinator = SyncCoordinator(client: FakeSyncClient())
         try coordinator.prepareForSync(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         XCTAssertNil(exercise.syncOwnerTokenIdentifier)
@@ -89,7 +89,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         )
         try context.save()
 
-        let coordinator = SettingsExerciseSyncCoordinator(client: FakeSettingsExerciseSyncClient())
+        let coordinator = SyncCoordinator(client: FakeSyncClient())
         try coordinator.prepareForSync(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         let entry = try XCTUnwrap(context.fetch(FetchDescriptor<SyncOutboxEntry>()).first)
@@ -110,7 +110,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         context.insert(exercise)
         try context.save()
 
-        let coordinator = SettingsExerciseSyncCoordinator(client: FakeSettingsExerciseSyncClient())
+        let coordinator = SyncCoordinator(client: FakeSyncClient())
         try coordinator.prepareForSync(ownerTokenIdentifier: "issuer|owner_b", context: context)
 
         XCTAssertEqual(exercise.syncOwnerTokenIdentifier, "issuer|owner_a")
@@ -131,7 +131,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         context.insert(entry)
         try context.save()
 
-        let coordinator = SettingsExerciseSyncCoordinator(client: FakeSettingsExerciseSyncClient())
+        let coordinator = SyncCoordinator(client: FakeSyncClient())
         try coordinator.prepareForSync(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         XCTAssertEqual(entry.status, .pending)
@@ -159,7 +159,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         context.insert(entry)
         try context.save()
 
-        let coordinator = SettingsExerciseSyncCoordinator(client: FakeSettingsExerciseSyncClient())
+        let coordinator = SyncCoordinator(client: FakeSyncClient())
         try coordinator.prepareForSync(ownerTokenIdentifier: "issuer|owner_b", context: context)
 
         XCTAssertEqual(exercise.syncOwnerTokenIdentifier, "issuer|owner_a")
@@ -184,8 +184,8 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         try recorder.recordCreate(entityKind: .exercise, entityID: exercise.id, ownerTokenIdentifier: "issuer|owner_a", context: context, now: Date(timeIntervalSince1970: 100))
         try context.save()
 
-        let client = FakeSettingsExerciseSyncClient()
-        let coordinator = SettingsExerciseSyncCoordinator(client: client)
+        let client = FakeSyncClient()
+        let coordinator = SyncCoordinator(client: client)
         try await coordinator.run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         XCTAssertEqual(client.upsertedSettings.count, 1)
@@ -218,8 +218,8 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         context.insert(squat)
         try context.save()
 
-        let firstClient = FakeSettingsExerciseSyncClient()
-        try await SettingsExerciseSyncCoordinator(client: firstClient).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+        let firstClient = FakeSyncClient()
+        try await SyncCoordinator(client: firstClient).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         let state = try XCTUnwrap(context.fetch(FetchDescriptor<SyncCursorState>()).first)
         XCTAssertTrue(state.hasBootstrappedSettingsExercises)
@@ -230,8 +230,8 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         )
         XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
 
-        let secondClient = FakeSettingsExerciseSyncClient()
-        try await SettingsExerciseSyncCoordinator(client: secondClient).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+        let secondClient = FakeSyncClient()
+        try await SyncCoordinator(client: secondClient).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         XCTAssertTrue(secondClient.upsertedSettings.isEmpty)
         XCTAssertTrue(secondClient.upsertedExercises.isEmpty)
@@ -272,7 +272,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         context.insert(squat)
         try context.save()
 
-        let client = FakeSettingsExerciseSyncClient()
+        let client = FakeSyncClient()
         client.fetchResponses = [
             SyncFetchChangesResponse(
                 userSettings: [
@@ -326,7 +326,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
             )
         ]
 
-        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         let syncedSettings = try context.fetch(FetchDescriptor<UserSettings>())
         let syncedExercises = try context.fetch(FetchDescriptor<Exercise>())
@@ -363,7 +363,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         context.insert(bench)
         try context.save()
 
-        let client = FakeSettingsExerciseSyncClient()
+        let client = FakeSyncClient()
         client.fetchResponses = [
             SyncFetchChangesResponse(
                 userSettings: [
@@ -401,7 +401,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
             )
         ]
 
-        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
 
         let syncedSettings = try context.fetch(FetchDescriptor<UserSettings>())
         let syncedExercises = try context.fetch(FetchDescriptor<Exercise>())
@@ -432,7 +432,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         context.insert(bench)
         try context.save()
 
-        let client = FakeSettingsExerciseSyncClient()
+        let client = FakeSyncClient()
         client.fetchResponses = [
             SyncFetchChangesResponse(
                 userSettings: [],
@@ -459,7 +459,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
             )
         ]
 
-        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         let syncedExercises = try context.fetch(FetchDescriptor<Exercise>())
         let syncedExercise = try XCTUnwrap(syncedExercises.first)
@@ -499,7 +499,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         )
         try context.save()
 
-        let client = FakeSettingsExerciseSyncClient()
+        let client = FakeSyncClient()
         client.fetchResponses = [
             SyncFetchChangesResponse(
                 userSettings: [],
@@ -526,7 +526,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
             )
         ]
 
-        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         let syncedExercises = try context.fetch(FetchDescriptor<Exercise>())
         let syncedExercise = try XCTUnwrap(syncedExercises.first)
@@ -585,7 +585,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         )
         try context.save()
 
-        let client = FakeSettingsExerciseSyncClient()
+        let client = FakeSyncClient()
         client.fetchResponses = [
             SyncFetchChangesResponse(
                 userSettings: [
@@ -623,7 +623,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
             )
         ]
 
-        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         let syncedSettings = try context.fetch(FetchDescriptor<UserSettings>())
         let syncedExercises = try context.fetch(FetchDescriptor<Exercise>())
@@ -671,7 +671,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
             defaultRestTimerSeconds: 120,
             hasCompletedOnboarding: true
         )
-        let client = FakeSettingsExerciseSyncClient()
+        let client = FakeSyncClient()
         client.userSettingsMutationResults = [
             SyncMutationResult(status: "ignored_stale", serverUpdatedAt: 30)
         ]
@@ -690,7 +690,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
             )
         ]
 
-        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         let syncedSettings = try XCTUnwrap(context.fetch(FetchDescriptor<UserSettings>()).first)
         XCTAssertEqual(syncedSettings.id, remoteSettingsID)
@@ -718,8 +718,8 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         context.insert(exercise)
         try context.save()
 
-        let client = FakeSettingsExerciseSyncClient()
-        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+        let client = FakeSyncClient()
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         XCTAssertTrue(client.upsertedExercises.isEmpty)
         XCTAssertEqual(exercise.syncOwnerTokenIdentifier, "issuer|owner_b")
@@ -741,9 +741,9 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         try SyncOutboxRecorder().recordUpdate(entityKind: .exercise, entityID: exercise.id, ownerTokenIdentifier: "issuer|owner_a", context: context, now: Date(timeIntervalSince1970: 100))
         try context.save()
 
-        let client = FakeSettingsExerciseSyncClient()
+        let client = FakeSyncClient()
         client.error = PushError()
-        let coordinator = SettingsExerciseSyncCoordinator(client: client)
+        let coordinator = SyncCoordinator(client: client)
         try await coordinator.run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         let entry = try XCTUnwrap(context.fetch(FetchDescriptor<SyncOutboxEntry>()).first)
@@ -776,8 +776,8 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         context.insert(entry)
         try context.save()
 
-        let client = FakeSettingsExerciseSyncClient()
-        let coordinator = SettingsExerciseSyncCoordinator(client: client)
+        let client = FakeSyncClient()
+        let coordinator = SyncCoordinator(client: client)
         try await coordinator.run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         XCTAssertEqual(client.upsertedExercises.map { $0.clientId }, [exercise.id.uuidString.lowercased()])
@@ -799,8 +799,8 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         try SyncOutboxRecorder().recordUpdate(entityKind: .exercise, entityID: exercise.id, ownerTokenIdentifier: "issuer|owner_a", context: context, now: Date(timeIntervalSince1970: 100))
         try context.save()
 
-        let client = FakeSettingsExerciseSyncClient()
-        let coordinator = SettingsExerciseSyncCoordinator(client: client)
+        let client = FakeSyncClient()
+        let coordinator = SyncCoordinator(client: client)
         try await coordinator.run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         XCTAssertEqual(client.upsertedExercises.count, 0)
@@ -816,8 +816,8 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         try SyncOutboxRecorder().recordUpdate(entityKind: .exercise, entityID: exerciseID, ownerTokenIdentifier: "issuer|owner_a", context: context, now: Date(timeIntervalSince1970: 100))
         try context.save()
 
-        let client = FakeSettingsExerciseSyncClient()
-        let coordinator = SettingsExerciseSyncCoordinator(client: client)
+        let client = FakeSyncClient()
+        let coordinator = SyncCoordinator(client: client)
         try await coordinator.run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         XCTAssertEqual(client.tombstones.count, 1)
@@ -835,9 +835,9 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         try SyncOutboxRecorder().recordUpdate(entityKind: .exercise, entityID: exerciseID, ownerTokenIdentifier: "issuer|owner_a", context: context, now: Date(timeIntervalSince1970: 100))
         try context.save()
 
-        let firstClient = FakeSettingsExerciseSyncClient()
+        let firstClient = FakeSyncClient()
         firstClient.error = PushError()
-        let coordinator = SettingsExerciseSyncCoordinator(client: firstClient)
+        let coordinator = SyncCoordinator(client: firstClient)
         try await coordinator.run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         let failedEntry = try XCTUnwrap(context.fetch(FetchDescriptor<SyncOutboxEntry>()).first)
@@ -845,8 +845,8 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         XCTAssertEqual(failedEntry.createdAt, Date(timeIntervalSince1970: 100))
         XCTAssertNotEqual(failedEntry.updatedAt, Date(timeIntervalSince1970: 100))
 
-        let retryClient = FakeSettingsExerciseSyncClient()
-        try await SettingsExerciseSyncCoordinator(client: retryClient).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+        let retryClient = FakeSyncClient()
+        try await SyncCoordinator(client: retryClient).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         XCTAssertEqual(retryClient.tombstones.count, 1)
         XCTAssertEqual(retryClient.tombstones.first?.0, .exercise)
@@ -866,8 +866,8 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         try recorder.recordDelete(entityKind: .exercise, entityID: exerciseID, ownerTokenIdentifier: "issuer|owner_a", context: context, now: Date(timeIntervalSince1970: 200))
         try context.save()
 
-        let client = FakeSettingsExerciseSyncClient()
-        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+        let client = FakeSyncClient()
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         XCTAssertEqual(client.tombstones.count, 1)
         XCTAssertEqual(client.tombstones.first?.0, .exercise)
@@ -888,17 +888,17 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         try recorder.recordDelete(entityKind: .exercise, entityID: exerciseID, ownerTokenIdentifier: "issuer|owner_a", context: context, now: Date(timeIntervalSince1970: 200))
         try context.save()
 
-        let firstClient = FakeSettingsExerciseSyncClient()
+        let firstClient = FakeSyncClient()
         firstClient.error = PushError()
-        try await SettingsExerciseSyncCoordinator(client: firstClient).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+        try await SyncCoordinator(client: firstClient).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         let failedEntry = try XCTUnwrap(context.fetch(FetchDescriptor<SyncOutboxEntry>()).first)
         XCTAssertEqual(failedEntry.status, .failed)
         XCTAssertEqual(failedEntry.createdAt, Date(timeIntervalSince1970: 200))
         XCTAssertNotEqual(failedEntry.updatedAt, Date(timeIntervalSince1970: 200))
 
-        let retryClient = FakeSettingsExerciseSyncClient()
-        try await SettingsExerciseSyncCoordinator(client: retryClient).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+        let retryClient = FakeSyncClient()
+        try await SyncCoordinator(client: retryClient).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         XCTAssertEqual(retryClient.tombstones.count, 1)
         XCTAssertEqual(retryClient.tombstones.first?.0, .exercise)
@@ -910,7 +910,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
     func testRunPullsRemoteExerciseAndAdvancesCursor() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
-        let client = FakeSettingsExerciseSyncClient()
+        let client = FakeSyncClient()
         client.fetchResponses = [
             SyncFetchChangesResponse(
                 userSettings: [],
@@ -937,7 +937,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
             )
         ]
 
-        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         let exercises = try context.fetch(FetchDescriptor<Exercise>())
         let cursor = try XCTUnwrap(context.fetch(FetchDescriptor<SyncCursorState>()).first)
@@ -962,7 +962,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         context.insert(exercise)
         try context.save()
 
-        let client = FakeSettingsExerciseSyncClient()
+        let client = FakeSyncClient()
         client.fetchResponses = [
             SyncFetchChangesResponse(
                 userSettings: [],
@@ -989,7 +989,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
             )
         ]
 
-        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         XCTAssertEqual(exercise.name, "Local Name")
     }
@@ -1010,7 +1010,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         context.insert(exercise)
         try context.save()
 
-        let client = FakeSettingsExerciseSyncClient()
+        let client = FakeSyncClient()
         client.fetchResponses = [
             SyncFetchChangesResponse(
                 userSettings: [],
@@ -1037,7 +1037,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
             )
         ]
 
-        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         XCTAssertEqual(exercise.name, "Deleted Local")
         XCTAssertEqual(exercise.categoryRaw, "strength")
@@ -1061,7 +1061,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         context.insert(settings)
         try context.save()
 
-        let client = FakeSettingsExerciseSyncClient()
+        let client = FakeSyncClient()
         client.fetchResponses = [
             SyncFetchChangesResponse(
                 userSettings: [
@@ -1082,7 +1082,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
             )
         ]
 
-        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         XCTAssertEqual(settings.weightUnitRaw, "pounds")
         XCTAssertEqual(settings.defaultRestTimerSeconds, 90)
@@ -1102,7 +1102,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         context.insert(settings)
         try context.save()
 
-        let client = FakeSettingsExerciseSyncClient()
+        let client = FakeSyncClient()
         client.fetchResponses = [
             SyncFetchChangesResponse(
                 userSettings: [
@@ -1123,7 +1123,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
             )
         ]
 
-        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         XCTAssertEqual(settings.weightUnit, .kilograms)
         XCTAssertEqual(settings.defaultRestTimerSeconds, 150)
@@ -1133,7 +1133,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
     func testRunPullsUntilNoMoreAndUsesAdvancedCursors() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
-        let client = FakeSettingsExerciseSyncClient()
+        let client = FakeSyncClient()
         client.fetchResponses = [
             SyncFetchChangesResponse(
                 userSettings: [],
@@ -1149,7 +1149,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
             )
         ]
 
-        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         let cursor = try XCTUnwrap(context.fetch(FetchDescriptor<SyncCursorState>()).first)
         XCTAssertEqual(client.fetchRequests.map(\.cursors.exercises), [0, 20])
@@ -1172,7 +1172,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         context.insert(exercise)
         try context.save()
 
-        let client = FakeSettingsExerciseSyncClient()
+        let client = FakeSyncClient()
         client.fetchResponses = [
             SyncFetchChangesResponse(
                 userSettings: [],
@@ -1199,7 +1199,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
             )
         ]
 
-        try await SettingsExerciseSyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         XCTAssertEqual(exercise.name, "Other Owner Name")
         XCTAssertEqual(exercise.syncOwnerTokenIdentifier, "issuer|owner_b")
@@ -1222,8 +1222,8 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         try SyncOutboxRecorder().recordDelete(entityKind: .exercise, entityID: exercise.id, ownerTokenIdentifier: "issuer|owner_a", context: context, now: Date(timeIntervalSince1970: 130))
         try context.save()
 
-        let client = FakeSettingsExerciseSyncClient()
-        let coordinator = SettingsExerciseSyncCoordinator(client: client)
+        let client = FakeSyncClient()
+        let coordinator = SyncCoordinator(client: client)
         try await coordinator.run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         XCTAssertTrue(client.tombstones.isEmpty)
@@ -1257,9 +1257,9 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
         try recorder.recordUpdate(entityKind: .exercise, entityID: pendingExercise.id, ownerTokenIdentifier: "issuer|owner_a", context: context, now: Date(timeIntervalSince1970: 200))
         try context.save()
 
-        let client = FakeSettingsExerciseSyncClient()
+        let client = FakeSyncClient()
         client.error = PushError()
-        let coordinator = SettingsExerciseSyncCoordinator(client: client)
+        let coordinator = SyncCoordinator(client: client)
         try await coordinator.run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         let entries = try context.fetch(FetchDescriptor<SyncOutboxEntry>())
@@ -1270,7 +1270,7 @@ final class SettingsExerciseSyncCoordinatorTests: XCTestCase {
     }
 }
 
-final class FakeSettingsExerciseSyncClient: SettingsExerciseSyncClient, @unchecked Sendable {
+final class FakeSyncClient: SyncClient, @unchecked Sendable {
     var upsertedSettings: [UserSettingsSyncPayload] = []
     var upsertedExercises: [ExerciseSyncPayload] = []
     var tombstones: [(SyncEntityKind, UUID, Date)] = []

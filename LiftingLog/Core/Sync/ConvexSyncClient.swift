@@ -2,7 +2,7 @@ import Combine
 import ConvexMobile
 import Foundation
 
-struct ConvexSettingsExerciseSyncClient: SettingsExerciseSyncClient, @unchecked Sendable {
+struct ConvexSyncClient: SyncClient, @unchecked Sendable {
     private let client: ConvexClientWithAuth<String>
 
     init(client: ConvexClientWithAuth<String>) {
@@ -47,7 +47,7 @@ struct ConvexSettingsExerciseSyncClient: SettingsExerciseSyncClient, @unchecked 
             return response
         }
 
-        throw ConvexSettingsExerciseSyncClientError.noFetchChangesValue
+        throw ConvexSyncClientError.noFetchChangesValue
     }
 }
 
@@ -105,7 +105,7 @@ enum ConvexSyncArgumentMapper {
     }
 }
 
-enum ConvexSettingsExerciseSyncClientError: LocalizedError {
+enum ConvexSyncClientError: LocalizedError {
     case noFetchChangesValue
 
     var errorDescription: String? {

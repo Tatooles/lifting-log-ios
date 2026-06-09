@@ -67,8 +67,8 @@ struct LiftingLogApp: App {
     private func configureSyncIfNeeded() {
         guard syncAuthTask == nil else { return }
 
-        let syncClient = ConvexSettingsExerciseSyncClient(client: convexClient)
-        let coordinator = SettingsExerciseSyncCoordinator(client: syncClient)
+        let syncClient = ConvexSyncClient(client: convexClient)
+        let coordinator = SyncCoordinator(client: syncClient)
         syncScheduler.configure(coordinator: coordinator, modelContext: modelContainer.mainContext)
 
         syncAuthTask = Task { @MainActor in
