@@ -673,6 +673,61 @@ final class SyncCoordinatorTests: XCTestCase {
         XCTAssertTrue(try context.fetch(FetchDescriptor<LoggedSet>()).isEmpty)
     }
 
+    func testPullStopsCurrentPaginationWhenLoggedSetParentIsMissingAndHasMore() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let owner = "issuer|owner_a"
+        let client = FakeSyncClient()
+        client.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [
+                    LoggedSetSyncRecord(
+                        clientId: "00000000-0000-0000-0000-000000006204",
+                        createdAt: 1,
+                        updatedAt: 2,
+                        deletedAt: nil,
+                        serverUpdatedAt: 50,
+                        loggedExerciseClientId: "00000000-0000-0000-0000-000000006203",
+                        orderIndex: 0,
+                        weight: 100,
+                        reps: 5,
+                        rpe: nil,
+                        placeholderWeight: nil,
+                        placeholderReps: nil,
+                        placeholderRPE: nil,
+                        kindRaw: "working",
+                        isCompleted: true,
+                        completedAt: nil,
+                        notes: "",
+                        healthLinkID: nil
+                    )
+                ],
+                cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 0, loggedExercises: 0, loggedSets: 50),
+                hasMore: SyncHasMore(userSettings: false, exercises: false, loggedSets: true)
+            ),
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [],
+                cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 0, loggedExercises: 0, loggedSets: 100),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            ),
+        ]
+
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
+
+        let state = try XCTUnwrap(context.fetch(FetchDescriptor<SyncCursorState>()).first)
+        XCTAssertEqual(client.fetchRequests.count, 1)
+        XCTAssertEqual(state.loggedSetsCursor, 0)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<LoggedSet>()).isEmpty)
+    }
+
     func testFirstRunAdoptsOwnerScopedDefaultsBeforeBootstrapping() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

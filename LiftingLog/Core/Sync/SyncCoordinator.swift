@@ -418,27 +418,29 @@ final class SyncCoordinator {
             try apply(userSettingsRecords: response.userSettings, ownerTokenIdentifier: ownerTokenIdentifier, context: context)
             try apply(exerciseRecords: response.exercises, ownerTokenIdentifier: ownerTokenIdentifier, context: context)
             let appliedWorkoutSessionCursor = try apply(workoutSessionRecords: response.workoutSessions, context: context)
-            let appliedLoggedExerciseCursor = try apply(loggedExerciseRecords: response.loggedExercises, context: context)
-            let appliedLoggedSetCursor = try apply(loggedSetRecords: response.loggedSets, context: context)
+            let loggedExerciseApplyResult = try apply(loggedExerciseRecords: response.loggedExercises, context: context)
+            let loggedSetApplyResult = try apply(loggedSetRecords: response.loggedSets, context: context)
 
             state.userSettingsCursor = max(state.userSettingsCursor, response.cursors.userSettings)
             state.exercisesCursor = max(state.exercisesCursor, response.cursors.exercises)
             if let appliedWorkoutSessionCursor {
                 state.workoutSessionsCursor = max(state.workoutSessionsCursor, appliedWorkoutSessionCursor)
             }
-            if let appliedLoggedExerciseCursor {
+            if let appliedLoggedExerciseCursor = loggedExerciseApplyResult.appliedCursor {
                 state.loggedExercisesCursor = max(state.loggedExercisesCursor, appliedLoggedExerciseCursor)
             }
-            if let appliedLoggedSetCursor {
+            if let appliedLoggedSetCursor = loggedSetApplyResult.appliedCursor {
                 state.loggedSetsCursor = max(state.loggedSetsCursor, appliedLoggedSetCursor)
             }
             try context.save()
 
-            hasMore = response.hasMore.userSettings
-                || response.hasMore.exercises
-                || response.hasMore.workoutSessions
-                || response.hasMore.loggedExercises
-                || response.hasMore.loggedSets
+            let deferredWorkoutChild = loggedExerciseApplyResult.deferredMissingParent || loggedSetApplyResult.deferredMissingParent
+            hasMore = !deferredWorkoutChild
+                && (response.hasMore.userSettings
+                    || response.hasMore.exercises
+                    || response.hasMore.workoutSessions
+                    || response.hasMore.loggedExercises
+                    || response.hasMore.loggedSets)
         }
 
         return summary
@@ -685,7 +687,7 @@ final class SyncCoordinator {
         session.healthLinkID = record.healthLinkID.flatMap(UUID.init(uuidString:))
     }
 
-    private func apply(loggedExerciseRecords records: [LoggedExerciseSyncRecord], context: ModelContext) throws -> Double? {
+    private func apply(loggedExerciseRecords records: [LoggedExerciseSyncRecord], context: ModelContext) throws -> WorkoutChildApplyResult {
         var maxAppliedServerUpdatedAt: Double?
         for record in records {
             guard let id = UUID(uuidString: record.clientId) else {
@@ -694,7 +696,10 @@ final class SyncCoordinator {
             }
             guard let sessionID = UUID(uuidString: record.sessionClientId),
                   let session = try findWorkoutSession(id: sessionID, context: context) else {
-                break
+                return WorkoutChildApplyResult(
+                    appliedCursor: maxAppliedServerUpdatedAt,
+                    deferredMissingParent: true
+                )
             }
             let exercise = try record.exerciseClientId
                 .flatMap(UUID.init(uuidString:))
@@ -739,7 +744,7 @@ final class SyncCoordinator {
             }
             maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
         }
-        return maxAppliedServerUpdatedAt
+        return WorkoutChildApplyResult(appliedCursor: maxAppliedServerUpdatedAt)
     }
 
     private func apply(
@@ -765,7 +770,7 @@ final class SyncCoordinator {
         }
     }
 
-    private func apply(loggedSetRecords records: [LoggedSetSyncRecord], context: ModelContext) throws -> Double? {
+    private func apply(loggedSetRecords records: [LoggedSetSyncRecord], context: ModelContext) throws -> WorkoutChildApplyResult {
         var maxAppliedServerUpdatedAt: Double?
         for record in records {
             guard let id = UUID(uuidString: record.clientId) else {
@@ -774,7 +779,10 @@ final class SyncCoordinator {
             }
             guard let loggedExerciseID = UUID(uuidString: record.loggedExerciseClientId),
                   let loggedExercise = try findLoggedExercise(id: loggedExerciseID, context: context) else {
-                break
+                return WorkoutChildApplyResult(
+                    appliedCursor: maxAppliedServerUpdatedAt,
+                    deferredMissingParent: true
+                )
             }
             let incomingUpdatedAt = Date(timeIntervalSince1970: record.updatedAt)
             let incomingDeletedAt = record.deletedAt.map(Date.init(timeIntervalSince1970:))
@@ -820,7 +828,7 @@ final class SyncCoordinator {
             }
             maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
         }
-        return maxAppliedServerUpdatedAt
+        return WorkoutChildApplyResult(appliedCursor: maxAppliedServerUpdatedAt)
     }
 
     private func apply(_ record: LoggedSetSyncRecord, to set: LoggedSet, loggedExercise: LoggedExercise) {
@@ -971,6 +979,11 @@ private struct SyncPullSummary {
 private struct SyncPushResult {
     var didComplete: Bool
     var didPush: Bool
+}
+
+private struct WorkoutChildApplyResult {
+    var appliedCursor: Double?
+    var deferredMissingParent = false
 }
 
 private extension SyncEntityKind {
