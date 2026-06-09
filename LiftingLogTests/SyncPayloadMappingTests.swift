@@ -61,14 +61,20 @@ final class SyncPayloadMappingTests: XCTestCase {
         XCTAssertEqual(payload.deletedAt, 50)
     }
 
-    func testFetchChangesRequestIncludesZeroWorkoutGraphCursors() throws {
-        let cursors = SyncChangeCursors(userSettings: 10, exercises: 20)
+    func testFetchChangesRequestCarriesWorkoutGraphCursors() throws {
+        let cursors = SyncChangeCursors(
+            userSettings: 10,
+            exercises: 20,
+            workoutSessions: 30,
+            loggedExercises: 40,
+            loggedSets: 50
+        )
 
         XCTAssertEqual(cursors.userSettings, 10)
         XCTAssertEqual(cursors.exercises, 20)
-        XCTAssertEqual(cursors.workoutSessions, 0)
-        XCTAssertEqual(cursors.loggedExercises, 0)
-        XCTAssertEqual(cursors.loggedSets, 0)
+        XCTAssertEqual(cursors.workoutSessions, 30)
+        XCTAssertEqual(cursors.loggedExercises, 40)
+        XCTAssertEqual(cursors.loggedSets, 50)
     }
 
     func testWorkoutSessionPayloadMapsCompletedSessionFields() throws {
