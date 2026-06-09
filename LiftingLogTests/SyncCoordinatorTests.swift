@@ -506,6 +506,173 @@ final class SyncCoordinatorTests: XCTestCase {
         XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
     }
 
+    func testRunPullsFullWorkoutGraphIntoEmptyStore() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let owner = "issuer|owner_a"
+        let exerciseID = UUID(uuidString: "00000000-0000-0000-0000-000000006001")!
+        let sessionID = UUID(uuidString: "00000000-0000-0000-0000-000000006002")!
+        let loggedExerciseID = UUID(uuidString: "00000000-0000-0000-0000-000000006003")!
+        let setID = UUID(uuidString: "00000000-0000-0000-0000-000000006004")!
+        let client = FakeSyncClient()
+        client.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [
+                    ExerciseSyncRecord(
+                        clientId: exerciseID.uuidString.lowercased(),
+                        createdAt: 10,
+                        updatedAt: 20,
+                        deletedAt: nil,
+                        serverUpdatedAt: 30,
+                        seedIdentifier: nil,
+                        name: "Bench Press",
+                        categoryRaw: "strength",
+                        equipmentRaw: "barbell",
+                        primaryMuscleRaw: "Chest",
+                        primaryMuscleGroupRaw: "chest",
+                        notes: "",
+                        isArchived: false,
+                        isSeeded: false
+                    )
+                ],
+                workoutSessions: [
+                    WorkoutSessionSyncRecord(
+                        clientId: sessionID.uuidString.lowercased(),
+                        createdAt: 11,
+                        updatedAt: 21,
+                        deletedAt: nil,
+                        serverUpdatedAt: 31,
+                        title: "Push",
+                        startedAt: 100,
+                        endedAt: 200,
+                        durationSeconds: 100,
+                        notes: "Good",
+                        referenceNotes: nil,
+                        statusRaw: "completed",
+                        sourceRaw: "blank",
+                        sourceSessionID: nil,
+                        healthLinkID: nil
+                    )
+                ],
+                loggedExercises: [
+                    LoggedExerciseSyncRecord(
+                        clientId: loggedExerciseID.uuidString.lowercased(),
+                        createdAt: 12,
+                        updatedAt: 22,
+                        deletedAt: nil,
+                        serverUpdatedAt: 32,
+                        sessionClientId: sessionID.uuidString.lowercased(),
+                        exerciseClientId: exerciseID.uuidString.lowercased(),
+                        orderIndex: 0,
+                        exerciseSnapshotName: "Bench Press",
+                        exerciseSnapshotEquipmentRaw: "barbell",
+                        exerciseSnapshotPrimaryMuscleGroupRaw: "chest",
+                        hasSnapshotMetadata: true,
+                        notes: "Paused",
+                        referenceNotes: nil
+                    )
+                ],
+                loggedSets: [
+                    LoggedSetSyncRecord(
+                        clientId: setID.uuidString.lowercased(),
+                        createdAt: 13,
+                        updatedAt: 23,
+                        deletedAt: nil,
+                        serverUpdatedAt: 33,
+                        loggedExerciseClientId: loggedExerciseID.uuidString.lowercased(),
+                        orderIndex: 0,
+                        weight: 185,
+                        reps: 5,
+                        rpe: 8,
+                        placeholderWeight: nil,
+                        placeholderReps: nil,
+                        placeholderRPE: nil,
+                        kindRaw: "working",
+                        isCompleted: true,
+                        completedAt: 190,
+                        notes: "",
+                        healthLinkID: nil
+                    )
+                ],
+                cursors: SyncChangeCursors(
+                    userSettings: 0,
+                    exercises: 30,
+                    workoutSessions: 31,
+                    loggedExercises: 32,
+                    loggedSets: 33
+                ),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            )
+        ]
+
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
+
+        let fetchRequest = try XCTUnwrap(client.fetchRequests.first)
+        XCTAssertEqual(fetchRequest.cursors, SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 0, loggedExercises: 0, loggedSets: 0))
+        let sessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let session = try XCTUnwrap(sessions.first { $0.id == sessionID })
+        XCTAssertEqual(session.title, "Push")
+        XCTAssertEqual(session.status, .completed)
+        XCTAssertEqual(session.sortedLoggedExercises.count, 1)
+        let loggedExercise = try XCTUnwrap(session.sortedLoggedExercises.first)
+        XCTAssertEqual(loggedExercise.id, loggedExerciseID)
+        XCTAssertEqual(loggedExercise.exercise?.id, exerciseID)
+        XCTAssertEqual(loggedExercise.sortedSets.map(\.id), [setID])
+        XCTAssertEqual(loggedExercise.sortedSets.first?.weight, 185)
+
+        let state = try XCTUnwrap(context.fetch(FetchDescriptor<SyncCursorState>()).first)
+        XCTAssertEqual(state.exercisesCursor, 30)
+        XCTAssertEqual(state.workoutSessionsCursor, 31)
+        XCTAssertEqual(state.loggedExercisesCursor, 32)
+        XCTAssertEqual(state.loggedSetsCursor, 33)
+    }
+
+    func testPullDoesNotAdvanceLoggedSetCursorWhenParentLoggedExerciseIsMissing() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let owner = "issuer|owner_a"
+        let client = FakeSyncClient()
+        client.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [
+                    LoggedSetSyncRecord(
+                        clientId: "00000000-0000-0000-0000-000000006104",
+                        createdAt: 1,
+                        updatedAt: 2,
+                        deletedAt: nil,
+                        serverUpdatedAt: 50,
+                        loggedExerciseClientId: "00000000-0000-0000-0000-000000006103",
+                        orderIndex: 0,
+                        weight: 100,
+                        reps: 5,
+                        rpe: nil,
+                        placeholderWeight: nil,
+                        placeholderReps: nil,
+                        placeholderRPE: nil,
+                        kindRaw: "working",
+                        isCompleted: true,
+                        completedAt: nil,
+                        notes: "",
+                        healthLinkID: nil
+                    )
+                ],
+                cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 0, loggedExercises: 0, loggedSets: 50),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            )
+        ]
+
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
+
+        let state = try XCTUnwrap(context.fetch(FetchDescriptor<SyncCursorState>()).first)
+        XCTAssertEqual(state.loggedSetsCursor, 0)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<LoggedSet>()).isEmpty)
+    }
+
     func testFirstRunAdoptsOwnerScopedDefaultsBeforeBootstrapping() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

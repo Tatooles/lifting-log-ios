@@ -406,7 +406,10 @@ final class SyncCoordinator {
             let response = try await client.fetchChanges(
                 cursors: SyncChangeCursors(
                     userSettings: state.userSettingsCursor,
-                    exercises: state.exercisesCursor
+                    exercises: state.exercisesCursor,
+                    workoutSessions: state.workoutSessionsCursor,
+                    loggedExercises: state.loggedExercisesCursor,
+                    loggedSets: state.loggedSetsCursor
                 ),
                 limit: 100
             )
@@ -414,12 +417,28 @@ final class SyncCoordinator {
             summary.record(response)
             try apply(userSettingsRecords: response.userSettings, ownerTokenIdentifier: ownerTokenIdentifier, context: context)
             try apply(exerciseRecords: response.exercises, ownerTokenIdentifier: ownerTokenIdentifier, context: context)
+            let appliedWorkoutSessionCursor = try apply(workoutSessionRecords: response.workoutSessions, context: context)
+            let appliedLoggedExerciseCursor = try apply(loggedExerciseRecords: response.loggedExercises, context: context)
+            let appliedLoggedSetCursor = try apply(loggedSetRecords: response.loggedSets, context: context)
 
             state.userSettingsCursor = max(state.userSettingsCursor, response.cursors.userSettings)
             state.exercisesCursor = max(state.exercisesCursor, response.cursors.exercises)
+            if let appliedWorkoutSessionCursor {
+                state.workoutSessionsCursor = max(state.workoutSessionsCursor, appliedWorkoutSessionCursor)
+            }
+            if let appliedLoggedExerciseCursor {
+                state.loggedExercisesCursor = max(state.loggedExercisesCursor, appliedLoggedExerciseCursor)
+            }
+            if let appliedLoggedSetCursor {
+                state.loggedSetsCursor = max(state.loggedSetsCursor, appliedLoggedSetCursor)
+            }
             try context.save()
 
-            hasMore = response.hasMore.userSettings || response.hasMore.exercises
+            hasMore = response.hasMore.userSettings
+                || response.hasMore.exercises
+                || response.hasMore.workoutSessions
+                || response.hasMore.loggedExercises
+                || response.hasMore.loggedSets
         }
 
         return summary
@@ -598,6 +617,232 @@ final class SyncCoordinator {
         exercise.createdAt = Date(timeIntervalSince1970: record.createdAt)
         exercise.updatedAt = Date(timeIntervalSince1970: record.updatedAt)
         exercise.deletedAt = record.deletedAt.map(Date.init(timeIntervalSince1970:))
+    }
+
+    private func apply(workoutSessionRecords records: [WorkoutSessionSyncRecord], context: ModelContext) throws -> Double? {
+        var maxAppliedServerUpdatedAt: Double?
+        for record in records {
+            guard let id = UUID(uuidString: record.clientId) else {
+                maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
+                continue
+            }
+            let incomingUpdatedAt = Date(timeIntervalSince1970: record.updatedAt)
+            let incomingDeletedAt = record.deletedAt.map(Date.init(timeIntervalSince1970:))
+
+            if let session = try findWorkoutSession(id: id, context: context) {
+                guard SyncConflictResolver.decision(
+                    localUpdatedAt: session.updatedAt,
+                    localDeletedAt: session.deletedAt,
+                    incomingUpdatedAt: incomingUpdatedAt,
+                    incomingDeletedAt: incomingDeletedAt,
+                    allowsIncomingRestore: false
+                ) == .applyIncoming else {
+                    maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
+                    continue
+                }
+                apply(record, to: session)
+            } else {
+                guard incomingDeletedAt == nil else {
+                    maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
+                    continue
+                }
+                let session = WorkoutSession(
+                    id: id,
+                    title: record.title,
+                    startedAt: Date(timeIntervalSince1970: record.startedAt),
+                    endedAt: record.endedAt.map(Date.init(timeIntervalSince1970:)),
+                    durationSeconds: record.durationSeconds,
+                    notes: record.notes,
+                    status: WorkoutSessionStatus(rawValue: record.statusRaw) ?? .completed,
+                    source: WorkoutSource(rawValue: record.sourceRaw) ?? .blank,
+                    sourceSessionID: record.sourceSessionID.flatMap(UUID.init(uuidString:)),
+                    referenceNotes: record.referenceNotes,
+                    createdAt: Date(timeIntervalSince1970: record.createdAt),
+                    updatedAt: incomingUpdatedAt,
+                    deletedAt: incomingDeletedAt,
+                    healthLinkID: record.healthLinkID.flatMap(UUID.init(uuidString:))
+                )
+                context.insert(session)
+            }
+            maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
+        }
+        return maxAppliedServerUpdatedAt
+    }
+
+    private func apply(_ record: WorkoutSessionSyncRecord, to session: WorkoutSession) {
+        session.title = record.title
+        session.startedAt = Date(timeIntervalSince1970: record.startedAt)
+        session.endedAt = record.endedAt.map(Date.init(timeIntervalSince1970:))
+        session.durationSeconds = record.durationSeconds
+        session.notes = record.notes
+        session.referenceNotes = record.referenceNotes
+        session.statusRaw = record.statusRaw
+        session.sourceRaw = record.sourceRaw
+        session.sourceSessionID = record.sourceSessionID.flatMap(UUID.init(uuidString:))
+        session.createdAt = Date(timeIntervalSince1970: record.createdAt)
+        session.updatedAt = Date(timeIntervalSince1970: record.updatedAt)
+        session.deletedAt = record.deletedAt.map(Date.init(timeIntervalSince1970:))
+        session.healthLinkID = record.healthLinkID.flatMap(UUID.init(uuidString:))
+    }
+
+    private func apply(loggedExerciseRecords records: [LoggedExerciseSyncRecord], context: ModelContext) throws -> Double? {
+        var maxAppliedServerUpdatedAt: Double?
+        for record in records {
+            guard let id = UUID(uuidString: record.clientId) else {
+                maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
+                continue
+            }
+            guard let sessionID = UUID(uuidString: record.sessionClientId),
+                  let session = try findWorkoutSession(id: sessionID, context: context) else {
+                break
+            }
+            let exercise = try record.exerciseClientId
+                .flatMap(UUID.init(uuidString:))
+                .flatMap { try findExercise(id: $0, context: context) }
+            let incomingUpdatedAt = Date(timeIntervalSince1970: record.updatedAt)
+            let incomingDeletedAt = record.deletedAt.map(Date.init(timeIntervalSince1970:))
+
+            if let loggedExercise = try findLoggedExercise(id: id, context: context) {
+                guard SyncConflictResolver.decision(
+                    localUpdatedAt: loggedExercise.updatedAt,
+                    localDeletedAt: loggedExercise.deletedAt,
+                    incomingUpdatedAt: incomingUpdatedAt,
+                    incomingDeletedAt: incomingDeletedAt,
+                    allowsIncomingRestore: false
+                ) == .applyIncoming else {
+                    maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
+                    continue
+                }
+                apply(record, to: loggedExercise, session: session, exercise: exercise)
+            } else {
+                guard incomingDeletedAt == nil else {
+                    maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
+                    continue
+                }
+                let loggedExercise = LoggedExercise(
+                    id: id,
+                    orderIndex: record.orderIndex,
+                    exercise: exercise,
+                    exerciseSnapshotName: record.exerciseSnapshotName,
+                    exerciseSnapshotEquipmentRaw: record.exerciseSnapshotEquipmentRaw,
+                    exerciseSnapshotPrimaryMuscleGroupRaw: record.exerciseSnapshotPrimaryMuscleGroupRaw,
+                    notes: record.notes,
+                    referenceNotes: record.referenceNotes,
+                    createdAt: Date(timeIntervalSince1970: record.createdAt),
+                    updatedAt: incomingUpdatedAt,
+                    deletedAt: incomingDeletedAt
+                )
+                loggedExercise.hasSnapshotMetadata = record.hasSnapshotMetadata
+                loggedExercise.session = session
+                session.loggedExercises.append(loggedExercise)
+                context.insert(loggedExercise)
+            }
+            maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
+        }
+        return maxAppliedServerUpdatedAt
+    }
+
+    private func apply(
+        _ record: LoggedExerciseSyncRecord,
+        to loggedExercise: LoggedExercise,
+        session: WorkoutSession,
+        exercise: Exercise?
+    ) {
+        loggedExercise.orderIndex = record.orderIndex
+        loggedExercise.exercise = exercise
+        loggedExercise.exerciseSnapshotName = record.exerciseSnapshotName
+        loggedExercise.exerciseSnapshotEquipmentRaw = record.exerciseSnapshotEquipmentRaw
+        loggedExercise.exerciseSnapshotPrimaryMuscleGroupRaw = record.exerciseSnapshotPrimaryMuscleGroupRaw
+        loggedExercise.hasSnapshotMetadata = record.hasSnapshotMetadata
+        loggedExercise.notes = record.notes
+        loggedExercise.referenceNotes = record.referenceNotes
+        loggedExercise.createdAt = Date(timeIntervalSince1970: record.createdAt)
+        loggedExercise.updatedAt = Date(timeIntervalSince1970: record.updatedAt)
+        loggedExercise.deletedAt = record.deletedAt.map(Date.init(timeIntervalSince1970:))
+        loggedExercise.session = session
+        if !session.loggedExercises.contains(where: { $0.id == loggedExercise.id }) {
+            session.loggedExercises.append(loggedExercise)
+        }
+    }
+
+    private func apply(loggedSetRecords records: [LoggedSetSyncRecord], context: ModelContext) throws -> Double? {
+        var maxAppliedServerUpdatedAt: Double?
+        for record in records {
+            guard let id = UUID(uuidString: record.clientId) else {
+                maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
+                continue
+            }
+            guard let loggedExerciseID = UUID(uuidString: record.loggedExerciseClientId),
+                  let loggedExercise = try findLoggedExercise(id: loggedExerciseID, context: context) else {
+                break
+            }
+            let incomingUpdatedAt = Date(timeIntervalSince1970: record.updatedAt)
+            let incomingDeletedAt = record.deletedAt.map(Date.init(timeIntervalSince1970:))
+
+            if let set = try findLoggedSet(id: id, context: context) {
+                guard SyncConflictResolver.decision(
+                    localUpdatedAt: set.updatedAt,
+                    localDeletedAt: set.deletedAt,
+                    incomingUpdatedAt: incomingUpdatedAt,
+                    incomingDeletedAt: incomingDeletedAt,
+                    allowsIncomingRestore: false
+                ) == .applyIncoming else {
+                    maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
+                    continue
+                }
+                apply(record, to: set, loggedExercise: loggedExercise)
+            } else {
+                guard incomingDeletedAt == nil else {
+                    maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
+                    continue
+                }
+                let set = LoggedSet(
+                    id: id,
+                    orderIndex: record.orderIndex,
+                    weight: record.weight,
+                    reps: record.reps,
+                    rpe: record.rpe,
+                    placeholderWeight: record.placeholderWeight,
+                    placeholderReps: record.placeholderReps,
+                    placeholderRPE: record.placeholderRPE,
+                    kind: SetKind(rawValue: record.kindRaw) ?? .working,
+                    isCompleted: record.isCompleted,
+                    completedAt: record.completedAt.map(Date.init(timeIntervalSince1970:)),
+                    notes: record.notes,
+                    createdAt: Date(timeIntervalSince1970: record.createdAt),
+                    updatedAt: incomingUpdatedAt,
+                    deletedAt: incomingDeletedAt,
+                    healthLinkID: record.healthLinkID.flatMap(UUID.init(uuidString:))
+                )
+                set.loggedExercise = loggedExercise
+                loggedExercise.sets.append(set)
+                context.insert(set)
+            }
+            maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
+        }
+        return maxAppliedServerUpdatedAt
+    }
+
+    private func apply(_ record: LoggedSetSyncRecord, to set: LoggedSet, loggedExercise: LoggedExercise) {
+        set.orderIndex = record.orderIndex
+        set.weight = record.weight
+        set.reps = record.reps
+        set.rpe = record.rpe
+        set.placeholderWeight = record.placeholderWeight
+        set.placeholderReps = record.placeholderReps
+        set.placeholderRPE = record.placeholderRPE
+        set.kindRaw = record.kindRaw
+        set.isCompleted = record.isCompleted
+        set.completedAt = record.completedAt.map(Date.init(timeIntervalSince1970:))
+        set.notes = record.notes
+        set.createdAt = Date(timeIntervalSince1970: record.createdAt)
+        set.updatedAt = Date(timeIntervalSince1970: record.updatedAt)
+        set.deletedAt = record.deletedAt.map(Date.init(timeIntervalSince1970:))
+        set.healthLinkID = record.healthLinkID.flatMap(UUID.init(uuidString:))
+        set.loggedExercise = loggedExercise
+        if !loggedExercise.sets.contains(where: { $0.id == set.id }) {
+            loggedExercise.sets.append(set)
+        }
     }
 
     private func canClaim(
