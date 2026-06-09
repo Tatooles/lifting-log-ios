@@ -195,6 +195,99 @@ final class SyncCoordinatorTests: XCTestCase {
         XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
     }
 
+    func testRunPushesCompletedWorkoutGraphInParentFirstOrder() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let owner = "issuer|owner_a"
+        let exercise = Exercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000005001")!,
+            name: "Bench Press",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Chest",
+            syncOwnerTokenIdentifier: owner
+        )
+        let session = WorkoutSession(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000005002")!,
+            title: "Push",
+            startedAt: Date(timeIntervalSince1970: 100),
+            endedAt: Date(timeIntervalSince1970: 200),
+            durationSeconds: 100,
+            status: .completed,
+            source: .blank,
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 200)
+        )
+        let loggedExercise = LoggedExercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000005003")!,
+            orderIndex: 0,
+            exercise: exercise,
+            createdAt: Date(timeIntervalSince1970: 110),
+            updatedAt: Date(timeIntervalSince1970: 210)
+        )
+        let set = LoggedSet(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000005004")!,
+            orderIndex: 0,
+            weight: 185,
+            reps: 5,
+            kind: .working,
+            isCompleted: true,
+            createdAt: Date(timeIntervalSince1970: 120),
+            updatedAt: Date(timeIntervalSince1970: 220)
+        )
+        loggedExercise.session = session
+        set.loggedExercise = loggedExercise
+        loggedExercise.sets.append(set)
+        session.loggedExercises.append(loggedExercise)
+        context.insert(exercise)
+        context.insert(session)
+        context.insert(loggedExercise)
+        context.insert(set)
+        let recorder = SyncOutboxRecorder()
+        try recorder.recordCreate(entityKind: .loggedSet, entityID: set.id, ownerTokenIdentifier: owner, context: context, now: Date(timeIntervalSince1970: 300))
+        try recorder.recordCreate(entityKind: .loggedExercise, entityID: loggedExercise.id, ownerTokenIdentifier: owner, context: context, now: Date(timeIntervalSince1970: 301))
+        try recorder.recordCreate(entityKind: .workoutSession, entityID: session.id, ownerTokenIdentifier: owner, context: context, now: Date(timeIntervalSince1970: 302))
+        try context.save()
+
+        let client = FakeSyncClient()
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
+
+        XCTAssertEqual(client.operationLog, [
+            "upsertWorkoutSession:\(session.id.uuidString.lowercased())",
+            "upsertLoggedExercise:\(loggedExercise.id.uuidString.lowercased())",
+            "upsertLoggedSet:\(set.id.uuidString.lowercased())",
+        ])
+        XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
+    }
+
+    func testRunSkipsActiveWorkoutSessionOutboxEntry() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let owner = "issuer|owner_a"
+        let session = WorkoutSession(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000005101")!,
+            title: "Active",
+            startedAt: Date(timeIntervalSince1970: 100),
+            status: .active,
+            source: .blank
+        )
+        context.insert(session)
+        try SyncOutboxRecorder().recordCreate(
+            entityKind: .workoutSession,
+            entityID: session.id,
+            ownerTokenIdentifier: owner,
+            context: context,
+            now: Date(timeIntervalSince1970: 200)
+        )
+        try context.save()
+
+        let client = FakeSyncClient()
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
+
+        XCTAssertTrue(client.upsertedWorkoutSessions.isEmpty)
+        XCTAssertTrue(client.tombstones.isEmpty)
+    }
+
     func testFirstRunBootstrapsExistingSettingsAndExercisesOnce() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
@@ -1321,6 +1414,7 @@ final class FakeSyncClient: SyncClient, @unchecked Sendable {
     var upsertedWorkoutSessions: [WorkoutSessionSyncPayload] = []
     var upsertedLoggedExercises: [LoggedExerciseSyncPayload] = []
     var upsertedLoggedSets: [LoggedSetSyncPayload] = []
+    var operationLog: [String] = []
     var tombstones: [(SyncEntityKind, UUID, Date)] = []
     var fetchRequests: [(cursors: SyncChangeCursors, limit: Int)] = []
     var userSettingsMutationResults: [SyncMutationResult] = []
@@ -1363,6 +1457,7 @@ final class FakeSyncClient: SyncClient, @unchecked Sendable {
 
     func upsertWorkoutSession(_ record: WorkoutSessionSyncPayload) async throws -> SyncMutationResult {
         if let error { throw error }
+        operationLog.append("upsertWorkoutSession:\(record.clientId)")
         upsertedWorkoutSessions.append(record)
         if !workoutSessionMutationResults.isEmpty {
             return workoutSessionMutationResults.removeFirst()
@@ -1372,6 +1467,7 @@ final class FakeSyncClient: SyncClient, @unchecked Sendable {
 
     func upsertLoggedExercise(_ record: LoggedExerciseSyncPayload) async throws -> SyncMutationResult {
         if let error { throw error }
+        operationLog.append("upsertLoggedExercise:\(record.clientId)")
         upsertedLoggedExercises.append(record)
         if !loggedExerciseMutationResults.isEmpty {
             return loggedExerciseMutationResults.removeFirst()
@@ -1381,6 +1477,7 @@ final class FakeSyncClient: SyncClient, @unchecked Sendable {
 
     func upsertLoggedSet(_ record: LoggedSetSyncPayload) async throws -> SyncMutationResult {
         if let error { throw error }
+        operationLog.append("upsertLoggedSet:\(record.clientId)")
         upsertedLoggedSets.append(record)
         if !loggedSetMutationResults.isEmpty {
             return loggedSetMutationResults.removeFirst()

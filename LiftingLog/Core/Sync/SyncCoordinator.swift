@@ -205,7 +205,17 @@ final class SyncCoordinator {
         let entries = try recorder.pendingEntries(context: context)
             .filter { entry in
                 entry.ownerTokenIdentifier == ownerTokenIdentifier
-                    && (entry.entityKind == .userSettings || entry.entityKind == .exercise)
+            }
+            .sorted { lhs, rhs in
+                let lhsRank = syncPushRank(for: lhs.entityKind)
+                let rhsRank = syncPushRank(for: rhs.entityKind)
+                if lhsRank != rhsRank {
+                    return lhsRank < rhsRank
+                }
+                if lhs.updatedAt == rhs.updatedAt {
+                    return lhs.createdAt < rhs.createdAt
+                }
+                return lhs.updatedAt < rhs.updatedAt
             }
 
         for entry in entries {
@@ -242,6 +252,17 @@ final class SyncCoordinator {
         return SyncPushResult(didComplete: true, didPush: !entries.isEmpty)
     }
 
+    private func syncPushRank(for entityKind: SyncEntityKind?) -> Int {
+        switch entityKind {
+        case .some(.userSettings): 0
+        case .some(.exercise): 1
+        case .some(.workoutSession): 2
+        case .some(.loggedExercise): 3
+        case .some(.loggedSet): 4
+        default: 999
+        }
+    }
+
     private func logicalFallbackTimestamp(for entry: SyncOutboxEntry) -> Date {
         return entry.hasBeenAttempted ? entry.createdAt : entry.updatedAt
     }
@@ -271,6 +292,24 @@ final class SyncCoordinator {
                 throw SyncCoordinatorError.ownerMismatch(entityKind: .exercise, entityID: entry.entityID)
             }
             return try await client.upsertExercise(SyncPayloadMapper.exercisePayload(from: exercise))
+        case (.workoutSession, .create), (.workoutSession, .update):
+            guard let session = try findWorkoutSession(id: entry.entityID, context: context) else {
+                return try await client.tombstone(entityKind: .workoutSession, clientId: entry.entityID, deletedAt: fallbackTimestamp)
+            }
+            guard session.status != .active else { return nil }
+            return try await client.upsertWorkoutSession(SyncPayloadMapper.workoutSessionPayload(from: session))
+        case (.loggedExercise, .create), (.loggedExercise, .update):
+            guard let loggedExercise = try findLoggedExercise(id: entry.entityID, context: context) else {
+                return try await client.tombstone(entityKind: .loggedExercise, clientId: entry.entityID, deletedAt: fallbackTimestamp)
+            }
+            guard loggedExercise.session?.status != .active else { return nil }
+            return try await client.upsertLoggedExercise(SyncPayloadMapper.loggedExercisePayload(from: loggedExercise))
+        case (.loggedSet, .create), (.loggedSet, .update):
+            guard let set = try findLoggedSet(id: entry.entityID, context: context) else {
+                return try await client.tombstone(entityKind: .loggedSet, clientId: entry.entityID, deletedAt: fallbackTimestamp)
+            }
+            guard set.loggedExercise?.session?.status != .active else { return nil }
+            return try await client.upsertLoggedSet(SyncPayloadMapper.loggedSetPayload(from: set))
         case (.userSettings, .delete):
             let settings = try findUserSettings(id: entry.entityID, context: context)
             if let settings, settings.syncOwnerTokenIdentifier != ownerTokenIdentifier {
@@ -285,6 +324,18 @@ final class SyncCoordinator {
             }
             let deletedAt = exercise?.deletedAt ?? fallbackTimestamp
             return try await client.tombstone(entityKind: .exercise, clientId: entry.entityID, deletedAt: deletedAt)
+        case (.workoutSession, .delete):
+            let session = try findWorkoutSession(id: entry.entityID, context: context)
+            let deletedAt = session?.deletedAt ?? fallbackTimestamp
+            return try await client.tombstone(entityKind: .workoutSession, clientId: entry.entityID, deletedAt: deletedAt)
+        case (.loggedExercise, .delete):
+            let loggedExercise = try findLoggedExercise(id: entry.entityID, context: context)
+            let deletedAt = loggedExercise?.deletedAt ?? fallbackTimestamp
+            return try await client.tombstone(entityKind: .loggedExercise, clientId: entry.entityID, deletedAt: deletedAt)
+        case (.loggedSet, .delete):
+            let set = try findLoggedSet(id: entry.entityID, context: context)
+            let deletedAt = set?.deletedAt ?? fallbackTimestamp
+            return try await client.tombstone(entityKind: .loggedSet, clientId: entry.entityID, deletedAt: deletedAt)
         default:
             return nil
         }
@@ -308,6 +359,12 @@ final class SyncCoordinator {
             state.userSettingsCursor = min(state.userSettingsCursor, refetchCursor)
         case .some(.exercise):
             state.exercisesCursor = min(state.exercisesCursor, refetchCursor)
+        case .some(.workoutSession):
+            state.workoutSessionsCursor = min(state.workoutSessionsCursor, refetchCursor)
+        case .some(.loggedExercise):
+            state.loggedExercisesCursor = min(state.loggedExercisesCursor, refetchCursor)
+        case .some(.loggedSet):
+            state.loggedSetsCursor = min(state.loggedSetsCursor, refetchCursor)
         default:
             break
         }
@@ -320,6 +377,21 @@ final class SyncCoordinator {
 
     private func findExercise(id: UUID, context: ModelContext) throws -> Exercise? {
         try context.fetch(FetchDescriptor<Exercise>())
+            .first { $0.id == id }
+    }
+
+    private func findWorkoutSession(id: UUID, context: ModelContext) throws -> WorkoutSession? {
+        try context.fetch(FetchDescriptor<WorkoutSession>())
+            .first { $0.id == id }
+    }
+
+    private func findLoggedExercise(id: UUID, context: ModelContext) throws -> LoggedExercise? {
+        try context.fetch(FetchDescriptor<LoggedExercise>())
+            .first { $0.id == id }
+    }
+
+    private func findLoggedSet(id: UUID, context: ModelContext) throws -> LoggedSet? {
+        try context.fetch(FetchDescriptor<LoggedSet>())
             .first { $0.id == id }
     }
 
