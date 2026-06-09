@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ExerciseCardView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(SyncScheduler.self) private var syncScheduler
     let loggedExercise: LoggedExercise
     let exerciseIndex: Int
     @Bindable var engine: ActiveWorkoutEngine
@@ -12,7 +13,10 @@ struct ExerciseCardView: View {
     @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
 
     private var weightUnit: MeasurementUnit {
-        UserSettings.visibleSettingsRecords(from: settingsRecords).first?.weightUnit ?? .pounds
+        UserSettings.visibleSettingsRecords(
+            from: settingsRecords,
+            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
+        ).first?.weightUnit ?? .pounds
     }
 
     var body: some View {

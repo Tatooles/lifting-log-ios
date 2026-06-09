@@ -200,6 +200,349 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         XCTAssertEqual(entry.operation, .update)
     }
 
+    func testSettingsMutationUsesCurrentSyncOwnerAndRequestsSync() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let settings = UserSettings(defaultRestTimerSeconds: 90)
+        context.insert(settings)
+        try context.save()
+
+        let scheduler = SyncScheduler()
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+
+        try SettingsMutationService(syncScheduler: scheduler).updateDefaultRestTimerSeconds(
+            120,
+            settings: settings,
+            context: context,
+            now: Date(timeIntervalSince1970: 100)
+        )
+
+        let entry = try XCTUnwrap(fetchEntries(context).first)
+        XCTAssertEqual(settings.syncOwnerTokenIdentifier, "issuer|owner_a")
+        XCTAssertEqual(entry.ownerTokenIdentifier, "issuer|owner_a")
+        XCTAssertEqual(scheduler.requestCount, 1)
+    }
+
+    func testExerciseMutationUsesCurrentSyncOwnerAndRequestsSync() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let scheduler = SyncScheduler()
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+
+        let exercise = try ExerciseMutationService(syncScheduler: scheduler).createExercise(
+            name: "Owner Bench",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Chest",
+            notes: "",
+            context: context,
+            now: Date(timeIntervalSince1970: 100)
+        )
+
+        let entry = try XCTUnwrap(fetchEntries(context).first)
+        XCTAssertEqual(exercise.syncOwnerTokenIdentifier, "issuer|owner_a")
+        XCTAssertEqual(entry.ownerTokenIdentifier, "issuer|owner_a")
+        XCTAssertEqual(scheduler.requestCount, 1)
+    }
+
+    func testSettingsMutationRejectsDifferentCurrentOwner() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let settings = UserSettings(
+            defaultRestTimerSeconds: 90,
+            syncOwnerTokenIdentifier: "issuer|owner_a"
+        )
+        context.insert(settings)
+        try context.save()
+
+        let scheduler = SyncScheduler()
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_b"
+
+        XCTAssertThrowsError(
+            try SettingsMutationService(syncScheduler: scheduler).updateDefaultRestTimerSeconds(
+                120,
+                settings: settings,
+                context: context,
+                now: Date(timeIntervalSince1970: 100)
+            )
+        ) { error in
+            XCTAssertEqual(error as? SyncMutationOwnershipError, .ownerMismatch)
+        }
+
+        XCTAssertEqual(settings.defaultRestTimerSeconds, 90)
+        XCTAssertEqual(settings.syncOwnerTokenIdentifier, "issuer|owner_a")
+        XCTAssertTrue(try fetchEntries(context).isEmpty)
+        XCTAssertEqual(scheduler.requestCount, 0)
+    }
+
+    func testExerciseMutationRejectsDifferentCurrentOwner() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let scheduler = SyncScheduler()
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_b"
+        let exercise = Exercise(
+            name: "Owner Bench",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Chest",
+            syncOwnerTokenIdentifier: "issuer|owner_a"
+        )
+        context.insert(exercise)
+        try context.save()
+
+        XCTAssertThrowsError(
+            try ExerciseMutationService(syncScheduler: scheduler).updateExercise(
+                exercise,
+                name: "Owner Bench Updated",
+                category: .strength,
+                equipment: .barbell,
+                primaryMuscle: "Chest",
+                notes: "",
+                context: context,
+                now: Date(timeIntervalSince1970: 100)
+            )
+        ) { error in
+            XCTAssertEqual(error as? SyncMutationOwnershipError, .ownerMismatch)
+        }
+
+        XCTAssertEqual(exercise.name, "Owner Bench")
+        XCTAssertEqual(exercise.syncOwnerTokenIdentifier, "issuer|owner_a")
+        XCTAssertTrue(try fetchEntries(context).isEmpty)
+        XCTAssertEqual(scheduler.requestCount, 0)
+    }
+
+    func testConfiguredSchedulerRunsRequestedSync() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let client = FakeSettingsExerciseSyncClient()
+        let coordinator = SettingsExerciseSyncCoordinator(client: client)
+        let scheduler = SyncScheduler(coordinator: coordinator, modelContext: context)
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+        let fetchCompleted = expectation(description: "scheduler runs sync fetch")
+        client.onFetchChanges = {
+            fetchCompleted.fulfill()
+        }
+
+        scheduler.requestSync()
+        await fulfillment(of: [fetchCompleted], timeout: 1.0)
+
+        XCTAssertEqual(scheduler.requestCount, 1)
+        XCTAssertEqual(client.fetchRequests.count, 1)
+        XCTAssertEqual(client.fetchRequests.first?.cursors, SyncChangeCursors(userSettings: 0, exercises: 0))
+    }
+
+    func testConfiguredSchedulerSeedsDefaultsForCurrentOwner() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        try SeedDataService.seedIfNeeded(context: context, ownerTokenIdentifier: "issuer|owner_a")
+
+        let scheduler = SyncScheduler(coordinator: SettingsExerciseSyncCoordinator(client: FakeSettingsExerciseSyncClient()), modelContext: context)
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_b"
+
+        scheduler.seedDefaultsForCurrentOwner()
+
+        let settings = try context.fetch(FetchDescriptor<UserSettings>())
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        XCTAssertEqual(
+            UserSettings.visibleSettingsRecords(from: settings, ownerTokenIdentifier: "issuer|owner_b").count,
+            1
+        )
+        XCTAssertEqual(
+            Exercise.visibleActiveExercises(from: exercises, ownerTokenIdentifier: "issuer|owner_b")
+                .filter(\.isSeeded)
+                .count,
+            20
+        )
+    }
+
+    func testConfiguredSchedulerClaimsOwnerlessDefaultsForUnbootstrappedOwner() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        try SeedDataService.seedIfNeeded(context: context)
+
+        let scheduler = SyncScheduler(coordinator: SettingsExerciseSyncCoordinator(client: FakeSettingsExerciseSyncClient()), modelContext: context)
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+
+        scheduler.seedDefaultsForCurrentOwner()
+
+        let settings = try context.fetch(FetchDescriptor<UserSettings>())
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        XCTAssertEqual(
+            UserSettings.visibleSettingsRecords(from: settings, ownerTokenIdentifier: "issuer|owner_a").count,
+            1
+        )
+        XCTAssertEqual(
+            Exercise.visibleActiveExercises(from: exercises, ownerTokenIdentifier: "issuer|owner_a")
+                .filter(\.isSeeded)
+                .count,
+            20
+        )
+        XCTAssertEqual(
+            UserSettings.visibleSettingsRecords(from: settings, ownerTokenIdentifier: nil).count,
+            0
+        )
+        XCTAssertTrue(
+            Exercise.visibleActiveExercises(from: exercises, ownerTokenIdentifier: nil)
+                .filter(\.isSeeded)
+                .isEmpty
+        )
+    }
+
+    func testConfiguredSchedulerDoesNotClaimOwnerlessDefaultsForBootstrappedOwner() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        try SeedDataService.seedIfNeeded(context: context)
+        let state = try SyncCursorState.state(for: "issuer|owner_a", context: context)
+        state.hasBootstrappedSettingsExercises = true
+        try context.save()
+
+        let scheduler = SyncScheduler(coordinator: SettingsExerciseSyncCoordinator(client: FakeSettingsExerciseSyncClient()), modelContext: context)
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+
+        scheduler.seedDefaultsForCurrentOwner()
+
+        let settings = try context.fetch(FetchDescriptor<UserSettings>())
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        XCTAssertEqual(
+            UserSettings.visibleSettingsRecords(from: settings, ownerTokenIdentifier: nil).count,
+            1
+        )
+        XCTAssertEqual(
+            Exercise.visibleActiveExercises(from: exercises, ownerTokenIdentifier: nil)
+                .filter(\.isSeeded)
+                .count,
+            20
+        )
+    }
+
+    func testConfiguredSchedulerSeedsDefaultsForLocalMode() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        try SeedDataService.seedIfNeeded(context: context, ownerTokenIdentifier: "issuer|owner_a")
+
+        let scheduler = SyncScheduler(coordinator: SettingsExerciseSyncCoordinator(client: FakeSettingsExerciseSyncClient()), modelContext: context)
+        scheduler.currentOwnerTokenIdentifier = nil
+
+        scheduler.seedDefaultsForLocalMode()
+
+        let settings = try context.fetch(FetchDescriptor<UserSettings>())
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        XCTAssertEqual(
+            UserSettings.visibleSettingsRecords(from: settings, ownerTokenIdentifier: nil)
+                .filter { $0.syncOwnerTokenIdentifier == nil }
+                .count,
+            1
+        )
+        XCTAssertEqual(
+            Exercise.visibleActiveExercises(from: exercises, ownerTokenIdentifier: nil)
+                .filter { $0.syncOwnerTokenIdentifier == nil && $0.isSeeded }
+                .count,
+            20
+        )
+    }
+
+    func testSchedulerQueuesRequestDuringActiveSync() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let client = FakeSettingsExerciseSyncClient()
+        let coordinator = SettingsExerciseSyncCoordinator(client: client)
+        let scheduler = SyncScheduler(coordinator: coordinator, modelContext: context)
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+        let fetchCompleted = expectation(description: "scheduler runs queued sync fetch")
+        fetchCompleted.expectedFulfillmentCount = 2
+        client.onFetchChanges = {
+            if client.fetchRequests.count == 1 {
+                scheduler.requestSync()
+            }
+            fetchCompleted.fulfill()
+        }
+
+        scheduler.requestSync()
+        await fulfillment(of: [fetchCompleted], timeout: 1.0)
+
+        XCTAssertEqual(scheduler.requestCount, 2)
+        XCTAssertEqual(client.fetchRequests.count, 2)
+        XCTAssertEqual(client.fetchRequests.first?.cursors, SyncChangeCursors(userSettings: 0, exercises: 0))
+        XCTAssertEqual(client.fetchRequests.last?.cursors, SyncChangeCursors(userSettings: 0, exercises: 0))
+    }
+
+    func testSchedulerStopsOldOwnerSyncWhenOwnerChangesDuringRun() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000005501")!,
+            name: "Owner A Bench",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Chest",
+            syncOwnerTokenIdentifier: "issuer|owner_a"
+        )
+        context.insert(exercise)
+        try SyncOutboxRecorder().recordUpdate(
+            entityKind: .exercise,
+            entityID: exercise.id,
+            ownerTokenIdentifier: "issuer|owner_a",
+            context: context,
+            now: Date(timeIntervalSince1970: 100)
+        )
+        try context.save()
+
+        let client = FakeSettingsExerciseSyncClient()
+        let coordinator = SettingsExerciseSyncCoordinator(client: client)
+        let scheduler = SyncScheduler(coordinator: coordinator, modelContext: context)
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+        let fetchCompleted = expectation(description: "initial old-owner pull runs")
+        var didChangeOwner = false
+        client.onFetchChanges = {
+            if !didChangeOwner {
+                didChangeOwner = true
+                scheduler.currentOwnerTokenIdentifier = "issuer|owner_b"
+                fetchCompleted.fulfill()
+            }
+        }
+
+        scheduler.requestSync()
+        await fulfillment(of: [fetchCompleted], timeout: 1.0)
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        let entries = try fetchEntries(context)
+        XCTAssertTrue(client.upsertedExercises.isEmpty)
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries.first?.entityID, exercise.id)
+        XCTAssertEqual(entries.first?.ownerTokenIdentifier, "issuer|owner_a")
+        XCTAssertEqual(entries.first?.status, .pending)
+    }
+
+    func testExerciseUpdateWithoutChangesDoesNotRecordOrRequestSync() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let scheduler = SyncScheduler()
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+        let exercise = Exercise(
+            name: "Bench Press",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Chest",
+            notes: "Pause"
+        )
+        context.insert(exercise)
+        try context.save()
+
+        try ExerciseMutationService(syncScheduler: scheduler).updateExercise(
+            exercise,
+            name: "Bench Press",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Chest",
+            notes: "Pause",
+            context: context,
+            now: Date(timeIntervalSince1970: 100)
+        )
+
+        XCTAssertTrue(try fetchEntries(context).isEmpty)
+        XCTAssertEqual(scheduler.requestCount, 0)
+    }
+
     func testFinishingWorkoutRecordsCompletedGraphCreateIntent() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

@@ -4,6 +4,7 @@ import SwiftUI
 struct ExerciseEditorView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(SyncScheduler.self) private var syncScheduler
     @Query(sort: \Exercise.name) private var exercises: [Exercise]
 
     let exercise: Exercise?
@@ -80,7 +81,10 @@ struct ExerciseEditorView: View {
             return
         }
 
-        let duplicate = exercises.contains { existing in
+        let duplicate = Exercise.visibleActiveExercises(
+            from: exercises,
+            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
+        ).contains { existing in
             existing.id != exercise?.id
                 && existing.hasSameActiveIdentity(name: trimmedName, equipment: equipment)
         }
@@ -91,7 +95,7 @@ struct ExerciseEditorView: View {
 
         let savedExercise: Exercise
         do {
-            let service = ExerciseMutationService()
+            let service = ExerciseMutationService(syncScheduler: syncScheduler)
             if let exercise {
                 try service.updateExercise(
                     exercise,

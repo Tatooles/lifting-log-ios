@@ -342,6 +342,19 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
+    func testSettingsEditRequestsSyncInUITestMode() {
+        let app = makeApp(extraArguments: ["--uitest-sync-owner", "issuer|ui_owner"])
+        app.launch()
+
+        app.buttons["ProfileTab"].tap()
+        app.buttons["ProfileSettingsLink"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
+        app.segmentedControls["WeightUnitPicker"].buttons["Kilograms"].tap()
+
+        XCTAssertTrue(app.staticTexts["UITestSyncRequestCount-1"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
     func testSettingsShowsAccountShellAndDeleteAccountPlaceholder() {
         let app = makeApp()
         app.launchArguments.append("--uitest-force-signed-out-auth")
@@ -414,6 +427,19 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
+    func testExerciseCreateRequestsSyncInUITestMode() {
+        let app = makeApp(extraArguments: ["--uitest-sync-owner", "issuer|ui_owner"])
+        app.launch()
+
+        app.buttons["ProfileTab"].tap()
+        app.buttons["ProfileExerciseLibraryLink"].tap()
+        XCTAssertTrue(app.navigationBars["Exercises"].waitForExistence(timeout: 3))
+        createExercise(name: "UI Sync Bench", equipment: "Barbell", muscle: "Chest", in: app)
+
+        XCTAssertTrue(app.staticTexts["UITestSyncRequestCount-1"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
     func testExerciseLibraryAllowsSameNameWithDifferentEquipmentAndRejectsExactDuplicate() {
         let app = makeApp()
         app.launch()
@@ -462,9 +488,12 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
-    private func makeApp() -> XCUIApplication {
+    private func makeApp(extraArguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["--uitest-in-memory-store"]
+        app.launchArguments = [
+            "--uitest-reset-persistent-store",
+            "--uitest-in-memory-store",
+        ] + extraArguments
         app.terminate()
         return app
     }

@@ -3,13 +3,17 @@ import SwiftUI
 
 struct ExercisePickerView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(SyncScheduler.self) private var syncScheduler
     @Query(sort: \Exercise.name) private var exercises: [Exercise]
     let onSelect: (Exercise) -> Void
     @State private var searchText = ""
     @State private var isCreatingExercise = false
 
     private var filteredExercises: [Exercise] {
-        Exercise.visibleActiveExercises(from: exercises)
+        Exercise.visibleActiveExercises(
+            from: exercises,
+            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
+        )
             .filter { exercise in
                 searchText.isEmpty || exercise.name.localizedCaseInsensitiveContains(searchText)
             }

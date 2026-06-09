@@ -3,13 +3,17 @@ import SwiftUI
 
 struct ExerciseLibraryView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(SyncScheduler.self) private var syncScheduler
     @Query(sort: \Exercise.name) private var exercises: [Exercise]
     @State private var searchText = ""
     @State private var isCreatingExercise = false
     @State private var removalErrorMessage: String?
 
     private var filteredExercises: [Exercise] {
-        Exercise.visibleActiveExercises(from: exercises)
+        Exercise.visibleActiveExercises(
+            from: exercises,
+            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
+        )
             .filter { searchText.isEmpty || $0.name.localizedCaseInsensitiveContains(searchText) }
     }
 
@@ -31,7 +35,7 @@ struct ExerciseLibraryView: View {
                 .swipeActions {
                     Button(role: .destructive) {
                         do {
-                            try ExerciseMutationService().removeExercise(exercise, context: modelContext)
+                            try ExerciseMutationService(syncScheduler: syncScheduler).removeExercise(exercise, context: modelContext)
                             removalErrorMessage = nil
                         } catch {
                             modelContext.rollback()

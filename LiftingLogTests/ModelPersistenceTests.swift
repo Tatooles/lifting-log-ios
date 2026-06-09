@@ -520,6 +520,54 @@ final class ModelPersistenceTests: XCTestCase {
         XCTAssertEqual(settings.map(\.id), [visibleSettings.id])
     }
 
+    func testVisibleActiveExercisesRespectCurrentSyncOwner() throws {
+        let localExercise = Exercise(name: "Local Bench", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
+        let ownerExercise = Exercise(
+            name: "Owner Squat",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscleGroup: .quads,
+            syncOwnerTokenIdentifier: "issuer|owner_a"
+        )
+        let otherOwnerExercise = Exercise(
+            name: "Other Deadlift",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscleGroup: .glutes,
+            syncOwnerTokenIdentifier: "issuer|owner_b"
+        )
+
+        let signedInExercises = Exercise.visibleActiveExercises(
+            from: [otherOwnerExercise, localExercise, ownerExercise],
+            ownerTokenIdentifier: "issuer|owner_a"
+        )
+        let signedOutExercises = Exercise.visibleActiveExercises(
+            from: [otherOwnerExercise, localExercise, ownerExercise],
+            ownerTokenIdentifier: nil
+        )
+
+        XCTAssertEqual(signedInExercises.map(\.id), [ownerExercise.id])
+        XCTAssertEqual(signedOutExercises.map(\.id), [localExercise.id])
+    }
+
+    func testVisibleSettingsRecordsRespectCurrentSyncOwner() throws {
+        let localSettings = UserSettings(weightUnit: .pounds)
+        let ownerSettings = UserSettings(weightUnit: .kilograms, syncOwnerTokenIdentifier: "issuer|owner_a")
+        let otherOwnerSettings = UserSettings(weightUnit: .pounds, syncOwnerTokenIdentifier: "issuer|owner_b")
+
+        let signedInSettings = UserSettings.visibleSettingsRecords(
+            from: [otherOwnerSettings, localSettings, ownerSettings],
+            ownerTokenIdentifier: "issuer|owner_a"
+        )
+        let signedOutSettings = UserSettings.visibleSettingsRecords(
+            from: [otherOwnerSettings, localSettings, ownerSettings],
+            ownerTokenIdentifier: nil
+        )
+
+        XCTAssertEqual(signedInSettings.map(\.id), [ownerSettings.id])
+        XCTAssertEqual(signedOutSettings.map(\.id), [localSettings.id])
+    }
+
     func testCustomExerciseCanBeCreatedEditedAndArchived() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

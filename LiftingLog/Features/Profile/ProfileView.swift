@@ -3,12 +3,16 @@ import SwiftUI
 
 struct ProfileView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(SyncScheduler.self) private var syncScheduler
     @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
     @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
     @Query(sort: \Exercise.name) private var exercises: [Exercise]
 
     private var settings: UserSettings? {
-        UserSettings.visibleSettingsRecords(from: settingsRecords).first
+        UserSettings.visibleSettingsRecords(
+            from: settingsRecords,
+            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
+        ).first
     }
 
     private var completedWorkoutCount: Int {
@@ -16,7 +20,10 @@ struct ProfileView: View {
     }
 
     private var activeExerciseCount: Int {
-        Exercise.visibleActiveExercises(from: exercises).count
+        Exercise.visibleActiveExercises(
+            from: exercises,
+            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
+        ).count
     }
 
     var body: some View {
@@ -65,10 +72,20 @@ struct ProfileView: View {
         }
         .background(AppTheme.subtleBackground.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
-        .task {
-            if UserSettings.visibleSettingsRecords(from: settingsRecords).isEmpty {
-                try? SeedDataService.seedIfNeeded(context: modelContext)
-            }
+        .task(id: syncScheduler.currentOwnerTokenIdentifier) {
+            seedSettingsIfNeeded()
+        }
+    }
+
+    private func seedSettingsIfNeeded() {
+        if UserSettings.visibleSettingsRecords(
+            from: settingsRecords,
+            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
+        ).isEmpty {
+            try? SeedDataService.seedIfNeeded(
+                context: modelContext,
+                ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
+            )
         }
     }
 

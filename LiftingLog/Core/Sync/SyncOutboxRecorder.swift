@@ -90,6 +90,7 @@ struct SyncOutboxRecorder {
             }
 
             entry.operation = .delete
+            entry.createdAt = now
             entry.refreshPending(now: now)
             return
         }
