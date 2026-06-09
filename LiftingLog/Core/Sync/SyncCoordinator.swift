@@ -849,6 +849,10 @@ final class SyncCoordinator {
             }
             guard let sessionID = UUID(uuidString: record.sessionClientId),
                   let session = try findWorkoutSession(id: sessionID, context: context) else {
+                if record.deletedAt != nil {
+                    maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
+                    continue
+                }
                 return WorkoutChildApplyResult(
                     appliedCursor: maxAppliedServerUpdatedAt,
                     deferredMissingParent: true
@@ -940,6 +944,10 @@ final class SyncCoordinator {
             }
             guard let loggedExerciseID = UUID(uuidString: record.loggedExerciseClientId),
                   let loggedExercise = try findLoggedExercise(id: loggedExerciseID, context: context) else {
+                if record.deletedAt != nil {
+                    maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
+                    continue
+                }
                 return WorkoutChildApplyResult(
                     appliedCursor: maxAppliedServerUpdatedAt,
                     deferredMissingParent: true

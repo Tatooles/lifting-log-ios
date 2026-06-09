@@ -878,6 +878,216 @@ final class SyncCoordinatorTests: XCTestCase {
         XCTAssertTrue(try context.fetch(FetchDescriptor<LoggedSet>()).isEmpty)
     }
 
+    func testPullAdvancesLoggedExerciseCursorForTombstoneWhenSessionIsMissing() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let owner = "issuer|owner_a"
+        let missingTombstoneID = UUID(uuidString: "00000000-0000-0000-0000-000000006303")!
+        let sessionID = UUID(uuidString: "00000000-0000-0000-0000-000000006312")!
+        let loggedExerciseID = UUID(uuidString: "00000000-0000-0000-0000-000000006313")!
+        let client = FakeSyncClient()
+        client.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [],
+                workoutSessions: [],
+                loggedExercises: [
+                    LoggedExerciseSyncRecord(
+                        clientId: missingTombstoneID.uuidString.lowercased(),
+                        createdAt: 1,
+                        updatedAt: 2,
+                        deletedAt: 3,
+                        serverUpdatedAt: 60,
+                        sessionClientId: "00000000-0000-0000-0000-000000006302",
+                        exerciseClientId: nil,
+                        orderIndex: 0,
+                        exerciseSnapshotName: "",
+                        exerciseSnapshotEquipmentRaw: "none",
+                        exerciseSnapshotPrimaryMuscleGroupRaw: "other",
+                        hasSnapshotMetadata: false,
+                        notes: "",
+                        referenceNotes: nil
+                    )
+                ],
+                loggedSets: [],
+                cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 0, loggedExercises: 60, loggedSets: 0),
+                hasMore: SyncHasMore(userSettings: false, exercises: false, loggedExercises: true)
+            ),
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [],
+                workoutSessions: [
+                    WorkoutSessionSyncRecord(
+                        clientId: sessionID.uuidString.lowercased(),
+                        createdAt: 10,
+                        updatedAt: 20,
+                        deletedAt: nil,
+                        serverUpdatedAt: 70,
+                        title: "Pull",
+                        startedAt: 100,
+                        endedAt: 200,
+                        durationSeconds: 100,
+                        notes: "",
+                        referenceNotes: nil,
+                        statusRaw: "completed",
+                        sourceRaw: "blank",
+                        sourceSessionID: nil,
+                        healthLinkID: nil
+                    )
+                ],
+                loggedExercises: [
+                    LoggedExerciseSyncRecord(
+                        clientId: loggedExerciseID.uuidString.lowercased(),
+                        createdAt: 11,
+                        updatedAt: 21,
+                        deletedAt: nil,
+                        serverUpdatedAt: 80,
+                        sessionClientId: sessionID.uuidString.lowercased(),
+                        exerciseClientId: nil,
+                        orderIndex: 0,
+                        exerciseSnapshotName: "Lat Pulldown",
+                        exerciseSnapshotEquipmentRaw: "cable",
+                        exerciseSnapshotPrimaryMuscleGroupRaw: "back",
+                        hasSnapshotMetadata: true,
+                        notes: "",
+                        referenceNotes: nil
+                    )
+                ],
+                loggedSets: [],
+                cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 70, loggedExercises: 80, loggedSets: 0),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            ),
+        ]
+
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
+
+        let state = try XCTUnwrap(context.fetch(FetchDescriptor<SyncCursorState>()).first)
+        let loggedExercises = try context.fetch(FetchDescriptor<LoggedExercise>())
+        XCTAssertEqual(client.fetchRequests.map(\.cursors.loggedExercises), [0, 60])
+        XCTAssertEqual(state.workoutSessionsCursor, 70)
+        XCTAssertEqual(state.loggedExercisesCursor, 80)
+        XCTAssertNil(loggedExercises.first { $0.id == missingTombstoneID })
+        XCTAssertNotNil(loggedExercises.first { $0.id == loggedExerciseID })
+    }
+
+    func testPullAdvancesLoggedSetCursorForTombstoneWhenLoggedExerciseIsMissing() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let owner = "issuer|owner_a"
+        let missingTombstoneID = UUID(uuidString: "00000000-0000-0000-0000-000000006404")!
+        let sessionID = UUID(uuidString: "00000000-0000-0000-0000-000000006412")!
+        let loggedExerciseID = UUID(uuidString: "00000000-0000-0000-0000-000000006413")!
+        let setID = UUID(uuidString: "00000000-0000-0000-0000-000000006414")!
+        let client = FakeSyncClient()
+        client.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [
+                    LoggedSetSyncRecord(
+                        clientId: missingTombstoneID.uuidString.lowercased(),
+                        createdAt: 1,
+                        updatedAt: 2,
+                        deletedAt: 3,
+                        serverUpdatedAt: 60,
+                        loggedExerciseClientId: "00000000-0000-0000-0000-000000006403",
+                        orderIndex: 0,
+                        weight: nil,
+                        reps: nil,
+                        rpe: nil,
+                        placeholderWeight: nil,
+                        placeholderReps: nil,
+                        placeholderRPE: nil,
+                        kindRaw: "working",
+                        isCompleted: false,
+                        completedAt: nil,
+                        notes: "",
+                        healthLinkID: nil
+                    )
+                ],
+                cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 0, loggedExercises: 0, loggedSets: 60),
+                hasMore: SyncHasMore(userSettings: false, exercises: false, loggedSets: true)
+            ),
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [],
+                workoutSessions: [
+                    WorkoutSessionSyncRecord(
+                        clientId: sessionID.uuidString.lowercased(),
+                        createdAt: 10,
+                        updatedAt: 20,
+                        deletedAt: nil,
+                        serverUpdatedAt: 70,
+                        title: "Legs",
+                        startedAt: 100,
+                        endedAt: 200,
+                        durationSeconds: 100,
+                        notes: "",
+                        referenceNotes: nil,
+                        statusRaw: "completed",
+                        sourceRaw: "blank",
+                        sourceSessionID: nil,
+                        healthLinkID: nil
+                    )
+                ],
+                loggedExercises: [
+                    LoggedExerciseSyncRecord(
+                        clientId: loggedExerciseID.uuidString.lowercased(),
+                        createdAt: 11,
+                        updatedAt: 21,
+                        deletedAt: nil,
+                        serverUpdatedAt: 80,
+                        sessionClientId: sessionID.uuidString.lowercased(),
+                        exerciseClientId: nil,
+                        orderIndex: 0,
+                        exerciseSnapshotName: "Squat",
+                        exerciseSnapshotEquipmentRaw: "barbell",
+                        exerciseSnapshotPrimaryMuscleGroupRaw: "legs",
+                        hasSnapshotMetadata: true,
+                        notes: "",
+                        referenceNotes: nil
+                    )
+                ],
+                loggedSets: [
+                    LoggedSetSyncRecord(
+                        clientId: setID.uuidString.lowercased(),
+                        createdAt: 12,
+                        updatedAt: 22,
+                        deletedAt: nil,
+                        serverUpdatedAt: 90,
+                        loggedExerciseClientId: loggedExerciseID.uuidString.lowercased(),
+                        orderIndex: 0,
+                        weight: 225,
+                        reps: 5,
+                        rpe: nil,
+                        placeholderWeight: nil,
+                        placeholderReps: nil,
+                        placeholderRPE: nil,
+                        kindRaw: "working",
+                        isCompleted: true,
+                        completedAt: nil,
+                        notes: "",
+                        healthLinkID: nil
+                    )
+                ],
+                cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 70, loggedExercises: 80, loggedSets: 90),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            ),
+        ]
+
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
+
+        let state = try XCTUnwrap(context.fetch(FetchDescriptor<SyncCursorState>()).first)
+        let sets = try context.fetch(FetchDescriptor<LoggedSet>())
+        XCTAssertEqual(client.fetchRequests.map(\.cursors.loggedSets), [0, 60])
+        XCTAssertEqual(state.loggedExercisesCursor, 80)
+        XCTAssertEqual(state.loggedSetsCursor, 90)
+        XCTAssertNil(sets.first { $0.id == missingTombstoneID })
+        XCTAssertNotNil(sets.first { $0.id == setID })
+    }
+
     func testPullStopsCurrentPaginationWhenLoggedSetParentIsMissingAndHasMore() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
