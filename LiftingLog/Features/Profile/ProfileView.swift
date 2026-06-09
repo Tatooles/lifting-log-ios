@@ -72,16 +72,20 @@ struct ProfileView: View {
         }
         .background(AppTheme.subtleBackground.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
-        .task {
-            if UserSettings.visibleSettingsRecords(
-                from: settingsRecords,
+        .task(id: syncScheduler.currentOwnerTokenIdentifier) {
+            seedSettingsIfNeeded()
+        }
+    }
+
+    private func seedSettingsIfNeeded() {
+        if UserSettings.visibleSettingsRecords(
+            from: settingsRecords,
+            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
+        ).isEmpty {
+            try? SeedDataService.seedIfNeeded(
+                context: modelContext,
                 ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
-            ).isEmpty {
-                try? SeedDataService.seedIfNeeded(
-                    context: modelContext,
-                    ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
-                )
-            }
+            )
         }
     }
 
