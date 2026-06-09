@@ -20,18 +20,26 @@ final class SyncCoordinator {
 
         let state = try SyncCursorState.state(for: ownerTokenIdentifier, context: context)
         let bootstrapScope: BootstrapScope
+        let includeOwnerlessCompletedWorkouts: Bool
         let didPullBeforePush: Bool
-        if state.hasBootstrappedSettingsExercises {
+        if state.hasBootstrappedSettingsExercises && state.hasBootstrappedWorkoutGraph {
             bootstrapScope = .allOwned
+            includeOwnerlessCompletedWorkouts = false
             didPullBeforePush = false
         } else {
             let summary = try await pullChanges(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
             try Task.checkCancellation()
-            bootstrapScope = summary.hasRemoteRecords ? .unownedOnly : .allOwned
+            bootstrapScope = summary.hasRemoteSettingsExerciseRecords ? .unownedOnly : .allOwned
+            includeOwnerlessCompletedWorkouts = !summary.hasRemoteWorkoutGraphRecords
             didPullBeforePush = true
         }
 
-        try prepareForSync(ownerTokenIdentifier: ownerTokenIdentifier, context: context, bootstrapScope: bootstrapScope)
+        try prepareForSync(
+            ownerTokenIdentifier: ownerTokenIdentifier,
+            context: context,
+            bootstrapScope: bootstrapScope,
+            includeOwnerlessCompletedWorkouts: includeOwnerlessCompletedWorkouts
+        )
         try Task.checkCancellation()
         let pushResult = try await pushPendingEntries(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
         guard pushResult.didComplete else { return }
@@ -43,7 +51,8 @@ final class SyncCoordinator {
     func prepareForSync(
         ownerTokenIdentifier: String,
         context: ModelContext,
-        bootstrapScope: BootstrapScope = .allOwned
+        bootstrapScope: BootstrapScope = .allOwned,
+        includeOwnerlessCompletedWorkouts: Bool = true
     ) throws {
         let state = try SyncCursorState.state(for: ownerTokenIdentifier, context: context)
         let bootstrapCandidates = try state.hasBootstrappedSettingsExercises
@@ -79,7 +88,7 @@ final class SyncCoordinator {
         }
 
         for entry in try context.fetch(FetchDescriptor<SyncOutboxEntry>()) {
-            guard entry.entityKind == .userSettings || entry.entityKind == .exercise else {
+            guard let entityKind = entry.entityKind, entityKind.isV1Synced else {
                 continue
             }
 
@@ -103,6 +112,15 @@ final class SyncCoordinator {
                 now: .now
             )
             state.hasBootstrappedSettingsExercises = true
+        }
+        if !state.hasBootstrappedWorkoutGraph {
+            try bootstrapWorkoutGraphForSync(
+                ownerTokenIdentifier: ownerTokenIdentifier,
+                includeOwnerlessCompletedWorkouts: includeOwnerlessCompletedWorkouts,
+                context: context,
+                now: .now
+            )
+            state.hasBootstrappedWorkoutGraph = true
         }
 
         try context.save()
@@ -171,6 +189,49 @@ final class SyncCoordinator {
                 context: context,
                 now: now
             )
+        }
+    }
+
+    private func bootstrapWorkoutGraphForSync(
+        ownerTokenIdentifier: String,
+        includeOwnerlessCompletedWorkouts: Bool,
+        context: ModelContext,
+        now: Date
+    ) throws {
+        guard includeOwnerlessCompletedWorkouts else { return }
+
+        for session in try context.fetch(FetchDescriptor<WorkoutSession>())
+            where session.status == .completed && !session.isDeleted {
+            try recordBootstrapEntry(
+                entityKind: .workoutSession,
+                entityID: session.id,
+                isDeleted: false,
+                ownerTokenIdentifier: ownerTokenIdentifier,
+                context: context,
+                now: now
+            )
+
+            for loggedExercise in session.sortedLoggedExercises where !loggedExercise.isDeleted {
+                try recordBootstrapEntry(
+                    entityKind: .loggedExercise,
+                    entityID: loggedExercise.id,
+                    isDeleted: false,
+                    ownerTokenIdentifier: ownerTokenIdentifier,
+                    context: context,
+                    now: now
+                )
+
+                for set in loggedExercise.sortedSets where !set.isDeleted {
+                    try recordBootstrapEntry(
+                        entityKind: .loggedSet,
+                        entityID: set.id,
+                        isDeleted: false,
+                        ownerTokenIdentifier: ownerTokenIdentifier,
+                        context: context,
+                        now: now
+                    )
+                }
+            }
         }
     }
 
@@ -871,6 +932,12 @@ final class SyncCoordinator {
             }
             return exercise.syncOwnerTokenIdentifier == nil
                 || exercise.syncOwnerTokenIdentifier == ownerTokenIdentifier
+        case .workoutSession:
+            return try findWorkoutSession(id: entry.entityID, context: context) != nil
+        case .loggedExercise:
+            return try findLoggedExercise(id: entry.entityID, context: context) != nil
+        case .loggedSet:
+            return try findLoggedSet(id: entry.entityID, context: context) != nil
         default:
             return false
         }
@@ -965,14 +1032,24 @@ private struct BootstrapCandidates {
 private struct SyncPullSummary {
     var hasUserSettings = false
     var hasExercises = false
+    var hasWorkoutSessions = false
+    var hasLoggedExercises = false
+    var hasLoggedSets = false
 
-    var hasRemoteRecords: Bool {
+    var hasRemoteSettingsExerciseRecords: Bool {
         hasUserSettings || hasExercises
+    }
+
+    var hasRemoteWorkoutGraphRecords: Bool {
+        hasWorkoutSessions || hasLoggedExercises || hasLoggedSets
     }
 
     mutating func record(_ response: SyncFetchChangesResponse) {
         hasUserSettings = hasUserSettings || !response.userSettings.isEmpty
         hasExercises = hasExercises || !response.exercises.isEmpty
+        hasWorkoutSessions = hasWorkoutSessions || !response.workoutSessions.isEmpty
+        hasLoggedExercises = hasLoggedExercises || !response.loggedExercises.isEmpty
+        hasLoggedSets = hasLoggedSets || !response.loggedSets.isEmpty
     }
 }
 
