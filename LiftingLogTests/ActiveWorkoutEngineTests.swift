@@ -443,6 +443,27 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertEqual(try completedSessions(in: context).count, 1)
     }
 
+    func testFinishingAuthenticatedWorkoutRequestsSync() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let engine = ActiveWorkoutEngine()
+        let scheduler = SyncScheduler()
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+        let session = try engine.startBlankWorkout(context: context, now: Date(timeIntervalSince1970: 100))
+
+        try engine.finishWorkout(
+            session,
+            syncScheduler: scheduler,
+            context: context,
+            now: Date(timeIntervalSince1970: 220)
+        )
+
+        let entry = try XCTUnwrap(context.fetch(FetchDescriptor<SyncOutboxEntry>()).first)
+        XCTAssertEqual(session.syncOwnerTokenIdentifier, "issuer|owner_a")
+        XCTAssertEqual(entry.ownerTokenIdentifier, "issuer|owner_a")
+        XCTAssertEqual(scheduler.requestCount, 1)
+    }
+
     func testDiscardedSessionsDoNotAppearInCompletedHistoryFetches() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

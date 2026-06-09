@@ -93,7 +93,10 @@ final class WorkoutSession: Identifiable {
         sessions.filter { session in
             session.status == .completed
                 && !session.isDeleted
-                && session.syncOwnerTokenIdentifier == ownerTokenIdentifier
+                && (
+                    session.syncOwnerTokenIdentifier == ownerTokenIdentifier
+                        || (ownerTokenIdentifier != nil && session.syncOwnerTokenIdentifier == nil)
+                )
         }
     }
 

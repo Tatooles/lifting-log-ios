@@ -61,7 +61,7 @@ final class HistoryPersistenceTests: XCTestCase {
         XCTAssertEqual(sessions.map(\.id), [visibleCompletedSession.id])
     }
 
-    func testVisibleCompletedSessionsAreScopedToOwner() {
+    func testVisibleCompletedSessionsAreScopedToOwnerAndIncludeOwnerlessLegacySessions() {
         let ownerASession = WorkoutSession(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000000304")!,
             title: "Owner A",
@@ -90,7 +90,7 @@ final class HistoryPersistenceTests: XCTestCase {
 
         XCTAssertEqual(
             WorkoutSession.visibleCompletedSessions(from: sessions, ownerTokenIdentifier: "issuer|owner_b").map(\.id),
-            [ownerBSession.id]
+            [ownerBSession.id, signedOutSession.id]
         )
         XCTAssertEqual(
             WorkoutSession.visibleCompletedSessions(from: sessions, ownerTokenIdentifier: nil).map(\.id),

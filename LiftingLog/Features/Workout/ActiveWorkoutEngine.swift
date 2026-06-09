@@ -249,11 +249,13 @@ final class ActiveWorkoutEngine {
     func finishWorkout(
         _ session: WorkoutSession,
         ownerTokenIdentifier: String? = nil,
+        syncScheduler: SyncScheduler? = nil,
         context: ModelContext,
         now: Date = .now
     ) throws {
+        let effectiveOwnerTokenIdentifier = ownerTokenIdentifier ?? syncScheduler?.currentOwnerTokenIdentifier
         applyFinalWorkoutTitle(to: session)
-        session.syncOwnerTokenIdentifier = ownerTokenIdentifier
+        session.syncOwnerTokenIdentifier = effectiveOwnerTokenIdentifier
         session.status = .completed
         session.endedAt = now
         session.durationSeconds = max(0, Int(now.timeIntervalSince(session.startedAt)))
@@ -263,7 +265,7 @@ final class ActiveWorkoutEngine {
             try recorder.recordCreate(
                 entityKind: .workoutSession,
                 entityID: session.id,
-                ownerTokenIdentifier: ownerTokenIdentifier,
+                ownerTokenIdentifier: effectiveOwnerTokenIdentifier,
                 context: context,
                 now: now
             )
@@ -271,7 +273,7 @@ final class ActiveWorkoutEngine {
                 try recorder.recordCreate(
                     entityKind: .loggedExercise,
                     entityID: loggedExercise.id,
-                    ownerTokenIdentifier: ownerTokenIdentifier,
+                    ownerTokenIdentifier: effectiveOwnerTokenIdentifier,
                     context: context,
                     now: now
                 )
@@ -279,7 +281,7 @@ final class ActiveWorkoutEngine {
                     try recorder.recordCreate(
                         entityKind: .loggedSet,
                         entityID: set.id,
-                        ownerTokenIdentifier: ownerTokenIdentifier,
+                        ownerTokenIdentifier: effectiveOwnerTokenIdentifier,
                         context: context,
                         now: now
                     )
@@ -292,6 +294,10 @@ final class ActiveWorkoutEngine {
         }
         if activeSessionID == session.id {
             activeSessionID = nil
+        }
+        if syncScheduler?.currentOwnerTokenIdentifier == effectiveOwnerTokenIdentifier,
+           effectiveOwnerTokenIdentifier != nil {
+            syncScheduler?.requestSync()
         }
     }
 
