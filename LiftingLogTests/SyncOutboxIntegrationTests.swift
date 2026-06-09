@@ -179,6 +179,49 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         assertEntry(entries, kind: .loggedSet, id: set.id, operation: .create)
     }
 
+    func testSettingsWeightUnitConversionClaimsOwnerlessCompletedWorkoutGraphForSetIntent() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let scheduler = SyncScheduler()
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+        let settings = UserSettings(weightUnit: .pounds, syncOwnerTokenIdentifier: "issuer|owner_a")
+        let session = WorkoutSession(
+            title: "Legacy Push",
+            startedAt: Date(timeIntervalSince1970: 100),
+            status: .completed,
+            source: .blank
+        )
+        let loggedExercise = LoggedExercise(orderIndex: 0, exerciseSnapshotName: "Bench Press")
+        let set = LoggedSet(orderIndex: 0, weight: 225, reps: 5, isCompleted: true)
+        set.loggedExercise = loggedExercise
+        loggedExercise.session = session
+        loggedExercise.sets.append(set)
+        session.loggedExercises.append(loggedExercise)
+        context.insert(settings)
+        context.insert(session)
+        context.insert(loggedExercise)
+        context.insert(set)
+        try context.save()
+
+        try SettingsMutationService(syncScheduler: scheduler).updateWeightUnit(
+            .kilograms,
+            settings: settings,
+            context: context,
+            now: Date(timeIntervalSince1970: 200)
+        )
+
+        let entries = try fetchEntries(context)
+        XCTAssertEqual(set.weight ?? 0, 102.058, accuracy: 0.001)
+        XCTAssertEqual(session.syncOwnerTokenIdentifier, "issuer|owner_a")
+        XCTAssertEqual(entries.count, 4)
+        assertEntry(entries, kind: .userSettings, id: settings.id, operation: .update)
+        assertEntry(entries, kind: .workoutSession, id: session.id, operation: .update)
+        assertEntry(entries, kind: .loggedExercise, id: loggedExercise.id, operation: .update)
+        assertEntry(entries, kind: .loggedSet, id: set.id, operation: .update)
+        XCTAssertTrue(entries.allSatisfy { $0.ownerTokenIdentifier == "issuer|owner_a" })
+        XCTAssertEqual(scheduler.requestCount, 1)
+    }
+
     func testRestTimerUpdateRecordsSettingsUpdateIntent() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
