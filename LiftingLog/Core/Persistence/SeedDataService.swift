@@ -13,13 +13,32 @@ enum SeedDataService {
     static func seedIfNeeded(
         context: ModelContext,
         ownerTokenIdentifier: String? = nil,
-        ownerlessScope: OwnerlessScope = .visibleOnly
+        ownerlessScope: OwnerlessScope = .visibleOnly,
+        claimOwnerlessVisibleDefaults: Bool = false
     ) throws {
+        if let ownerTokenIdentifier, claimOwnerlessVisibleDefaults {
+            try claimOwnerlessVisibleRecords(context: context, ownerTokenIdentifier: ownerTokenIdentifier)
+        }
         try ensureSettings(context: context, ownerTokenIdentifier: ownerTokenIdentifier, ownerlessScope: ownerlessScope)
         try ensureExercises(context: context, ownerTokenIdentifier: ownerTokenIdentifier, ownerlessScope: ownerlessScope)
         try migrateLegacyPrimaryMuscleGroups(context: context)
         try ensureSeedMetadata(context: context)
         try context.save()
+    }
+
+    private static func claimOwnerlessVisibleRecords(
+        context: ModelContext,
+        ownerTokenIdentifier: String
+    ) throws {
+        let settings = try context.fetch(FetchDescriptor<UserSettings>())
+        for setting in UserSettings.visibleSettingsRecords(from: settings, ownerTokenIdentifier: nil) {
+            setting.syncOwnerTokenIdentifier = ownerTokenIdentifier
+        }
+
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        for exercise in Exercise.visibleActiveExercises(from: exercises, ownerTokenIdentifier: nil) {
+            exercise.syncOwnerTokenIdentifier = ownerTokenIdentifier
+        }
     }
 
     private static func ensureSettings(

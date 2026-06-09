@@ -39,7 +39,15 @@ final class SyncScheduler {
 
     func seedDefaultsForCurrentOwner() {
         guard let currentOwnerTokenIdentifier, let modelContext else { return }
-        try? SeedDataService.seedIfNeeded(context: modelContext, ownerTokenIdentifier: currentOwnerTokenIdentifier)
+        let hasBootstrapped = (try? SyncCursorState.state(
+            for: currentOwnerTokenIdentifier,
+            context: modelContext
+        ).hasBootstrappedSettingsExercises) ?? true
+        try? SeedDataService.seedIfNeeded(
+            context: modelContext,
+            ownerTokenIdentifier: currentOwnerTokenIdentifier,
+            claimOwnerlessVisibleDefaults: !hasBootstrapped
+        )
     }
 
     func seedDefaultsForLocalMode() {

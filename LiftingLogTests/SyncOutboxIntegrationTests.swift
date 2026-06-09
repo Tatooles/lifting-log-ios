@@ -355,6 +355,66 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         )
     }
 
+    func testConfiguredSchedulerClaimsOwnerlessDefaultsForUnbootstrappedOwner() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        try SeedDataService.seedIfNeeded(context: context)
+
+        let scheduler = SyncScheduler(coordinator: SettingsExerciseSyncCoordinator(client: FakeSettingsExerciseSyncClient()), modelContext: context)
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+
+        scheduler.seedDefaultsForCurrentOwner()
+
+        let settings = try context.fetch(FetchDescriptor<UserSettings>())
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        XCTAssertEqual(
+            UserSettings.visibleSettingsRecords(from: settings, ownerTokenIdentifier: "issuer|owner_a").count,
+            1
+        )
+        XCTAssertEqual(
+            Exercise.visibleActiveExercises(from: exercises, ownerTokenIdentifier: "issuer|owner_a")
+                .filter(\.isSeeded)
+                .count,
+            20
+        )
+        XCTAssertEqual(
+            UserSettings.visibleSettingsRecords(from: settings, ownerTokenIdentifier: nil).count,
+            0
+        )
+        XCTAssertTrue(
+            Exercise.visibleActiveExercises(from: exercises, ownerTokenIdentifier: nil)
+                .filter(\.isSeeded)
+                .isEmpty
+        )
+    }
+
+    func testConfiguredSchedulerDoesNotClaimOwnerlessDefaultsForBootstrappedOwner() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        try SeedDataService.seedIfNeeded(context: context)
+        let state = try SyncCursorState.state(for: "issuer|owner_a", context: context)
+        state.hasBootstrappedSettingsExercises = true
+        try context.save()
+
+        let scheduler = SyncScheduler(coordinator: SettingsExerciseSyncCoordinator(client: FakeSettingsExerciseSyncClient()), modelContext: context)
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+
+        scheduler.seedDefaultsForCurrentOwner()
+
+        let settings = try context.fetch(FetchDescriptor<UserSettings>())
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        XCTAssertEqual(
+            UserSettings.visibleSettingsRecords(from: settings, ownerTokenIdentifier: nil).count,
+            1
+        )
+        XCTAssertEqual(
+            Exercise.visibleActiveExercises(from: exercises, ownerTokenIdentifier: nil)
+                .filter(\.isSeeded)
+                .count,
+            20
+        )
+    }
+
     func testConfiguredSchedulerSeedsDefaultsForLocalMode() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

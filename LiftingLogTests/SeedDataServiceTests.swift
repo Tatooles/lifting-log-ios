@@ -157,6 +157,35 @@ final class SeedDataServiceTests: XCTestCase {
         XCTAssertTrue(exercises.filter(\.isSeeded).allSatisfy { $0.syncOwnerTokenIdentifier == nil })
     }
 
+    func testOwnerScopedSeedCanClaimVisibleOwnerlessDefaultsForFirstOwnerSync() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+
+        try SeedDataService.seedIfNeeded(context: context)
+        try SeedDataService.seedIfNeeded(
+            context: context,
+            ownerTokenIdentifier: "issuer|owner_b",
+            claimOwnerlessVisibleDefaults: true
+        )
+
+        let settings = try context.fetch(FetchDescriptor<UserSettings>())
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        XCTAssertEqual(settings.count, 1)
+        XCTAssertEqual(exercises.filter(\.isSeeded).count, 20)
+        XCTAssertEqual(
+            UserSettings.visibleSettingsRecords(from: settings, ownerTokenIdentifier: "issuer|owner_b").count,
+            1
+        )
+        XCTAssertEqual(
+            Exercise.visibleActiveExercises(from: exercises, ownerTokenIdentifier: "issuer|owner_b")
+                .filter(\.isSeeded)
+                .count,
+            20
+        )
+        XCTAssertTrue(settings.allSatisfy { $0.syncOwnerTokenIdentifier == "issuer|owner_b" })
+        XCTAssertTrue(exercises.filter(\.isSeeded).allSatisfy { $0.syncOwnerTokenIdentifier == "issuer|owner_b" })
+    }
+
     func testOwnerlessSeedCreatesVisibleLocalDefaultsWhenOnlyOwnedDefaultsExist() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
