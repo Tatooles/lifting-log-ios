@@ -94,13 +94,20 @@ final class SyncScheduler {
             while true {
                 needsSync = false
                 hasQueuedSyncRequest = false
+                let syncOwnerTokenIdentifier = currentOwnerTokenIdentifier
                 do {
-                    try await coordinator.run(ownerTokenIdentifier: currentOwnerTokenIdentifier, context: modelContext)
+                    try await coordinator.run(ownerTokenIdentifier: syncOwnerTokenIdentifier, context: modelContext)
+                    guard !Task.isCancelled, currentOwnerTokenIdentifier == syncOwnerTokenIdentifier else {
+                        break
+                    }
                     lastSyncedAt = .now
                     lastFailure = nil
                 } catch is CancellationError {
                     break
                 } catch {
+                    guard !Task.isCancelled, currentOwnerTokenIdentifier == syncOwnerTokenIdentifier else {
+                        break
+                    }
                     lastFailure = Failure(message: error.localizedDescription, occurredAt: .now)
                     break
                 }

@@ -56,15 +56,30 @@ final class SyncSchedulerStatusTests: XCTestCase {
     }
 
     func testOwnerChangeClearsRuntimeFailureAndCancelsQueuedState() async throws {
-        let scheduler = SyncScheduler()
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let client = FakeSyncClient()
+        let scheduler = SyncScheduler(coordinator: SyncCoordinator(client: client), modelContext: context)
         scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
         scheduler.recordFailureForTesting(message: "offline", at: Date(timeIntervalSince1970: 100))
 
         XCTAssertNotNil(scheduler.lastFailure)
 
-        scheduler.currentOwnerTokenIdentifier = "issuer|owner_b"
+        let syncStarted = expectation(description: "sync started")
+        client.onFetchChanges = {
+            XCTAssertTrue(scheduler.isSyncing)
+            scheduler.requestSync()
+            XCTAssertTrue(scheduler.hasQueuedSyncRequest)
+            scheduler.currentOwnerTokenIdentifier = "issuer|owner_b"
+            syncStarted.fulfill()
+        }
+
+        scheduler.requestSync()
+        await fulfillment(of: [syncStarted], timeout: 1.0)
+        try await waitUntil { !scheduler.isSyncing }
 
         XCTAssertNil(scheduler.lastFailure)
+        XCTAssertNil(scheduler.lastSyncedAt)
         XCTAssertFalse(scheduler.hasQueuedSyncRequest)
         XCTAssertFalse(scheduler.isSyncing)
     }
