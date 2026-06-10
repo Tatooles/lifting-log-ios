@@ -876,6 +876,29 @@ final class SyncCoordinator {
         session.updatedAt = Date(timeIntervalSince1970: record.updatedAt)
         session.deletedAt = record.deletedAt.map(Date.init(timeIntervalSince1970:))
         session.healthLinkID = record.healthLinkID.flatMap(UUID.init(uuidString:))
+        if let deletedAt = session.deletedAt {
+            cascadeRemoteWorkoutSessionDeletion(session, deletedAt: deletedAt)
+        }
+    }
+
+    private func cascadeRemoteWorkoutSessionDeletion(_ session: WorkoutSession, deletedAt: Date) {
+        for loggedExercise in session.loggedExercises {
+            if loggedExercise.deletedAt == nil {
+                loggedExercise.deletedAt = deletedAt
+            }
+            if loggedExercise.updatedAt < deletedAt {
+                loggedExercise.updatedAt = deletedAt
+            }
+
+            for set in loggedExercise.sets {
+                if set.deletedAt == nil {
+                    set.deletedAt = deletedAt
+                }
+                if set.updatedAt < deletedAt {
+                    set.updatedAt = deletedAt
+                }
+            }
+        }
     }
 
     private func apply(

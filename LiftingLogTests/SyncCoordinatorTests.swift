@@ -833,6 +833,100 @@ final class SyncCoordinatorTests: XCTestCase {
         XCTAssertEqual(state.loggedSetsCursor, 33)
     }
 
+    func testPullCascadesRemoteWorkoutSessionTombstoneToLocalChildren() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let owner = "issuer|owner_a"
+        let deletedAt = Date(timeIntervalSince1970: 300)
+        let sessionID = UUID(uuidString: "00000000-0000-0000-0000-000000006051")!
+        let loggedExerciseID = UUID(uuidString: "00000000-0000-0000-0000-000000006052")!
+        let setID = UUID(uuidString: "00000000-0000-0000-0000-000000006053")!
+
+        let state = SyncCursorState(
+            ownerTokenIdentifier: owner,
+            hasBootstrappedSettingsExercises: true,
+            hasBootstrappedWorkoutGraph: true
+        )
+        let session = WorkoutSession(
+            id: sessionID,
+            title: "Remote Deleted",
+            startedAt: Date(timeIntervalSince1970: 100),
+            endedAt: Date(timeIntervalSince1970: 200),
+            durationSeconds: 100,
+            status: .completed,
+            source: .blank,
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 200),
+            syncOwnerTokenIdentifier: owner
+        )
+        let loggedExercise = LoggedExercise(
+            id: loggedExerciseID,
+            orderIndex: 0,
+            exerciseSnapshotName: "Bench Press",
+            createdAt: Date(timeIntervalSince1970: 110),
+            updatedAt: Date(timeIntervalSince1970: 200)
+        )
+        let set = LoggedSet(
+            id: setID,
+            orderIndex: 0,
+            weight: 185,
+            reps: 5,
+            kind: .working,
+            isCompleted: true,
+            createdAt: Date(timeIntervalSince1970: 120),
+            updatedAt: Date(timeIntervalSince1970: 200)
+        )
+        loggedExercise.session = session
+        set.loggedExercise = loggedExercise
+        session.loggedExercises.append(loggedExercise)
+        loggedExercise.sets.append(set)
+        context.insert(state)
+        context.insert(session)
+        context.insert(loggedExercise)
+        context.insert(set)
+        try context.save()
+
+        let client = FakeSyncClient()
+        client.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [],
+                workoutSessions: [
+                    WorkoutSessionSyncRecord(
+                        clientId: sessionID.uuidString.lowercased(),
+                        createdAt: 100,
+                        updatedAt: 300,
+                        deletedAt: 300,
+                        serverUpdatedAt: 400,
+                        title: "Remote Deleted",
+                        startedAt: 100,
+                        endedAt: 200,
+                        durationSeconds: 100,
+                        notes: "",
+                        referenceNotes: nil,
+                        statusRaw: "completed",
+                        sourceRaw: "blank",
+                        sourceSessionID: nil,
+                        healthLinkID: nil
+                    )
+                ],
+                loggedExercises: [],
+                loggedSets: [],
+                cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 400),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            )
+        ]
+
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
+
+        XCTAssertEqual(session.deletedAt, deletedAt)
+        XCTAssertEqual(loggedExercise.deletedAt, deletedAt)
+        XCTAssertEqual(set.deletedAt, deletedAt)
+        XCTAssertTrue(session.sortedLoggedExercises.isEmpty)
+        XCTAssertTrue(loggedExercise.sortedSets.isEmpty)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
+    }
+
     func testPullDoesNotAdvanceLoggedSetCursorWhenParentLoggedExerciseIsMissing() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
