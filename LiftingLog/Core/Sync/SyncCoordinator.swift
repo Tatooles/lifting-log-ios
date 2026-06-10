@@ -808,8 +808,6 @@ final class SyncCoordinator {
                     continue
                 }
 
-                guard incomingDeletedAt == nil else { continue }
-
                 let exercise = Exercise(
                     id: id,
                     seedIdentifier: record.seedIdentifier,
@@ -823,7 +821,7 @@ final class SyncCoordinator {
                     syncOwnerTokenIdentifier: ownerTokenIdentifier,
                     createdAt: Date(timeIntervalSince1970: record.createdAt),
                     updatedAt: incomingUpdatedAt,
-                    deletedAt: nil
+                    deletedAt: incomingDeletedAt
                 )
                 exercise.categoryRaw = record.categoryRaw
                 exercise.equipmentRaw = record.equipmentRaw
