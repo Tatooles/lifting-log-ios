@@ -55,6 +55,46 @@ final class SyncSchedulerStatusTests: XCTestCase {
         XCTAssertNil(scheduler.lastFailure)
     }
 
+    func testSchedulerDoesNotRecordSuccessWhenPushLeavesFailedOutboxEntry() async throws {
+        struct PushError: LocalizedError {
+            var errorDescription: String? { "push failed" }
+        }
+
+        let owner = "issuer|owner_a"
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(
+            name: "Bench Press",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Chest",
+            syncOwnerTokenIdentifier: owner
+        )
+        context.insert(exercise)
+        try SyncOutboxRecorder().recordUpdate(
+            entityKind: .exercise,
+            entityID: exercise.id,
+            ownerTokenIdentifier: owner,
+            context: context,
+            now: Date(timeIntervalSince1970: 100)
+        )
+        try context.save()
+
+        let client = FakeSyncClient()
+        client.error = PushError()
+        let scheduler = SyncScheduler(coordinator: SyncCoordinator(client: client), modelContext: context)
+        scheduler.currentOwnerTokenIdentifier = owner
+
+        scheduler.requestSync()
+        try await waitUntil {
+            !scheduler.isSyncing
+                && ((try? context.fetch(FetchDescriptor<SyncOutboxEntry>()).first?.status) == .failed)
+        }
+
+        XCTAssertNil(scheduler.lastSyncedAt)
+        XCTAssertEqual(scheduler.lastFailure?.message, "Cloud sync could not finish.")
+    }
+
     func testSchedulerDoesNotRecordSuccessWithoutOwner() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

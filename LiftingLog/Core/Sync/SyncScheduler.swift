@@ -4,6 +4,8 @@ import SwiftData
 @MainActor
 @Observable
 final class SyncScheduler {
+    private static let incompleteSyncFailureMessage = "Cloud sync could not finish."
+
     struct Failure: Equatable {
         let message: String
         let occurredAt: Date
@@ -101,6 +103,13 @@ final class SyncScheduler {
                     guard !Task.isCancelled, currentOwnerTokenIdentifier == syncOwnerTokenIdentifier else {
                         break
                     }
+                    guard !hasFailedActiveV1OutboxEntries(
+                        ownerTokenIdentifier: syncOwnerTokenIdentifier,
+                        context: modelContext
+                    ) else {
+                        lastFailure = Failure(message: Self.incompleteSyncFailureMessage, occurredAt: .now)
+                        break
+                    }
                     lastSyncedAt = .now
                     lastFailure = nil
                 } catch is CancellationError {
@@ -126,6 +135,20 @@ final class SyncScheduler {
             if shouldStartQueuedSync {
                 startSyncTask(coordinator: coordinator, modelContext: modelContext)
             }
+        }
+    }
+
+    private func hasFailedActiveV1OutboxEntries(
+        ownerTokenIdentifier: String?,
+        context: ModelContext
+    ) -> Bool {
+        guard let ownerTokenIdentifier else { return false }
+        let entries = (try? context.fetch(FetchDescriptor<SyncOutboxEntry>())) ?? []
+        return entries.contains { entry in
+            guard entry.isActive else { return false }
+            guard entry.entityKind?.isV1Synced == true else { return false }
+            guard entry.status == .failed else { return false }
+            return entry.ownerTokenIdentifier == ownerTokenIdentifier || entry.ownerTokenIdentifier == nil
         }
     }
 }
