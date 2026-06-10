@@ -100,8 +100,18 @@ final class WorkoutSession: Identifiable {
         }
     }
 
-    static func visibleActiveSessions(from sessions: [WorkoutSession]) -> [WorkoutSession] {
-        sessions.filter { $0.status == .active && !$0.isDeleted }
+    static func visibleActiveSessions(
+        from sessions: [WorkoutSession],
+        ownerTokenIdentifier: String? = nil
+    ) -> [WorkoutSession] {
+        sessions.filter { session in
+            session.status == .active
+                && !session.isDeleted
+                && (
+                    session.syncOwnerTokenIdentifier == ownerTokenIdentifier
+                        || (ownerTokenIdentifier != nil && session.syncOwnerTokenIdentifier == nil)
+                )
+        }
     }
 
     func effectiveDurationSeconds(now: Date = .now) -> Int {

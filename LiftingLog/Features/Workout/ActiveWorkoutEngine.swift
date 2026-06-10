@@ -19,9 +19,9 @@ final class ActiveWorkoutEngine {
     var isStartingWorkout = false
     var lastErrorMessage: String?
 
-    func loadActiveSession(context: ModelContext) {
+    func loadActiveSession(ownerTokenIdentifier: String? = nil, context: ModelContext) {
         do {
-            activeSessionID = try currentActiveSession(context: context)?.id
+            activeSessionID = try currentActiveSession(ownerTokenIdentifier: ownerTokenIdentifier, context: context)?.id
             lastErrorMessage = nil
         } catch {
             lastErrorMessage = error.localizedDescription
@@ -29,8 +29,12 @@ final class ActiveWorkoutEngine {
     }
 
     @discardableResult
-    func startBlankWorkout(context: ModelContext, now: Date = .now) throws -> WorkoutSession {
-        if let active = try currentActiveSession(context: context) {
+    func startBlankWorkout(
+        ownerTokenIdentifier: String? = nil,
+        context: ModelContext,
+        now: Date = .now
+    ) throws -> WorkoutSession {
+        if let active = try currentActiveSession(ownerTokenIdentifier: ownerTokenIdentifier, context: context) {
             activeSessionID = active.id
             return active
         }
@@ -38,7 +42,15 @@ final class ActiveWorkoutEngine {
         isStartingWorkout = true
         defer { isStartingWorkout = false }
 
-        let session = WorkoutSession(title: "Workout", startedAt: now, status: .active, source: .blank, createdAt: now, updatedAt: now)
+        let session = WorkoutSession(
+            title: "Workout",
+            startedAt: now,
+            status: .active,
+            source: .blank,
+            createdAt: now,
+            updatedAt: now,
+            syncOwnerTokenIdentifier: ownerTokenIdentifier
+        )
         context.insert(session)
         try context.save()
         activeSessionID = session.id
@@ -46,8 +58,13 @@ final class ActiveWorkoutEngine {
     }
 
     @discardableResult
-    func startWorkout(fromPast pastSession: WorkoutSession, context: ModelContext, now: Date = .now) throws -> WorkoutSession {
-        if let active = try currentActiveSession(context: context) {
+    func startWorkout(
+        fromPast pastSession: WorkoutSession,
+        ownerTokenIdentifier: String? = nil,
+        context: ModelContext,
+        now: Date = .now
+    ) throws -> WorkoutSession {
+        if let active = try currentActiveSession(ownerTokenIdentifier: ownerTokenIdentifier, context: context) {
             activeSessionID = active.id
             return active
         }
@@ -63,7 +80,8 @@ final class ActiveWorkoutEngine {
             sourceSessionID: pastSession.id,
             referenceNotes: pastSession.notes,
             createdAt: now,
-            updatedAt: now
+            updatedAt: now,
+            syncOwnerTokenIdentifier: ownerTokenIdentifier
         )
         context.insert(session)
 
@@ -253,7 +271,9 @@ final class ActiveWorkoutEngine {
         context: ModelContext,
         now: Date = .now
     ) throws {
-        let effectiveOwnerTokenIdentifier = ownerTokenIdentifier ?? syncScheduler?.currentOwnerTokenIdentifier
+        let effectiveOwnerTokenIdentifier = session.syncOwnerTokenIdentifier
+            ?? ownerTokenIdentifier
+            ?? syncScheduler?.currentOwnerTokenIdentifier
         applyFinalWorkoutTitle(to: session)
         session.syncOwnerTokenIdentifier = effectiveOwnerTokenIdentifier
         session.status = .completed
@@ -315,8 +335,11 @@ final class ActiveWorkoutEngine {
         }
     }
 
-    private func currentActiveSession(context: ModelContext) throws -> WorkoutSession? {
-        let activeSessions = WorkoutSession.visibleActiveSessions(from: try context.fetch(FetchDescriptor<WorkoutSession>()))
+    private func currentActiveSession(ownerTokenIdentifier: String?, context: ModelContext) throws -> WorkoutSession? {
+        let activeSessions = WorkoutSession.visibleActiveSessions(
+            from: try context.fetch(FetchDescriptor<WorkoutSession>()),
+            ownerTokenIdentifier: ownerTokenIdentifier
+        )
             .sorted { $0.startedAt > $1.startedAt }
 
         if activeSessions.count > 1 {

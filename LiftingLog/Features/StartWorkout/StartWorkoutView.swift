@@ -71,7 +71,10 @@ struct StartWorkoutView: View {
 
     private func startBlankWorkout() {
         do {
-            _ = try activeWorkoutEngine.startBlankWorkout(context: modelContext)
+            _ = try activeWorkoutEngine.startBlankWorkout(
+                ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier,
+                context: modelContext
+            )
             navigationState.selectedTab = .workout
         } catch {
             activeWorkoutEngine.lastErrorMessage = error.localizedDescription
@@ -80,7 +83,11 @@ struct StartWorkoutView: View {
 
     private func startWorkout(fromPast session: WorkoutSession) {
         do {
-            _ = try activeWorkoutEngine.startWorkout(fromPast: session, context: modelContext)
+            _ = try activeWorkoutEngine.startWorkout(
+                fromPast: session,
+                ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier,
+                context: modelContext
+            )
             navigationState.selectedTab = .workout
         } catch {
             activeWorkoutEngine.lastErrorMessage = error.localizedDescription

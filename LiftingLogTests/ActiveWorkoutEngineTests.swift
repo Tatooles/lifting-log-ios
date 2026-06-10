@@ -449,7 +449,11 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         let engine = ActiveWorkoutEngine()
         let scheduler = SyncScheduler()
         scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
-        let session = try engine.startBlankWorkout(context: context, now: Date(timeIntervalSince1970: 100))
+        let session = try engine.startBlankWorkout(
+            ownerTokenIdentifier: scheduler.currentOwnerTokenIdentifier,
+            context: context,
+            now: Date(timeIntervalSince1970: 100)
+        )
 
         try engine.finishWorkout(
             session,
@@ -462,6 +466,68 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertEqual(session.syncOwnerTokenIdentifier, "issuer|owner_a")
         XCTAssertEqual(entry.ownerTokenIdentifier, "issuer|owner_a")
         XCTAssertEqual(scheduler.requestCount, 1)
+    }
+
+    func testFinishingWorkoutPreservesOwnerCapturedWhenStarted() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let engine = ActiveWorkoutEngine()
+        let scheduler = SyncScheduler()
+        let startedOwner = "issuer|owner_a"
+        scheduler.currentOwnerTokenIdentifier = startedOwner
+        let session = try engine.startBlankWorkout(
+            ownerTokenIdentifier: scheduler.currentOwnerTokenIdentifier,
+            context: context,
+            now: Date(timeIntervalSince1970: 100)
+        )
+
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_b"
+        try engine.finishWorkout(
+            session,
+            syncScheduler: scheduler,
+            context: context,
+            now: Date(timeIntervalSince1970: 220)
+        )
+
+        let entries = try context.fetch(FetchDescriptor<SyncOutboxEntry>())
+        XCTAssertEqual(session.syncOwnerTokenIdentifier, startedOwner)
+        XCTAssertTrue(entries.allSatisfy { $0.ownerTokenIdentifier == startedOwner })
+        XCTAssertEqual(scheduler.requestCount, 0)
+    }
+
+    func testActiveSessionVisibilityIsScopedToCurrentOwner() throws {
+        let ownerA = WorkoutSession(
+            title: "Owner A",
+            startedAt: Date(timeIntervalSince1970: 100),
+            status: .active,
+            source: .blank,
+            syncOwnerTokenIdentifier: "issuer|owner_a"
+        )
+        let ownerB = WorkoutSession(
+            title: "Owner B",
+            startedAt: Date(timeIntervalSince1970: 200),
+            status: .active,
+            source: .blank,
+            syncOwnerTokenIdentifier: "issuer|owner_b"
+        )
+        let ownerless = WorkoutSession(
+            title: "Ownerless",
+            startedAt: Date(timeIntervalSince1970: 300),
+            status: .active,
+            source: .blank
+        )
+
+        XCTAssertEqual(
+            WorkoutSession.visibleActiveSessions(
+                from: [ownerA, ownerB, ownerless],
+                ownerTokenIdentifier: "issuer|owner_b"
+            ).map(\.title),
+            ["Owner B", "Ownerless"]
+        )
+        XCTAssertEqual(
+            WorkoutSession.visibleActiveSessions(from: [ownerA, ownerB, ownerless]).map(\.title),
+            ["Ownerless"]
+        )
     }
 
     func testDiscardedSessionsDoNotAppearInCompletedHistoryFetches() throws {

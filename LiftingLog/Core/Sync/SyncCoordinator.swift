@@ -927,11 +927,25 @@ final class SyncCoordinator {
                 maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
                 continue
             }
-            let exercise = try record.exerciseClientId
-                .flatMap(UUID.init(uuidString:))
-                .flatMap { try findExercise(id: $0, context: context) }
             let incomingUpdatedAt = Date(timeIntervalSince1970: record.updatedAt)
             let incomingDeletedAt = record.deletedAt.map(Date.init(timeIntervalSince1970:))
+            let exercise: Exercise?
+            if let exerciseClientId = record.exerciseClientId,
+               let exerciseID = UUID(uuidString: exerciseClientId) {
+                guard let resolvedExercise = try findExercise(id: exerciseID, context: context) else {
+                    guard incomingDeletedAt == nil else {
+                        maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
+                        continue
+                    }
+                    return WorkoutChildApplyResult(
+                        appliedCursor: maxAppliedServerUpdatedAt,
+                        deferredMissingParent: true
+                    )
+                }
+                exercise = resolvedExercise
+            } else {
+                exercise = nil
+            }
 
             if let loggedExercise = try findLoggedExercise(id: id, context: context) {
                 guard SyncConflictResolver.decision(

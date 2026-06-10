@@ -972,6 +972,132 @@ final class SyncCoordinatorTests: XCTestCase {
         XCTAssertTrue(try context.fetch(FetchDescriptor<LoggedSet>()).isEmpty)
     }
 
+    func testPullDefersLoggedExerciseUntilReferencedExerciseExists() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let owner = "issuer|owner_a"
+        let exerciseID = UUID(uuidString: "00000000-0000-0000-0000-000000006201")!
+        let sessionID = UUID(uuidString: "00000000-0000-0000-0000-000000006202")!
+        let loggedExerciseID = UUID(uuidString: "00000000-0000-0000-0000-000000006203")!
+        let state = SyncCursorState(
+            ownerTokenIdentifier: owner,
+            hasBootstrappedSettingsExercises: true,
+            hasBootstrappedWorkoutGraph: true
+        )
+        context.insert(state)
+        try context.save()
+
+        let firstClient = FakeSyncClient()
+        firstClient.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [],
+                workoutSessions: [
+                    WorkoutSessionSyncRecord(
+                        clientId: sessionID.uuidString.lowercased(),
+                        createdAt: 10,
+                        updatedAt: 20,
+                        deletedAt: nil,
+                        serverUpdatedAt: 31,
+                        title: "Push",
+                        startedAt: 100,
+                        endedAt: 200,
+                        durationSeconds: 100,
+                        notes: "",
+                        referenceNotes: nil,
+                        statusRaw: "completed",
+                        sourceRaw: "blank",
+                        sourceSessionID: nil,
+                        healthLinkID: nil
+                    )
+                ],
+                loggedExercises: [
+                    LoggedExerciseSyncRecord(
+                        clientId: loggedExerciseID.uuidString.lowercased(),
+                        createdAt: 11,
+                        updatedAt: 21,
+                        deletedAt: nil,
+                        serverUpdatedAt: 32,
+                        sessionClientId: sessionID.uuidString.lowercased(),
+                        exerciseClientId: exerciseID.uuidString.lowercased(),
+                        orderIndex: 0,
+                        exerciseSnapshotName: "Bench Press",
+                        exerciseSnapshotEquipmentRaw: "barbell",
+                        exerciseSnapshotPrimaryMuscleGroupRaw: "chest",
+                        hasSnapshotMetadata: true,
+                        notes: "",
+                        referenceNotes: nil
+                    )
+                ],
+                loggedSets: [],
+                cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 31, loggedExercises: 32),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            )
+        ]
+
+        try await SyncCoordinator(client: firstClient).run(ownerTokenIdentifier: owner, context: context)
+
+        XCTAssertEqual(state.workoutSessionsCursor, 31)
+        XCTAssertEqual(state.loggedExercisesCursor, 0)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<LoggedExercise>()).isEmpty)
+
+        let secondClient = FakeSyncClient()
+        secondClient.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [
+                    ExerciseSyncRecord(
+                        clientId: exerciseID.uuidString.lowercased(),
+                        createdAt: 9,
+                        updatedAt: 19,
+                        deletedAt: nil,
+                        serverUpdatedAt: 30,
+                        seedIdentifier: nil,
+                        name: "Bench Press",
+                        categoryRaw: "strength",
+                        equipmentRaw: "barbell",
+                        primaryMuscleRaw: "Chest",
+                        primaryMuscleGroupRaw: "chest",
+                        notes: "",
+                        isArchived: false,
+                        isSeeded: false
+                    )
+                ],
+                workoutSessions: [],
+                loggedExercises: [
+                    LoggedExerciseSyncRecord(
+                        clientId: loggedExerciseID.uuidString.lowercased(),
+                        createdAt: 11,
+                        updatedAt: 21,
+                        deletedAt: nil,
+                        serverUpdatedAt: 32,
+                        sessionClientId: sessionID.uuidString.lowercased(),
+                        exerciseClientId: exerciseID.uuidString.lowercased(),
+                        orderIndex: 0,
+                        exerciseSnapshotName: "Bench Press",
+                        exerciseSnapshotEquipmentRaw: "barbell",
+                        exerciseSnapshotPrimaryMuscleGroupRaw: "chest",
+                        hasSnapshotMetadata: true,
+                        notes: "",
+                        referenceNotes: nil
+                    )
+                ],
+                loggedSets: [],
+                cursors: SyncChangeCursors(userSettings: 0, exercises: 30, workoutSessions: 31, loggedExercises: 32),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            )
+        ]
+
+        try await SyncCoordinator(client: secondClient).run(ownerTokenIdentifier: owner, context: context)
+
+        let loggedExercise = try XCTUnwrap(context.fetch(FetchDescriptor<LoggedExercise>()).first)
+        XCTAssertEqual(secondClient.fetchRequests.first?.cursors.loggedExercises, 0)
+        XCTAssertEqual(loggedExercise.id, loggedExerciseID)
+        XCTAssertEqual(loggedExercise.exercise?.id, exerciseID)
+        XCTAssertEqual(state.exercisesCursor, 30)
+        XCTAssertEqual(state.loggedExercisesCursor, 32)
+    }
+
     func testPullAdvancesLoggedExerciseCursorForTombstoneWhenSessionIsMissing() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
