@@ -271,9 +271,7 @@ final class ActiveWorkoutEngine {
         context: ModelContext,
         now: Date = .now
     ) throws {
-        let effectiveOwnerTokenIdentifier = session.syncOwnerTokenIdentifier
-            ?? ownerTokenIdentifier
-            ?? syncScheduler?.currentOwnerTokenIdentifier
+        let effectiveOwnerTokenIdentifier = session.syncOwnerTokenIdentifier ?? ownerTokenIdentifier
         applyFinalWorkoutTitle(to: session)
         session.syncOwnerTokenIdentifier = effectiveOwnerTokenIdentifier
         session.status = .completed
