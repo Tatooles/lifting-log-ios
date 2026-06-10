@@ -18,6 +18,7 @@ final class SyncStatusDisplayStateTests: XCTestCase {
         XCTAssertEqual(state.title, "Sync Status")
         XCTAssertEqual(state.subtitle, "Cloud sync starts after you sign in.")
         XCTAssertEqual(state.trailingText, "Local only")
+        XCTAssertEqual(state.tint, .secondary)
         XCTAssertFalse(state.canRetry)
         XCTAssertFalse(state.showsGlobalFailureNotice)
     }
@@ -36,6 +37,7 @@ final class SyncStatusDisplayStateTests: XCTestCase {
         XCTAssertEqual(state.kind, .syncing)
         XCTAssertEqual(state.subtitle, "Sending and receiving changes.")
         XCTAssertEqual(state.trailingText, "Syncing")
+        XCTAssertEqual(state.tint, .attention)
         XCTAssertFalse(state.canRetry)
     }
 
@@ -54,6 +56,7 @@ final class SyncStatusDisplayStateTests: XCTestCase {
         XCTAssertEqual(state.subtitle, "Cloud sync could not finish. Your data is saved on this iPhone.")
         XCTAssertEqual(state.detailText, "1 failed, 2 waiting. Last synced 1 min ago.")
         XCTAssertEqual(state.trailingText, "Retry")
+        XCTAssertEqual(state.tint, .attention)
         XCTAssertTrue(state.canRetry)
         XCTAssertTrue(state.showsGlobalFailureNotice)
         XCTAssertEqual(state.userVisibleFailureMessage, "Cloud sync could not finish. Your data is saved on this iPhone.")
@@ -73,6 +76,7 @@ final class SyncStatusDisplayStateTests: XCTestCase {
         XCTAssertEqual(state.kind, .waiting)
         XCTAssertEqual(state.subtitle, "4 changes waiting for cloud sync.")
         XCTAssertEqual(state.trailingText, "Waiting")
+        XCTAssertEqual(state.tint, .secondary)
         XCTAssertTrue(state.canRetry)
         XCTAssertFalse(state.showsGlobalFailureNotice)
     }
@@ -91,6 +95,7 @@ final class SyncStatusDisplayStateTests: XCTestCase {
         XCTAssertEqual(state.kind, .upToDate)
         XCTAssertEqual(state.subtitle, "Last synced 5 min ago.")
         XCTAssertEqual(state.trailingText, "Up to date")
+        XCTAssertEqual(state.tint, .secondary)
         XCTAssertFalse(state.canRetry)
     }
 
@@ -99,5 +104,20 @@ final class SyncStatusDisplayStateTests: XCTestCase {
             SyncStatusDisplayState.sanitizedFailureReason(from: "The Internet connection appears to be offline."),
             "The network appears to be offline."
         )
+    }
+
+    func testFailureMessageWithoutCountsUsesSanitizedDetailText() {
+        let state = SyncStatusDisplayState.make(
+            ownerTokenIdentifier: "issuer|owner_a",
+            isSyncing: false,
+            lastSyncedAt: nil,
+            lastFailureMessage: "offline",
+            pendingCount: 0,
+            failedCount: 0,
+            now: Date(timeIntervalSince1970: 1_000)
+        )
+
+        XCTAssertEqual(state.kind, .needsAttention)
+        XCTAssertEqual(state.detailText, "The network appears to be offline.")
     }
 }

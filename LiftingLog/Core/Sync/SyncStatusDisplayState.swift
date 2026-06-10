@@ -1,5 +1,4 @@
 import Foundation
-import SwiftUI
 
 struct SyncStatusDisplayState {
     enum Kind: Equatable {
@@ -10,13 +9,18 @@ struct SyncStatusDisplayState {
         case needsAttention
     }
 
+    enum Tint: Equatable {
+        case secondary
+        case attention
+    }
+
     let kind: Kind
     let title: String
     let subtitle: String
     let detailText: String?
     let trailingText: String
     let systemImage: String
-    let tint: Color
+    let tint: Tint
     let canRetry: Bool
     let showsGlobalFailureNotice: Bool
     let userVisibleFailureMessage: String?
@@ -53,7 +57,7 @@ struct SyncStatusDisplayState {
                 detailText: countsText(pendingCount: pendingCount, failedCount: failedCount, lastSyncedAt: lastSyncedAt, now: now),
                 trailingText: "Syncing",
                 systemImage: "arrow.triangle.2.circlepath.icloud",
-                tint: AppTheme.accentBright,
+                tint: .attention,
                 canRetry: false,
                 showsGlobalFailureNotice: false,
                 userVisibleFailureMessage: nil
@@ -70,7 +74,7 @@ struct SyncStatusDisplayState {
                     ?? sanitizedFailureReason(from: lastFailureMessage ?? ""),
                 trailingText: "Retry",
                 systemImage: "exclamationmark.icloud",
-                tint: AppTheme.accentBright,
+                tint: .attention,
                 canRetry: true,
                 showsGlobalFailureNotice: true,
                 userVisibleFailureMessage: defaultMessage
