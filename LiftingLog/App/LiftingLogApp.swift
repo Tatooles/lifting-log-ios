@@ -80,7 +80,10 @@ struct LiftingLogApp: App {
                     syncScheduler.currentOwnerTokenIdentifier = nil
                     syncScheduler.seedDefaultsForLocalMode()
                 case .authenticated:
-                    syncScheduler.currentOwnerTokenIdentifier = await resolveOwnerTokenIdentifier()
+                    guard let ownerTokenIdentifier = await resolveOwnerTokenIdentifier() else {
+                        break
+                    }
+                    syncScheduler.currentOwnerTokenIdentifier = ownerTokenIdentifier
                     syncScheduler.seedDefaultsForCurrentOwner()
                     syncScheduler.requestSync()
                 }

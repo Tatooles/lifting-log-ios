@@ -90,13 +90,15 @@ final class WorkoutSession: Identifiable {
         from sessions: [WorkoutSession],
         ownerTokenIdentifier: String? = nil
     ) -> [WorkoutSession] {
-        sessions.filter { session in
-            session.status == .completed
-                && !session.isDeleted
-                && (
-                    session.syncOwnerTokenIdentifier == ownerTokenIdentifier
-                        || (ownerTokenIdentifier != nil && session.syncOwnerTokenIdentifier == nil)
-                )
+        let visibleCompleted = sessions.filter { session in
+            session.status == .completed && !session.isDeleted
+        }
+        guard let ownerTokenIdentifier else {
+            return visibleCompleted
+        }
+
+        return visibleCompleted.filter { session in
+            session.syncOwnerTokenIdentifier == ownerTokenIdentifier || session.syncOwnerTokenIdentifier == nil
         }
     }
 
