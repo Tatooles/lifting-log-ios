@@ -407,8 +407,8 @@ final class SyncCoordinator {
                 entry.ownerTokenIdentifier == ownerTokenIdentifier
             }
             .sorted { lhs, rhs in
-                let lhsRank = syncPushRank(for: lhs.entityKind)
-                let rhsRank = syncPushRank(for: rhs.entityKind)
+                let lhsRank = syncPushRank(for: lhs)
+                let rhsRank = syncPushRank(for: rhs)
                 if lhsRank != rhsRank {
                     return lhsRank < rhsRank
                 }
@@ -453,6 +453,21 @@ final class SyncCoordinator {
         }
 
         return SyncPushResult(didComplete: true, didPush: !entries.isEmpty)
+    }
+
+    private func syncPushRank(for entry: SyncOutboxEntry) -> Int {
+        guard entry.operation == .delete else {
+            return syncPushRank(for: entry.entityKind)
+        }
+
+        return switch entry.entityKind {
+        case .some(.userSettings): 0
+        case .some(.exercise): 1
+        case .some(.loggedSet): 2
+        case .some(.loggedExercise): 3
+        case .some(.workoutSession): 4
+        default: 999
+        }
     }
 
     private func syncPushRank(for entityKind: SyncEntityKind?) -> Int {

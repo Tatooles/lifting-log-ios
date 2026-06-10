@@ -40,6 +40,7 @@ struct FinishWorkoutSheet: View {
                 do {
                     try engine.finishWorkout(
                         session,
+                        ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier,
                         syncScheduler: syncScheduler,
                         context: modelContext
                     )

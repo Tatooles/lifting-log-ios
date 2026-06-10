@@ -322,8 +322,8 @@ final class SyncCoordinatorTests: XCTestCase {
         let client = FakeSyncClient()
         try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
 
-        XCTAssertEqual(client.tombstones.map(\.0), [.workoutSession, .loggedExercise, .loggedSet])
-        XCTAssertEqual(client.tombstones.map(\.1), [session.id, loggedExercise.id, set.id])
+        XCTAssertEqual(client.tombstones.map(\.0), [.loggedSet, .loggedExercise, .workoutSession])
+        XCTAssertEqual(client.tombstones.map(\.1), [set.id, loggedExercise.id, session.id])
         XCTAssertEqual(client.tombstones.map(\.2), [deletedAt, deletedAt, deletedAt])
         XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
     }

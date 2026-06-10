@@ -516,6 +516,29 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertEqual(scheduler.requestCount, 0)
     }
 
+    func testFinishingSignedOutWorkoutWithCurrentOwnerRecordsOwnedIntent() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let engine = ActiveWorkoutEngine()
+        let scheduler = SyncScheduler()
+        let owner = "issuer|owner_a"
+        let session = try engine.startBlankWorkout(context: context, now: Date(timeIntervalSince1970: 100))
+        scheduler.currentOwnerTokenIdentifier = owner
+
+        try engine.finishWorkout(
+            session,
+            ownerTokenIdentifier: scheduler.currentOwnerTokenIdentifier,
+            syncScheduler: scheduler,
+            context: context,
+            now: Date(timeIntervalSince1970: 220)
+        )
+
+        let entries = try context.fetch(FetchDescriptor<SyncOutboxEntry>())
+        XCTAssertEqual(session.syncOwnerTokenIdentifier, owner)
+        XCTAssertTrue(entries.allSatisfy { $0.ownerTokenIdentifier == owner })
+        XCTAssertEqual(scheduler.requestCount, 1)
+    }
+
     func testActiveSessionVisibilityIsScopedToCurrentOwner() throws {
         let ownerA = WorkoutSession(
             title: "Owner A",
