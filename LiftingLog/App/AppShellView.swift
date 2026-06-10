@@ -7,12 +7,32 @@ struct AppShellView: View {
     @Bindable var navigationState: AppNavigationState
     @Bindable var activeWorkoutEngine: ActiveWorkoutEngine
     @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
+    @Query(sort: \SyncOutboxEntry.updatedAt, order: .reverse) private var outboxEntries: [SyncOutboxEntry]
 
     private var activeSession: WorkoutSession? {
         WorkoutSession.visibleActiveSessions(
             from: sessions,
             ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
         ).first
+    }
+
+    private var syncDisplayState: SyncStatusDisplayState {
+        let activeEntries = outboxEntries.filter { entry in
+            guard entry.isActive else { return false }
+            guard entry.entityKind?.isV1Synced == true else { return false }
+            if let owner = syncScheduler.currentOwnerTokenIdentifier {
+                return entry.ownerTokenIdentifier == owner || entry.ownerTokenIdentifier == nil
+            }
+            return false
+        }
+        return SyncStatusDisplayState.make(
+            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier,
+            isSyncing: syncScheduler.isSyncing,
+            lastSyncedAt: syncScheduler.lastSyncedAt,
+            lastFailureMessage: syncScheduler.lastFailure?.message,
+            pendingCount: activeEntries.filter { $0.status == .pending || $0.status == .inFlight }.count,
+            failedCount: activeEntries.filter { $0.status == .failed }.count
+        )
     }
 
     var body: some View {
@@ -39,8 +59,8 @@ struct AppShellView: View {
             }
             .tag(AppTab.workout)
 
-            NavigationStack {
-                ProfileView()
+            NavigationStack(path: $navigationState.profilePath) {
+                ProfileView(navigationState: navigationState)
             }
             .tabItem {
                 Label(AppTab.profile.title(isWorkoutActive: activeSession != nil), systemImage: AppTab.profile.symbolName(isWorkoutActive: activeSession != nil))
@@ -50,11 +70,66 @@ struct AppShellView: View {
         }
         .tint(AppTheme.accentBright)
         .preferredColorScheme(.dark)
+        .safeAreaInset(edge: .bottom) {
+            if syncDisplayState.showsGlobalFailureNotice {
+                GlobalSyncFailureBanner(
+                    retry: { syncScheduler.retrySync() },
+                    details: { navigationState.openSyncSettings() }
+                )
+                .padding(.horizontal, AppTheme.shellPadding)
+                .padding(.bottom, 8)
+            }
+        }
         .task {
             activeWorkoutEngine.loadActiveSession(
                 ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier,
                 context: modelContext
             )
         }
+    }
+}
+
+private struct GlobalSyncFailureBanner: View {
+    let retry: () -> Void
+    let details: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "exclamationmark.icloud")
+                .foregroundStyle(AppTheme.accentBright)
+                .font(.system(size: 20, weight: .semibold))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Cloud sync failed")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text("Your data is saved on this iPhone.")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+
+            Spacer(minLength: 8)
+
+            HStack(spacing: 8) {
+                Button("Retry", action: retry)
+                    .buttonStyle(.borderedProminent)
+                    .tint(AppTheme.accentBright)
+                    .accessibilityIdentifier("GlobalSyncRetryButton")
+                Button("Details", action: details)
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("GlobalSyncDetailsButton")
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(AppTheme.surface)
+                .accessibilityIdentifier("GlobalSyncFailureBanner")
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(AppTheme.accentBright.opacity(0.45))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 }

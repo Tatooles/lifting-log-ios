@@ -377,6 +377,26 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
+    func testFailedSyncBannerShowsRetryAndRoutesToSettingsDetails() {
+        let app = makeApp(extraArguments: [
+            "--uitest-sync-owner", "issuer|ui_owner",
+            "--uitest-show-sync-failure",
+        ])
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["Cloud sync failed"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Your data is saved on this iPhone."].exists)
+
+        app.buttons["GlobalSyncRetryButton"].tap()
+        XCTAssertTrue(app.staticTexts["UITestSyncRequestCount-1"].waitForExistence(timeout: 3))
+
+        app.buttons["GlobalSyncDetailsButton"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Sync Status"].exists)
+        XCTAssertTrue(app.staticTexts["Cloud sync could not finish. Your data is saved on this iPhone."].exists)
+    }
+
+    @MainActor
     func testSettingsShowsAccountShellAndDeleteAccountPlaceholder() {
         let app = makeApp()
         app.launchArguments.append("--uitest-force-signed-out-auth")

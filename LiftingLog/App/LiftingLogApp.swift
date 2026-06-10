@@ -57,6 +57,11 @@ struct LiftingLogApp: App {
             .task {
                 if let uiTestSyncOwner {
                     syncScheduler.currentOwnerTokenIdentifier = uiTestSyncOwner
+                    if ProcessInfo.processInfo.arguments.contains("--uitest-show-sync-failure") {
+                        syncScheduler.recordFailureForTesting(
+                            message: "Convex function sync:fetchChanges failed for token \(uiTestSyncOwner)"
+                        )
+                    }
                     return
                 }
                 configureSyncIfNeeded()

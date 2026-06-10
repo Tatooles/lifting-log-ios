@@ -23,4 +23,13 @@ final class AppNavigationStateTests: XCTestCase {
 
         XCTAssertTrue(navigationState.historyPath.isEmpty)
     }
+
+    func testOpenSyncSettingsSelectsProfileAndPushesSettingsRoute() {
+        let navigationState = AppNavigationState()
+
+        navigationState.openSyncSettings()
+
+        XCTAssertEqual(navigationState.selectedTab, .profile)
+        XCTAssertEqual(navigationState.profilePath, [.settings])
+    }
 }

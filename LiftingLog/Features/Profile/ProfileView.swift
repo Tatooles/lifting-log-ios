@@ -8,6 +8,8 @@ struct ProfileView: View {
     @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
     @Query(sort: \Exercise.name) private var exercises: [Exercise]
 
+    @Bindable var navigationState: AppNavigationState
+
     private var settings: UserSettings? {
         UserSettings.visibleSettingsRecords(
             from: settingsRecords,
@@ -75,6 +77,14 @@ struct ProfileView: View {
         }
         .background(AppTheme.subtleBackground.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
+        .navigationDestination(for: ProfileRoute.self) { route in
+            switch route {
+            case .settings:
+                if let settings {
+                    SettingsView(settings: settings)
+                }
+            }
+        }
         .task(id: syncScheduler.currentOwnerTokenIdentifier) {
             seedSettingsIfNeeded()
         }
