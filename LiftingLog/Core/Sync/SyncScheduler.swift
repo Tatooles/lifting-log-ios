@@ -39,6 +39,7 @@ final class SyncScheduler {
 
     func requestSync() {
         requestCount += 1
+        guard currentOwnerTokenIdentifier != nil else { return }
         guard let coordinator, let modelContext else { return }
         guard syncTask == nil else {
             needsSync = true

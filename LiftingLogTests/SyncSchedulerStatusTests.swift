@@ -55,6 +55,21 @@ final class SyncSchedulerStatusTests: XCTestCase {
         XCTAssertNil(scheduler.lastFailure)
     }
 
+    func testSchedulerDoesNotRecordSuccessWithoutOwner() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let client = FakeSyncClient()
+        let scheduler = SyncScheduler(coordinator: SyncCoordinator(client: client), modelContext: context)
+
+        scheduler.requestSync()
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(scheduler.requestCount, 1)
+        XCTAssertNil(scheduler.lastSyncedAt)
+        XCTAssertNil(scheduler.lastFailure)
+        XCTAssertFalse(scheduler.isSyncing)
+    }
+
     func testOwnerChangeClearsRuntimeFailureAndCancelsQueuedState() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
