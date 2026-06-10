@@ -4,13 +4,24 @@ import SwiftData
 @MainActor
 @Observable
 final class SyncScheduler {
+    struct Failure: Equatable {
+        let message: String
+        let occurredAt: Date
+    }
+
     var currentOwnerTokenIdentifier: String? {
         didSet {
             guard oldValue != currentOwnerTokenIdentifier else { return }
             cancelInFlightSync()
+            clearRuntimeStateForOwnerChange()
         }
     }
     private(set) var requestCount = 0
+    private(set) var isSyncing = false
+    private(set) var hasQueuedSyncRequest = false
+    private(set) var lastSyncedAt: Date?
+    private(set) var lastFailure: Failure?
+
     private var coordinator: SyncCoordinator?
     private var modelContext: ModelContext?
     private var syncTask: Task<Void, Never>?
@@ -31,10 +42,15 @@ final class SyncScheduler {
         guard let coordinator, let modelContext else { return }
         guard syncTask == nil else {
             needsSync = true
+            hasQueuedSyncRequest = true
             return
         }
 
         startSyncTask(coordinator: coordinator, modelContext: modelContext)
+    }
+
+    func retrySync() {
+        requestSync()
     }
 
     func seedDefaultsForCurrentOwner() {
@@ -55,21 +71,37 @@ final class SyncScheduler {
         try? SeedDataService.seedIfNeeded(context: modelContext)
     }
 
+    func recordFailureForTesting(message: String, at date: Date = .now) {
+        lastFailure = Failure(message: message, occurredAt: date)
+    }
+
     private func cancelInFlightSync() {
         guard let syncTask else { return }
         needsSync = false
         syncTask.cancel()
     }
 
+    private func clearRuntimeStateForOwnerChange() {
+        hasQueuedSyncRequest = false
+        isSyncing = false
+        lastSyncedAt = nil
+        lastFailure = nil
+    }
+
     private func startSyncTask(coordinator: SyncCoordinator, modelContext: ModelContext) {
         syncTask = Task { @MainActor in
+            isSyncing = true
             while true {
                 needsSync = false
+                hasQueuedSyncRequest = false
                 do {
                     try await coordinator.run(ownerTokenIdentifier: currentOwnerTokenIdentifier, context: modelContext)
+                    lastSyncedAt = .now
+                    lastFailure = nil
                 } catch is CancellationError {
                     break
                 } catch {
+                    lastFailure = Failure(message: error.localizedDescription, occurredAt: .now)
                     break
                 }
                 if Task.isCancelled {
@@ -80,6 +112,8 @@ final class SyncScheduler {
 
             let shouldStartQueuedSync = needsSync && currentOwnerTokenIdentifier != nil
             needsSync = false
+            hasQueuedSyncRequest = false
+            isSyncing = false
             syncTask = nil
             if shouldStartQueuedSync {
                 startSyncTask(coordinator: coordinator, modelContext: modelContext)
