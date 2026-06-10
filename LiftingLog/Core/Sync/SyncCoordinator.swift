@@ -1192,24 +1192,24 @@ final class SyncCoordinator {
             guard let session = try findWorkoutSession(id: entry.entityID, context: context) else {
                 return false
             }
-            guard session.syncOwnerTokenIdentifier != nil else {
-                return false
+            if session.syncOwnerTokenIdentifier == nil {
+                return entry.isActive
             }
             return try canSyncWorkoutSession(session, ownerTokenIdentifier: ownerTokenIdentifier, context: context)
         case .loggedExercise:
             guard let session = try findLoggedExercise(id: entry.entityID, context: context)?.session else {
                 return false
             }
-            guard session.syncOwnerTokenIdentifier != nil else {
-                return false
+            if session.syncOwnerTokenIdentifier == nil {
+                return entry.isActive
             }
             return try canSyncWorkoutSession(session, ownerTokenIdentifier: ownerTokenIdentifier, context: context)
         case .loggedSet:
             guard let session = try findLoggedSet(id: entry.entityID, context: context)?.loggedExercise?.session else {
                 return false
             }
-            guard session.syncOwnerTokenIdentifier != nil else {
-                return false
+            if session.syncOwnerTokenIdentifier == nil {
+                return entry.isActive
             }
             return try canSyncWorkoutSession(session, ownerTokenIdentifier: ownerTokenIdentifier, context: context)
         default:

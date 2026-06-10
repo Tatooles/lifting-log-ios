@@ -419,7 +419,7 @@ final class SyncCoordinatorTests: XCTestCase {
         XCTAssertNotNil(try context.fetch(FetchDescriptor<WorkoutSession>()).first { $0.id == remoteSessionID })
     }
 
-    func testFirstWorkoutGraphRunDoesNotClaimOwnerlessWorkoutOutboxWhenRemoteGraphExists() async throws {
+    func testFirstWorkoutGraphRunClaimsOwnerlessWorkoutOutboxWhenRemoteGraphExists() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
         let owner = "issuer|owner_a"
@@ -491,11 +491,13 @@ final class SyncCoordinatorTests: XCTestCase {
 
         try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
 
-        XCTAssertTrue(client.operationLog.isEmpty)
-        XCTAssertNil(localSession.syncOwnerTokenIdentifier)
-        let entries = try context.fetch(FetchDescriptor<SyncOutboxEntry>())
-        XCTAssertEqual(entries.count, 3)
-        XCTAssertTrue(entries.allSatisfy { $0.ownerTokenIdentifier == nil })
+        XCTAssertEqual(client.operationLog, [
+            "upsertWorkoutSession:\(localSession.id.uuidString.lowercased())",
+            "upsertLoggedExercise:\(loggedExercise.id.uuidString.lowercased())",
+            "upsertLoggedSet:\(set.id.uuidString.lowercased())",
+        ])
+        XCTAssertEqual(localSession.syncOwnerTokenIdentifier, owner)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
     }
 
     func testFirstWorkoutGraphRunClaimsOwnerlessWorkoutOutboxWhenRemoteGraphIsEmpty() async throws {
