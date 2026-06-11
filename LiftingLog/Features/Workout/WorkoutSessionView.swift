@@ -24,7 +24,7 @@ struct WorkoutSessionView: View {
     @State private var recentlyAddedExerciseID: UUID?
     @State private var collapsedExerciseIDs: Set<UUID> = []
     @FocusState private var focusedField: WorkoutField?
-    private let contentBottomPadding: CGFloat = 180
+    private let contentBottomPadding: CGFloat = 120
 
     var body: some View {
         ScrollViewReader { scrollProxy in
@@ -62,10 +62,11 @@ struct WorkoutSessionView: View {
                             Label("Add Exercise", systemImage: "plus")
                                 .font(.headline)
                                 .foregroundStyle(AppTheme.accentBright)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 8)
+                                .frame(maxWidth: .infinity, minHeight: 50)
+                                .background(AppTheme.accentMuted, in: Capsule())
+                                .contentShape(Capsule())
                         }
-                        .buttonStyle(.glass)
+                        .buttonStyle(.plain)
                         .accessibilityIdentifier("AddExerciseButton")
 
                         SurfaceCard {
@@ -83,6 +84,19 @@ struct WorkoutSessionView: View {
                                 .foregroundStyle(AppTheme.textPrimary)
                                 .lineLimit(4...6)
                                 .focused($focusedField, equals: .workoutNotes)
+                                .padding(12)
+                                .background(
+                                    AppTheme.fieldFill,
+                                    in: RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
+                                        .strokeBorder(
+                                            focusedField == .workoutNotes ? AppTheme.accentBright.opacity(0.7) : .clear,
+                                            lineWidth: 1.5
+                                        )
+                                )
+                                .animation(.easeOut(duration: 0.15), value: focusedField == .workoutNotes)
                                 .id(WorkoutField.workoutNotes)
 
                                 if let referenceNotes {

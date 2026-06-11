@@ -19,21 +19,27 @@ struct SwipeToDeleteRow<Content: View>: View {
         content
             .offset(x: offsetX)
             .background(alignment: .trailing) {
+                // The red area grows to exactly fill whatever the row has
+                // revealed, flush against the sliding content, like a List
+                // swipe action.
                 if offsetX < -1 {
                     Button(role: .destructive) {
                         performDelete()
                     } label: {
-                        Image(systemName: "trash.fill")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: revealWidth - 10)
+                        deleteShape
+                            .fill(Color(.systemRed))
+                            .overlay(
+                                Image(systemName: "trash.fill")
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                    .opacity(min(1, (-offsetX - 24) / 24))
+                            )
+                            .frame(width: max(0, -offsetX - 8))
                             .frame(maxHeight: .infinity)
-                            .background(Color(.systemRed), in: deleteShape)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(deleteAccessibilityLabel)
                     .accessibilityIdentifier(deleteAccessibilityIdentifier ?? deleteAccessibilityLabel)
-                    .transition(.opacity)
                 }
             }
             .contentShape(Rectangle())

@@ -19,6 +19,9 @@ struct SurfaceCard<Content: View>: View {
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(.regularMaterial, in: shape)
+            // Clip so collapsing content is swallowed by the card edge
+            // instead of sliding over it.
+            .clipShape(shape)
             .overlay(
                 shape.strokeBorder(
                     colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.05),

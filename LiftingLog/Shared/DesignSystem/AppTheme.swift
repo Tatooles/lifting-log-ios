@@ -19,6 +19,9 @@ enum AppTheme {
     static let surfaceMuted = Color(.tertiarySystemFill)
     /// Recessed fill for input fields inside a card.
     static let surfaceStrong = Color(.quaternarySystemFill)
+    /// Fill for editable fields inside a card — stronger than surfaceMuted so
+    /// inputs read as the primary content.
+    static let fieldFill = Color(.secondarySystemFill)
 
     static let border = Color(.separator).opacity(0.5)
     static let borderStrong = Color(.separator)

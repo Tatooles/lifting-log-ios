@@ -264,6 +264,8 @@ final class LiftingLogUITests: XCTestCase {
         XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
         addExercise("Variant Bench, Dumbbell • Chest", in: app)
         dismissKeyboardIfNeeded(in: app)
+        app.buttons["ExerciseMenuButton-0"].tap()
+        XCTAssertTrue(app.buttons["ExerciseHistoryButton-0"].waitForExistence(timeout: 3))
         app.buttons["ExerciseHistoryButton-0"].tap()
 
         XCTAssertTrue(app.staticTexts["Dumbbell Variant"].waitForExistence(timeout: 3))

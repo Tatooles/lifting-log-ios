@@ -100,7 +100,7 @@ struct SetRowView: View {
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity)
             .background(
-                AppTheme.surfaceMuted,
+                AppTheme.fieldFill,
                 in: RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
             )
             .overlay(

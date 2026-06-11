@@ -10,6 +10,7 @@ struct ExerciseCardView: View {
     @Binding var isCollapsed: Bool
     var focusedField: FocusState<WorkoutField?>.Binding
     let viewHistory: () -> Void
+    @State private var showsRemoveConfirmation = false
     @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
 
     private var weightUnit: MeasurementUnit {
@@ -65,29 +66,43 @@ struct ExerciseCardView: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("ExerciseHeader-\(exerciseIndex)")
 
-                    Button(action: viewHistory) {
-                        Image(systemName: "clock.arrow.circlepath")
+                    Menu {
+                        Button(action: viewHistory) {
+                            Label("View History", systemImage: "clock.arrow.circlepath")
+                        }
+                        .accessibilityIdentifier("ExerciseHistoryButton-\(exerciseIndex)")
+
+                        Button(role: .destructive) {
+                            showsRemoveConfirmation = true
+                        } label: {
+                            Label("Remove Exercise", systemImage: "trash")
+                        }
+                        .accessibilityIdentifier("RemoveExerciseButton-\(exerciseIndex)")
+                    } label: {
+                        Image(systemName: "ellipsis")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(AppTheme.textSecondary)
                             .frame(width: 44, height: 44)
                             .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("View \(loggedExercise.exerciseSnapshotName) history")
-                    .accessibilityIdentifier("ExerciseHistoryButton-\(exerciseIndex)")
+                    .accessibilityLabel("\(loggedExercise.exerciseSnapshotName) options")
+                    .accessibilityIdentifier("ExerciseMenuButton-\(exerciseIndex)")
                 }
-                .padding(.vertical, 6)
+                .padding(.top, 12)
+                .padding(.bottom, 6)
                 .padding(.horizontal, 16)
-                .contextMenu {
-                    Button(action: viewHistory) {
-                        Label("View History", systemImage: "clock.arrow.circlepath")
-                    }
-
-                    Button(role: .destructive) {
+                .confirmationDialog(
+                    "Remove \(loggedExercise.exerciseSnapshotName)?",
+                    isPresented: $showsRemoveConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Remove Exercise", role: .destructive) {
                         try? engine.removeLoggedExercise(loggedExercise, context: modelContext)
-                    } label: {
-                        Label("Remove Exercise", systemImage: "trash")
                     }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("This removes the exercise and its sets from this workout.")
                 }
 
                 if !isCollapsed {
@@ -125,13 +140,13 @@ struct ExerciseCardView: View {
                             Label("Add Set", systemImage: "plus")
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(AppTheme.accentBright)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 4)
+                                .padding(.horizontal, 12)
+                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                                .contentShape(Rectangle())
                         }
-                        .buttonStyle(.glass)
+                        .buttonStyle(.plain)
                         .accessibilityIdentifier("AddSetButton-\(exerciseIndex)")
                         .padding(.horizontal, 16)
-                        .padding(.top, 2)
 
                         TextField(
                             "Exercise notes...",
@@ -147,9 +162,19 @@ struct ExerciseCardView: View {
                         .padding(14)
                         .frame(minHeight: 88, alignment: .topLeading)
                         .background(
-                            AppTheme.surfaceMuted,
+                            AppTheme.fieldFill,
                             in: RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
                         )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
+                                .strokeBorder(
+                                    focusedField.wrappedValue == .exerciseNotes(loggedExercise.id)
+                                        ? AppTheme.accentBright.opacity(0.7)
+                                        : .clear,
+                                    lineWidth: 1.5
+                                )
+                        )
+                        .animation(.easeOut(duration: 0.15), value: focusedField.wrappedValue == .exerciseNotes(loggedExercise.id))
                         .padding(.horizontal, 16)
                         .accessibilityIdentifier("ExerciseNotesField-\(exerciseIndex)")
                         .id(WorkoutField.exerciseNotes(loggedExercise.id))
