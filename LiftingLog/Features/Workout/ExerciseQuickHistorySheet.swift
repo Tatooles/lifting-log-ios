@@ -8,6 +8,14 @@ struct ExerciseQuickHistorySheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(SyncScheduler.self) private var syncScheduler
     @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
+    @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
+
+    private var weightUnit: MeasurementUnit {
+        UserSettings.visibleSettingsRecords(
+            from: settingsRecords,
+            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
+        ).first?.weightUnit ?? .pounds
+    }
 
     private var route: ExerciseHistoryRoute {
         ExerciseHistoryRoute(loggedExercise: loggedExercise)
@@ -52,7 +60,7 @@ struct ExerciseQuickHistorySheet: View {
                         )
                     } else {
                         ForEach(recentGroups) { group in
-                            ExerciseHistorySessionGroupCard(group: group)
+                            ExerciseHistorySessionGroupCard(group: group, weightUnit: weightUnit)
                         }
                     }
                 }
