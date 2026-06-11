@@ -344,15 +344,33 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
-    func testSettingsWeightUnitConversionRoundsDisplayedWorkoutValues() {
+    func testSettingsWeightUnitPreferenceRoundsDisplayedWorkoutAndHistoryValues() {
         let app = makeApp()
         app.launch()
 
-        app.buttons["StartBlankWorkoutButton"].tap()
-        XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
-        addBenchPress(in: app)
-        fillFirstBenchSet(in: app)
-        dismissKeyboardIfNeeded(in: app)
+        createCompletedBenchWorkout(in: app, title: "Metric Display")
+
+        app.buttons["ProfileTab"].tap()
+        app.buttons["ProfileSettingsLink"].tap()
+        XCTAssertTrue(app.segmentedControls["WeightUnitPicker"].waitForExistence(timeout: 3))
+        app.segmentedControls["WeightUnitPicker"].buttons["Kilograms"].tap()
+
+        app.buttons["HistoryTab"].tap()
+        XCTAssertTrue(app.buttons["WorkoutHistoryButton-0"].waitForExistence(timeout: 3))
+        app.buttons["WorkoutHistoryButton-0"].tap()
+        XCTAssertTrue(app.staticTexts["83.91"].waitForExistence(timeout: 3))
+
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.segmentedControls["HistoryModePicker"].buttons["Exercises"].tap()
+        XCTAssertTrue(app.buttons["ExerciseHistoryButton-0"].waitForExistence(timeout: 3))
+        app.buttons["ExerciseHistoryButton-0"].tap()
+        XCTAssertTrue(app.staticTexts["83.91 x 5 @ 8"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    func testKilogramFirstWorkoutEntryDisplaysCleanWeightAndPlaceholder() {
+        let app = makeApp()
+        app.launch()
 
         app.buttons["ProfileTab"].tap()
         app.buttons["ProfileSettingsLink"].tap()
@@ -360,7 +378,31 @@ final class LiftingLogUITests: XCTestCase {
         app.segmentedControls["WeightUnitPicker"].buttons["Kilograms"].tap()
 
         app.buttons["WorkoutTab"].tap()
-        XCTAssertEqual(app.textFields["SetWeightField-0-0"].value as? String, "83.91")
+        app.buttons["StartBlankWorkoutButton"].tap()
+        XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
+        addBenchPress(in: app)
+
+        let firstWeightField = app.textFields["SetWeightField-0-0"]
+        firstWeightField.tap()
+        firstWeightField.typeText("100")
+        dismissKeyboardIfNeeded(in: app)
+        XCTAssertEqual(firstWeightField.value as? String, "100")
+
+        app.buttons["AddSetButton-0"].tap()
+        let secondWeightField = app.textFields["SetWeightField-0-1"]
+        XCTAssertTrue(secondWeightField.waitForExistence(timeout: 3))
+        XCTAssertEqual(secondWeightField.value as? String, "100")
+
+        app.buttons["ProfileTab"].tap()
+        if !app.segmentedControls["WeightUnitPicker"].waitForExistence(timeout: 1) {
+            app.buttons["ProfileSettingsLink"].tap()
+            XCTAssertTrue(app.segmentedControls["WeightUnitPicker"].waitForExistence(timeout: 3))
+        }
+        app.segmentedControls["WeightUnitPicker"].buttons["Pounds"].tap()
+
+        app.buttons["WorkoutTab"].tap()
+        XCTAssertEqual(app.textFields["SetWeightField-0-0"].value as? String, "220.46")
+        XCTAssertEqual(app.textFields["SetWeightField-0-1"].value as? String, "220.46")
     }
 
     @MainActor

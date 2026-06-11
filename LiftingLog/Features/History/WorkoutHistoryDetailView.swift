@@ -7,9 +7,17 @@ struct WorkoutHistoryDetailView: View {
     @Environment(SyncScheduler.self) private var syncScheduler
     let session: WorkoutSession
     @State private var deleteErrorMessage: String?
+    @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
 
     private var metrics: WorkoutMetrics {
         WorkoutMetrics(session: session)
+    }
+
+    private var weightUnit: MeasurementUnit {
+        UserSettings.visibleSettingsRecords(
+            from: settingsRecords,
+            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
+        ).first?.weightUnit ?? .pounds
     }
 
     var body: some View {
@@ -57,7 +65,7 @@ struct WorkoutHistoryDetailView: View {
                                 HStack {
                                     Text("Set \(set.orderIndex + 1)")
                                     Spacer()
-                                    Text(set.weight.map(WorkoutFormatters.number) ?? "-")
+                                    Text(weightText(for: set))
                                     Text("x")
                                     Text(set.reps.map(String.init) ?? "-")
                                     Text(set.isCompleted ? "Done" : "Open")
@@ -132,5 +140,13 @@ struct WorkoutHistoryDetailView: View {
             }
             .frame(maxWidth: .infinity)
         }
+    }
+
+    private func weightText(for set: LoggedSet) -> String {
+        guard let displayWeight = weightUnit.displayWeight(fromCanonicalPounds: set.weight) else {
+            return "-"
+        }
+
+        return WorkoutFormatters.number(displayWeight)
     }
 }
