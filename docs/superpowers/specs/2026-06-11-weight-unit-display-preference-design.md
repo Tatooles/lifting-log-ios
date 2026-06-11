@@ -86,6 +86,11 @@ Cover behavior at the boundaries most likely to regress:
 - Sync payload mapping sends canonical stored pounds.
 - Formatter coverage guards against floating-point artifacts such as `99.999999` or `100.0000001` reaching user-facing strings.
 
+Add or update one to two UI tests for the user-visible risk:
+
+- A kilogram-first workout entry flow: set units to kilograms, enter a normal kilogram value such as `100`, complete or revisit the set, and assert the UI shows a clean `100` rather than a floating-point artifact.
+- A settings toggle display flow: create or use a completed workout, switch units, and assert workout or exercise history displays converted values cleanly without requiring any history-editing action from the user.
+
 Existing tests that currently expect bulk conversion on settings change should be updated or removed because that behavior becomes the bug being eliminated.
 
 ## Risks
