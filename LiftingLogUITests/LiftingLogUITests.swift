@@ -377,6 +377,44 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
+    func testFailedSyncBannerShowsRetryAndRoutesToSettingsDetails() {
+        let app = makeApp(extraArguments: [
+            "--uitest-sync-owner", "issuer|ui_owner",
+            "--uitest-show-sync-failure",
+        ])
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["Cloud sync failed"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Your data is saved on this iPhone."].exists)
+
+        app.buttons["GlobalSyncRetryButton"].tap()
+        XCTAssertTrue(app.staticTexts["UITestSyncRequestCount-1"].waitForExistence(timeout: 3))
+
+        app.buttons["GlobalSyncDetailsButton"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Sync Status"].exists)
+        XCTAssertTrue(app.staticTexts["Cloud sync could not finish. Your data is saved on this iPhone."].exists)
+
+        app.buttons["SettingsDeveloperDiagnosticsRow"].tap()
+        let syncSummary = app.staticTexts["DeveloperDiagnosticsSyncSummary"]
+        XCTAssertTrue(syncSummary.waitForExistence(timeout: 3))
+        XCTAssertTrue(syncSummary.label.contains("lastFailure: Convex function sync:fetchChanges failed for token issuer|ui_owner"))
+    }
+
+    @MainActor
+    func testFailedSyncBannerCanBeDismissed() {
+        let app = makeApp(extraArguments: [
+            "--uitest-sync-owner", "issuer|ui_owner",
+            "--uitest-show-sync-failure",
+        ])
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["Cloud sync failed"].waitForExistence(timeout: 3))
+        app.buttons["GlobalSyncDismissButton"].tap()
+        XCTAssertFalse(app.otherElements["GlobalSyncFailureBanner"].waitForExistence(timeout: 1))
+    }
+
+    @MainActor
     func testSettingsShowsAccountShellAndDeleteAccountPlaceholder() {
         let app = makeApp()
         app.launchArguments.append("--uitest-force-signed-out-auth")
@@ -389,7 +427,8 @@ final class LiftingLogUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Account"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Sync Status"].exists)
         XCTAssertTrue(app.staticTexts["Local only"].exists)
-        XCTAssertTrue(app.staticTexts["Cloud sync is not configured yet."].exists)
+        XCTAssertTrue(app.staticTexts["Cloud sync starts after you sign in."].exists)
+        XCTAssertFalse(app.staticTexts["Cloud sync is not configured yet."].exists)
         XCTAssertTrue(app.buttons["SettingsDeleteAccountRow"].exists)
 
         app.buttons["SettingsDeleteAccountRow"].tap()

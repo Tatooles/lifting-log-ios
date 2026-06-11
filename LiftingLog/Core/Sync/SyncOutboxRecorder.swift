@@ -196,7 +196,12 @@ struct SyncOutboxRecorder {
     }
 
     func pendingEntries(context: ModelContext) throws -> [SyncOutboxEntry] {
-        try context.fetch(FetchDescriptor<SyncOutboxEntry>())
+        let pendingStatus = SyncOutboxStatus.pending.rawValue
+        return try context.fetch(FetchDescriptor<SyncOutboxEntry>(
+            predicate: #Predicate { entry in
+                entry.statusRaw == pendingStatus
+            }
+        ))
             .filter { entry in
                 guard let entityKind = entry.entityKind, entityKind.isV1Synced else {
                     return false
@@ -204,8 +209,7 @@ struct SyncOutboxRecorder {
                 guard entry.operation != nil else {
                     return false
                 }
-
-                return entry.status == .pending
+                return true
             }
             .sorted { lhs, rhs in
                 if lhs.updatedAt == rhs.updatedAt {
@@ -216,19 +220,51 @@ struct SyncOutboxRecorder {
             }
     }
 
+    func pendingEntries(
+        ownerTokenIdentifier: String,
+        context: ModelContext
+    ) throws -> [SyncOutboxEntry] {
+        let pendingStatus = SyncOutboxStatus.pending.rawValue
+        let descriptor = FetchDescriptor<SyncOutboxEntry>(
+            predicate: #Predicate { entry in
+                entry.statusRaw == pendingStatus
+                    && entry.ownerTokenIdentifier == ownerTokenIdentifier
+                    && entry.operationRaw != ""
+            },
+            sortBy: [
+                SortDescriptor(\.updatedAt),
+                SortDescriptor(\.createdAt),
+            ]
+        )
+
+        return try context.fetch(descriptor)
+            .filter { entry in
+                guard let entityKind = entry.entityKind, entityKind.isV1Synced else {
+                    return false
+                }
+                return entry.operation != nil
+            }
+    }
+
     private func activeEntry(
         entityKind: SyncEntityKind,
         entityID: UUID,
         ownerTokenIdentifier: String?,
         context: ModelContext
     ) throws -> SyncOutboxEntry? {
-        try context.fetch(FetchDescriptor<SyncOutboxEntry>())
-            .filter { entry in
-                entry.entityKind == entityKind
+        let entityKindRaw = entityKind.rawValue
+        let completedStatus = SyncOutboxStatus.completed.rawValue
+        return try context.fetch(FetchDescriptor<SyncOutboxEntry>(
+            predicate: #Predicate { entry in
+                entry.entityKindRaw == entityKindRaw
                     && entry.entityID == entityID
                     && entry.ownerTokenIdentifier == ownerTokenIdentifier
-                    && entry.isActive
-                    && entry.operation != nil
+                    && entry.statusRaw != completedStatus
+                    && entry.operationRaw != ""
+            }
+        ))
+            .filter { entry in
+                entry.operation != nil
             }
             .sorted { lhs, rhs in
                 if lhs.createdAt == rhs.createdAt {

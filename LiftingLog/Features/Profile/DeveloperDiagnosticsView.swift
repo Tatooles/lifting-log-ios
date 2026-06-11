@@ -1,10 +1,13 @@
 #if DEBUG
 import Combine
 import ConvexMobile
+import SwiftData
 import SwiftUI
 
 @MainActor
 struct DeveloperDiagnosticsView: View {
+    @Environment(SyncScheduler.self) private var syncScheduler
+    @Query(sort: \SyncOutboxEntry.updatedAt, order: .reverse) private var outboxEntries: [SyncOutboxEntry]
     @State private var client = ConvexClientFactory.makeAuthenticatedClient()
     @State private var authStateLabel = "Loading"
     @State private var smokeResult = "Not checked"
@@ -32,6 +35,14 @@ struct DeveloperDiagnosticsView: View {
                     .textSelection(.enabled)
                     .accessibilityIdentifier("DeveloperDiagnosticsConvexAuthResult")
             }
+
+            Section("Sync") {
+                Text(syncDiagnostics.summary)
+                    .font(.footnote.monospaced())
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .textSelection(.enabled)
+                    .accessibilityIdentifier("DeveloperDiagnosticsSyncSummary")
+            }
         }
         .scrollContentBackground(.hidden)
         .background(AppTheme.subtleBackground.ignoresSafeArea())
@@ -46,6 +57,36 @@ struct DeveloperDiagnosticsView: View {
             smokeTask?.cancel()
             smokeTask = nil
         }
+    }
+
+    private var syncDiagnostics: SyncDiagnosticsSnapshot {
+        let entries = outboxEntries
+            .filter { entry in
+                guard entry.isActive else { return false }
+                guard entry.entityKind?.isV1Synced == true else { return false }
+                if let owner = syncScheduler.currentOwnerTokenIdentifier {
+                    return entry.ownerTokenIdentifier == owner || entry.ownerTokenIdentifier == nil
+                }
+                return true
+            }
+            .map { entry in
+                SyncDiagnosticsEntry(
+                    entityKind: entry.entityKindRaw,
+                    operation: entry.operationRaw,
+                    status: entry.statusRaw,
+                    ownerTokenIdentifier: entry.ownerTokenIdentifier,
+                    attemptCount: entry.attemptCount,
+                    updatedAt: entry.updatedAt,
+                    lastErrorMessage: entry.lastErrorMessage
+                )
+            }
+
+        return SyncDiagnosticsSnapshot.make(
+            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier,
+            isSyncing: syncScheduler.isSyncing,
+            lastFailureMessage: syncScheduler.lastFailure?.message,
+            entries: entries
+        )
     }
 
     private func observeAuthState() {

@@ -90,4 +90,16 @@ final class SyncCursorStateTests: XCTestCase {
         XCTAssertEqual(state.exercisesCursor, 34)
         XCTAssertEqual(try context.fetch(FetchDescriptor<SyncCursorState>()).count, 1)
     }
+
+    func testCursorStateLookupReturnsUnsavedInsertedOwnerState() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+
+        let first = try SyncCursorState.state(for: "issuer|owner_a", context: context)
+        let second = try SyncCursorState.state(for: "issuer|owner_a", context: context)
+        try context.save()
+
+        XCTAssertEqual(second.id, first.id)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<SyncCursorState>()).count, 1)
+    }
 }

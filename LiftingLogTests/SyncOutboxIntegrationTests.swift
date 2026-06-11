@@ -837,6 +837,157 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         assertEntry(entries, kind: .loggedSet, id: set.id, operation: .delete)
     }
 
+    func testLargeWeightUnitConversionSyncDrainsWithoutFailure() async throws {
+        let owner = "issuer|owner_a"
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let settings = UserSettings(weightUnit: .pounds, syncOwnerTokenIdentifier: owner)
+        context.insert(settings)
+
+        for index in 0..<100 {
+            let session = WorkoutSession(
+                title: "Workout \(index)",
+                startedAt: Date(timeIntervalSince1970: Double(index)),
+                endedAt: Date(timeIntervalSince1970: Double(index + 1000)),
+                durationSeconds: 100,
+                status: .completed,
+                source: .blank,
+                syncOwnerTokenIdentifier: owner
+            )
+            let loggedExercise = LoggedExercise(orderIndex: 0, exerciseSnapshotName: "Bench Press")
+            let set = LoggedSet(orderIndex: 0, weight: Double(100 + index), reps: 5, isCompleted: true)
+            loggedExercise.session = session
+            set.loggedExercise = loggedExercise
+            loggedExercise.sets.append(set)
+            session.loggedExercises.append(loggedExercise)
+            context.insert(session)
+        }
+        try context.save()
+
+        let client = FakeSyncClient()
+        let scheduler = SyncScheduler(
+            coordinator: SyncCoordinator(client: client),
+            modelContext: context
+        )
+        scheduler.currentOwnerTokenIdentifier = owner
+
+        try SettingsMutationService(syncScheduler: scheduler).updateWeightUnit(
+            .kilograms,
+            settings: settings,
+            context: context,
+            now: Date(timeIntervalSince1970: 2_000)
+        )
+
+        try await waitUntil(timeout: 5.0) {
+            scheduler.lastSyncedAt != nil || scheduler.lastFailure != nil
+        }
+
+        XCTAssertNil(scheduler.lastFailure)
+        XCTAssertNotNil(scheduler.lastSyncedAt)
+        XCTAssertTrue(try fetchEntries(context).isEmpty)
+        XCTAssertEqual(client.upsertedLoggedSets.count, 100)
+        XCTAssertEqual(client.upsertedSettings.count, 1)
+    }
+
+    func testCoordinatorPushesLargePendingOutboxInBoundedPages() async throws {
+        let owner = "issuer|owner_a"
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        context.insert(SyncCursorState(
+            ownerTokenIdentifier: owner,
+            userSettingsCursor: 1,
+            exercisesCursor: 1,
+            workoutSessionsCursor: 1,
+            loggedExercisesCursor: 1,
+            loggedSetsCursor: 1,
+            hasBootstrappedSettingsExercises: true,
+            hasBootstrappedWorkoutGraph: true
+        ))
+
+        let recorder = SyncOutboxRecorder()
+        for index in 0..<120 {
+            let session = WorkoutSession(
+                title: "Workout \(index)",
+                startedAt: Date(timeIntervalSince1970: Double(index)),
+                endedAt: Date(timeIntervalSince1970: Double(index + 1000)),
+                durationSeconds: 100,
+                status: .completed,
+                source: .blank,
+                syncOwnerTokenIdentifier: owner
+            )
+            let loggedExercise = LoggedExercise(orderIndex: 0, exerciseSnapshotName: "Bench Press")
+            let set = LoggedSet(orderIndex: 0, weight: Double(100 + index), reps: 5, isCompleted: true)
+            loggedExercise.session = session
+            set.loggedExercise = loggedExercise
+            loggedExercise.sets.append(set)
+            session.loggedExercises.append(loggedExercise)
+            context.insert(session)
+            try recorder.recordUpdate(
+                entityKind: .loggedSet,
+                entityID: set.id,
+                ownerTokenIdentifier: owner,
+                context: context,
+                now: Date(timeIntervalSince1970: Double(2_000 + index))
+            )
+        }
+        try context.save()
+
+        let client = FakeSyncClient()
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
+
+        XCTAssertEqual(client.upsertedLoggedSets.count, 50)
+        XCTAssertEqual(try fetchEntries(context).count, 70)
+    }
+
+    func testCoordinatorSortsAllPendingDeletesByDependencyBeforeBatchLimit() async throws {
+        let owner = "issuer|owner_a"
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        context.insert(SyncCursorState(
+            ownerTokenIdentifier: owner,
+            userSettingsCursor: 1,
+            exercisesCursor: 1,
+            workoutSessionsCursor: 1,
+            loggedExercisesCursor: 1,
+            loggedSetsCursor: 1,
+            hasBootstrappedSettingsExercises: true,
+            hasBootstrappedWorkoutGraph: true
+        ))
+
+        context.insert(SyncOutboxEntry(
+            entityKind: .workoutSession,
+            entityID: UUID(),
+            operation: .delete,
+            ownerTokenIdentifier: owner,
+            now: Date(timeIntervalSince1970: 100)
+        ))
+        context.insert(SyncOutboxEntry(
+            entityKind: .loggedExercise,
+            entityID: UUID(),
+            operation: .delete,
+            ownerTokenIdentifier: owner,
+            now: Date(timeIntervalSince1970: 101)
+        ))
+        for index in 0..<60 {
+            context.insert(SyncOutboxEntry(
+                entityKind: .loggedSet,
+                entityID: UUID(),
+                operation: .delete,
+                ownerTokenIdentifier: owner,
+                now: Date(timeIntervalSince1970: Double(200 + index))
+            ))
+        }
+        try context.save()
+
+        let client = FakeSyncClient()
+        let result = try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
+
+        XCTAssertTrue(result.hasMorePendingEntries)
+        XCTAssertEqual(client.tombstones.count, 50)
+        XCTAssertTrue(client.tombstones.allSatisfy { kind, _, _ in kind == .loggedSet })
+        XCTAssertEqual(try fetchEntries(context).count, 12)
+    }
+
     private func fetchEntries(_ context: ModelContext) throws -> [SyncOutboxEntry] {
         try context.fetch(FetchDescriptor<SyncOutboxEntry>())
             .sorted { lhs, rhs in
@@ -859,5 +1010,17 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         XCTAssertNotNil(entry, "Missing \(kind.rawValue) entry for \(id)", file: file, line: line)
         XCTAssertEqual(entry?.operation, operation, file: file, line: line)
         XCTAssertEqual(entry?.status, .pending, file: file, line: line)
+    }
+
+    private func waitUntil(
+        timeout: TimeInterval = 1.0,
+        condition: @MainActor @escaping () -> Bool
+    ) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if condition() { return }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTFail("Condition was not met before timeout")
     }
 }

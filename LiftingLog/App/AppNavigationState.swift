@@ -62,25 +62,37 @@ enum HistoryRoute: Hashable {
     case exercise(ExerciseHistoryRoute)
 }
 
+enum ProfileRoute: Hashable {
+    case settings
+}
+
 @Observable
 final class AppNavigationState {
     var selectedTab: AppTab
     var historyMode: HistoryMode
     var historyPath: [HistoryRoute]
+    var profilePath: [ProfileRoute]
 
     init(
         selectedTab: AppTab = .workout,
         historyMode: HistoryMode = .workouts,
-        historyPath: [HistoryRoute] = []
+        historyPath: [HistoryRoute] = [],
+        profilePath: [ProfileRoute] = []
     ) {
         self.selectedTab = selectedTab
         self.historyMode = historyMode
         self.historyPath = historyPath
+        self.profilePath = profilePath
     }
 
     func openExerciseHistory(_ route: ExerciseHistoryRoute) {
         selectedTab = .history
         historyMode = .exercises
         historyPath = [.exercise(route)]
+    }
+
+    func openSyncSettings() {
+        selectedTab = .profile
+        profilePath = [.settings]
     }
 }

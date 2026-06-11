@@ -4,16 +4,19 @@ import SwiftData
 @MainActor
 final class SyncCoordinator {
     private let client: any SyncClient & Sendable
+    private let maxPendingPushEntriesPerRun: Int
     private let recorder = SyncOutboxRecorder()
     private var isRunning = false
 
-    init(client: any SyncClient & Sendable) {
+    init(client: any SyncClient & Sendable, maxPendingPushEntriesPerRun: Int = 50) {
         self.client = client
+        self.maxPendingPushEntriesPerRun = maxPendingPushEntriesPerRun
     }
 
-    func run(ownerTokenIdentifier: String?, context: ModelContext) async throws {
-        guard let ownerTokenIdentifier else { return }
-        guard !isRunning else { return }
+    @discardableResult
+    func run(ownerTokenIdentifier: String?, context: ModelContext) async throws -> SyncRunResult {
+        guard let ownerTokenIdentifier else { return SyncRunResult() }
+        guard !isRunning else { return SyncRunResult() }
         isRunning = true
         defer { isRunning = false }
         try Task.checkCancellation()
@@ -42,10 +45,16 @@ final class SyncCoordinator {
         )
         try Task.checkCancellation()
         let pushResult = try await pushPendingEntries(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
-        guard pushResult.didComplete else { return }
+        guard pushResult.didComplete else {
+            return SyncRunResult(didPush: pushResult.didPush)
+        }
+        guard !pushResult.hasMorePendingEntries else {
+            return SyncRunResult(didPush: pushResult.didPush, hasMorePendingEntries: true)
+        }
         if pushResult.didPush || !didPullBeforePush {
             _ = try await pullChanges(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
         }
+        return SyncRunResult(didPush: pushResult.didPush)
     }
 
     func prepareForSync(
@@ -88,7 +97,13 @@ final class SyncCoordinator {
             }
         }
 
-        for entry in try context.fetch(FetchDescriptor<SyncOutboxEntry>()) {
+        let completedStatus = SyncOutboxStatus.completed.rawValue
+        for entry in try context.fetch(FetchDescriptor<SyncOutboxEntry>(
+            predicate: #Predicate { entry in
+                entry.statusRaw != completedStatus
+                    && entry.operationRaw != ""
+            }
+        )) {
             guard let entityKind = entry.entityKind, entityKind.isV1Synced else {
                 continue
             }
@@ -128,6 +143,10 @@ final class SyncCoordinator {
             )
             if didCompleteWorkoutGraphBootstrap {
                 state.hasBootstrappedWorkoutGraph = true
+                if state.loggedSetsCursor == 0,
+                   try hasActiveOutboxEntries(entityKind: .loggedSet, ownerTokenIdentifier: ownerTokenIdentifier, context: context) {
+                    state.loggedSetsCursor = 1
+                }
             }
         }
         if hadBootstrappedWorkoutGraph && state.loggedSetsCursor == 0 {
@@ -136,6 +155,9 @@ final class SyncCoordinator {
                 context: context,
                 now: .now
             )
+            if try hasActiveOutboxEntries(entityKind: .loggedSet, ownerTokenIdentifier: ownerTokenIdentifier, context: context) {
+                state.loggedSetsCursor = 1
+            }
         }
 
         try context.save()
@@ -380,14 +402,18 @@ final class SyncCoordinator {
         context: ModelContext,
         now: Date
     ) throws -> Bool {
-        guard let entry = try context.fetch(FetchDescriptor<SyncOutboxEntry>())
-            .first(where: {
-                $0.entityKind == entityKind
-                    && $0.entityID == entityID
-                    && $0.ownerTokenIdentifier == nil
-                    && $0.isActive
-                    && $0.operation != nil
-            }) else {
+        let entityKindRaw = entityKind.rawValue
+        let completedStatus = SyncOutboxStatus.completed.rawValue
+        guard let entry = try context.fetch(FetchDescriptor<SyncOutboxEntry>(
+            predicate: #Predicate { entry in
+                entry.entityKindRaw == entityKindRaw
+                    && entry.entityID == entityID
+                    && entry.ownerTokenIdentifier == nil
+                    && entry.statusRaw != completedStatus
+                    && entry.operationRaw != ""
+            }
+        ))
+            .first(where: { $0.isActive && $0.operation != nil }) else {
             return false
         }
 
@@ -402,10 +428,12 @@ final class SyncCoordinator {
     }
 
     private func pushPendingEntries(ownerTokenIdentifier: String, context: ModelContext) async throws -> SyncPushResult {
-        let entries = try recorder.pendingEntries(context: context)
-            .filter { entry in
-                entry.ownerTokenIdentifier == ownerTokenIdentifier
-            }
+        let fetchedEntries = try recorder.pendingEntries(
+            ownerTokenIdentifier: ownerTokenIdentifier,
+            context: context
+        )
+        let hasMorePendingEntries = fetchedEntries.count > maxPendingPushEntriesPerRun
+        let entries = fetchedEntries
             .sorted { lhs, rhs in
                 let lhsRank = syncPushRank(for: lhs)
                 let rhsRank = syncPushRank(for: rhs)
@@ -417,12 +445,15 @@ final class SyncCoordinator {
                 }
                 return lhs.updatedAt < rhs.updatedAt
             }
+            .prefix(maxPendingPushEntriesPerRun)
 
+        var needsSave = false
+        var completedSinceLastSave = 0
         for entry in entries {
             try Task.checkCancellation()
             let logicalUpdatedAt = logicalFallbackTimestamp(for: entry)
             recorder.markInFlight(entry, now: .now)
-            try context.save()
+            needsSave = true
             try Task.checkCancellation()
 
             do {
@@ -439,20 +470,44 @@ final class SyncCoordinator {
                     context: context
                 )
                 recorder.removeCompleted(entry, context: context)
-                try context.save()
+                needsSave = true
+                completedSinceLastSave += 1
+                if completedSinceLastSave >= 25 {
+                    try context.save()
+                    needsSave = false
+                    completedSinceLastSave = 0
+                }
             } catch {
+                if let syncError = error as? SyncCoordinatorError, case .ownerMismatch = syncError {
+                    context.delete(entry)
+                    needsSave = true
+                    completedSinceLastSave += 1
+                    if completedSinceLastSave >= 25 {
+                        try context.save()
+                        needsSave = false
+                        completedSinceLastSave = 0
+                    }
+                    continue
+                }
                 if entry.status == .inFlight {
                     recorder.markFailed(entry, message: error.localizedDescription, now: .now)
-                    try context.save()
+                    needsSave = true
                 }
-                if error is SyncCoordinatorError {
-                    continue
+                if needsSave {
+                    try context.save()
                 }
                 return SyncPushResult(didComplete: false, didPush: true)
             }
         }
 
-        return SyncPushResult(didComplete: true, didPush: !entries.isEmpty)
+        if needsSave {
+            try context.save()
+        }
+        return SyncPushResult(
+            didComplete: true,
+            didPush: !entries.isEmpty,
+            hasMorePendingEntries: hasMorePendingEntries
+        )
     }
 
     private func syncPushRank(for entry: SyncOutboxEntry) -> Int {
@@ -609,28 +664,43 @@ final class SyncCoordinator {
     }
 
     private func findUserSettings(id: UUID, context: ModelContext) throws -> UserSettings? {
-        try context.fetch(FetchDescriptor<UserSettings>())
-            .first { $0.id == id }
+        try context.fetch(FetchDescriptor<UserSettings>(
+            predicate: #Predicate { settings in
+                settings.id == id
+            }
+        )).first
     }
 
     private func findExercise(id: UUID, context: ModelContext) throws -> Exercise? {
-        try context.fetch(FetchDescriptor<Exercise>())
-            .first { $0.id == id }
+        try context.fetch(FetchDescriptor<Exercise>(
+            predicate: #Predicate { exercise in
+                exercise.id == id
+            }
+        )).first
     }
 
     private func findWorkoutSession(id: UUID, context: ModelContext) throws -> WorkoutSession? {
-        try context.fetch(FetchDescriptor<WorkoutSession>())
-            .first { $0.id == id }
+        try context.fetch(FetchDescriptor<WorkoutSession>(
+            predicate: #Predicate { session in
+                session.id == id
+            }
+        )).first
     }
 
     private func findLoggedExercise(id: UUID, context: ModelContext) throws -> LoggedExercise? {
-        try context.fetch(FetchDescriptor<LoggedExercise>())
-            .first { $0.id == id }
+        try context.fetch(FetchDescriptor<LoggedExercise>(
+            predicate: #Predicate { loggedExercise in
+                loggedExercise.id == id
+            }
+        )).first
     }
 
     private func findLoggedSet(id: UUID, context: ModelContext) throws -> LoggedSet? {
-        try context.fetch(FetchDescriptor<LoggedSet>())
-            .first { $0.id == id }
+        try context.fetch(FetchDescriptor<LoggedSet>(
+            predicate: #Predicate { set in
+                set.id == id
+            }
+        )).first
     }
 
     private func pullChanges(ownerTokenIdentifier: String, context: ModelContext) async throws -> SyncPullSummary {
@@ -1270,12 +1340,38 @@ final class SyncCoordinator {
         entityID: UUID,
         context: ModelContext
     ) throws -> Bool {
-        try context.fetch(FetchDescriptor<SyncOutboxEntry>())
-            .contains { entry in
-                entry.entityKind == entityKind
+        let entityKindRaw = entityKind.rawValue
+        let completedStatus = SyncOutboxStatus.completed.rawValue
+        return try context.fetch(FetchDescriptor<SyncOutboxEntry>(
+            predicate: #Predicate { entry in
+                entry.entityKindRaw == entityKindRaw
                     && entry.entityID == entityID
-                    && entry.isActive
-                    && entry.operation != nil
+                    && entry.statusRaw != completedStatus
+                    && entry.operationRaw != ""
+            }
+        ))
+            .contains { entry in
+                entry.isActive && entry.operation != nil
+            }
+    }
+
+    private func hasActiveOutboxEntries(
+        entityKind: SyncEntityKind,
+        ownerTokenIdentifier: String,
+        context: ModelContext
+    ) throws -> Bool {
+        let entityKindRaw = entityKind.rawValue
+        let completedStatus = SyncOutboxStatus.completed.rawValue
+        return try context.fetch(FetchDescriptor<SyncOutboxEntry>(
+            predicate: #Predicate { entry in
+                entry.entityKindRaw == entityKindRaw
+                    && entry.ownerTokenIdentifier == ownerTokenIdentifier
+                    && entry.statusRaw != completedStatus
+                    && entry.operationRaw != ""
+            }
+        ))
+            .contains { entry in
+                entry.isActive && entry.operation != nil
             }
     }
 
@@ -1286,8 +1382,16 @@ final class SyncCoordinator {
         ownerTokenIdentifier: String,
         context: ModelContext
     ) throws {
-        for entry in try context.fetch(FetchDescriptor<SyncOutboxEntry>())
-            where entry.entityKind == entityKind && entry.entityID == oldID && entry.isActive {
+        let entityKindRaw = entityKind.rawValue
+        let completedStatus = SyncOutboxStatus.completed.rawValue
+        for entry in try context.fetch(FetchDescriptor<SyncOutboxEntry>(
+            predicate: #Predicate { entry in
+                entry.entityKindRaw == entityKindRaw
+                    && entry.entityID == oldID
+                    && entry.statusRaw != completedStatus
+                    && entry.operationRaw != ""
+            }
+        )) where entry.isActive {
             entry.entityID = newID
             if entry.ownerTokenIdentifier == nil {
                 entry.ownerTokenIdentifier = ownerTokenIdentifier
@@ -1341,9 +1445,15 @@ private struct SyncPullSummary {
     }
 }
 
+struct SyncRunResult {
+    var didPush = false
+    var hasMorePendingEntries = false
+}
+
 private struct SyncPushResult {
     var didComplete: Bool
     var didPush: Bool
+    var hasMorePendingEntries = false
 }
 
 private struct WorkoutChildApplyResult {
