@@ -68,4 +68,11 @@ final class FormattingTests: XCTestCase {
     func testNumberFormatterRoundsConvertedWeightForDisplay() {
         XCTAssertEqual(WorkoutFormatters.number(102.058), "102.06")
     }
+
+    func testVolumeFormatterDisplaysCanonicalPoundVolumeInSelectedUnit() {
+        let canonicalVolume = MeasurementUnit.kilograms.canonicalWeight(fromDisplayWeight: 100)! * 5
+
+        XCTAssertEqual(WorkoutFormatters.volume(canonicalPounds: canonicalVolume, unit: .kilograms), "500")
+        XCTAssertEqual(WorkoutFormatters.volume(canonicalPounds: canonicalVolume, unit: .pounds), "1,102.31")
+    }
 }
