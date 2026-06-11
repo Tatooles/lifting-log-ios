@@ -12,6 +12,7 @@ enum AppTheme {
     static let accentBright = Color(red: 232 / 255, green: 76 / 255, blue: 61 / 255)
     static let accentMuted = accent.opacity(0.18)
     static let accentGlow = Color(red: 192 / 255, green: 57 / 255, blue: 43 / 255).opacity(0.34)
+    static let success = Color(red: 52 / 255, green: 199 / 255, blue: 89 / 255)
     static let textPrimary = Color(red: 240 / 255, green: 240 / 255, blue: 240 / 255)
     static let textSecondary = textPrimary.opacity(0.55)
     static let textTertiary = textPrimary.opacity(0.3)

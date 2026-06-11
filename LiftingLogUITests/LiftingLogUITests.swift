@@ -394,6 +394,24 @@ final class LiftingLogUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Sync Status"].exists)
         XCTAssertTrue(app.staticTexts["Cloud sync could not finish. Your data is saved on this iPhone."].exists)
+
+        app.buttons["SettingsDeveloperDiagnosticsRow"].tap()
+        let syncSummary = app.staticTexts["DeveloperDiagnosticsSyncSummary"]
+        XCTAssertTrue(syncSummary.waitForExistence(timeout: 3))
+        XCTAssertTrue(syncSummary.label.contains("lastFailure: Convex function sync:fetchChanges failed for token issuer|ui_owner"))
+    }
+
+    @MainActor
+    func testFailedSyncBannerCanBeDismissed() {
+        let app = makeApp(extraArguments: [
+            "--uitest-sync-owner", "issuer|ui_owner",
+            "--uitest-show-sync-failure",
+        ])
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["Cloud sync failed"].waitForExistence(timeout: 3))
+        app.buttons["GlobalSyncDismissButton"].tap()
+        XCTAssertFalse(app.otherElements["GlobalSyncFailureBanner"].waitForExistence(timeout: 1))
     }
 
     @MainActor

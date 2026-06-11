@@ -95,6 +95,47 @@ final class SyncSchedulerStatusTests: XCTestCase {
         XCTAssertEqual(scheduler.lastFailure?.message, "Cloud sync could not finish.")
     }
 
+    func testSchedulerDiscardsOutboxEntryWhenLocalRecordBelongsToDifferentOwner() async throws {
+        let currentOwner = "issuer|owner_a"
+        let otherOwner = "issuer|owner_b"
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let set = LoggedSet(orderIndex: 0, weight: 185, reps: 5)
+        let loggedExercise = LoggedExercise(orderIndex: 0, sets: [set])
+        let session = WorkoutSession(
+            title: "Other owner workout",
+            startedAt: Date(timeIntervalSince1970: 100),
+            status: .completed,
+            source: .blank,
+            syncOwnerTokenIdentifier: otherOwner,
+            loggedExercises: [loggedExercise]
+        )
+        context.insert(session)
+        try SyncOutboxRecorder().recordUpdate(
+            entityKind: .loggedSet,
+            entityID: set.id,
+            ownerTokenIdentifier: currentOwner,
+            context: context,
+            now: Date(timeIntervalSince1970: 200)
+        )
+        try context.save()
+
+        let client = FakeSyncClient()
+        let scheduler = SyncScheduler(coordinator: SyncCoordinator(client: client), modelContext: context)
+        scheduler.currentOwnerTokenIdentifier = currentOwner
+
+        scheduler.requestSync()
+        try await waitUntil {
+            scheduler.lastSyncedAt != nil || scheduler.lastFailure != nil
+        }
+
+        let entries = try context.fetch(FetchDescriptor<SyncOutboxEntry>())
+        XCTAssertTrue(entries.isEmpty)
+        XCTAssertTrue(client.upsertedLoggedSets.isEmpty)
+        XCTAssertNil(scheduler.lastFailure)
+        XCTAssertNotNil(scheduler.lastSyncedAt)
+    }
+
     func testSchedulerDoesNotRecordSuccessWithoutOwner() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

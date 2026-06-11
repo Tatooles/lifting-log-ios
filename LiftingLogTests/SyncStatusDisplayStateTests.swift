@@ -95,7 +95,7 @@ final class SyncStatusDisplayStateTests: XCTestCase {
         XCTAssertEqual(state.kind, .upToDate)
         XCTAssertEqual(state.subtitle, "Last synced 5 min ago.")
         XCTAssertEqual(state.trailingText, "Up to date")
-        XCTAssertEqual(state.tint, .secondary)
+        XCTAssertEqual(state.tint, .success)
         XCTAssertFalse(state.canRetry)
     }
 

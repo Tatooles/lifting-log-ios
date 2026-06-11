@@ -2202,9 +2202,7 @@ final class SyncCoordinatorTests: XCTestCase {
         try await coordinator.run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         XCTAssertEqual(client.upsertedExercises.count, 0)
-        let entry = try XCTUnwrap(context.fetch(FetchDescriptor<SyncOutboxEntry>()).first)
-        XCTAssertEqual(entry.status, .failed)
-        XCTAssertEqual(entry.lastErrorMessage, "Cannot sync exercise \(exercise.id.uuidString) because the local record belongs to a different owner.")
+        XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
     }
 
     func testRunContinuesAfterOwnerMismatchWhenLaterEntriesAreValid() async throws {
@@ -2270,9 +2268,9 @@ final class SyncCoordinatorTests: XCTestCase {
         try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
 
         XCTAssertEqual(client.upsertedLoggedSets.map(\.clientId), [ownedSet.id.uuidString.lowercased()])
-        XCTAssertEqual(staleEntry.status, .failed)
-        XCTAssertEqual(staleEntry.lastErrorMessage, "Cannot sync loggedSet \(otherSet.id.uuidString) because the local record belongs to a different owner.")
-        XCTAssertFalse(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).contains { $0.entityID == ownedSet.id })
+        let entries = try context.fetch(FetchDescriptor<SyncOutboxEntry>())
+        XCTAssertFalse(entries.contains { $0.entityID == otherSet.id })
+        XCTAssertFalse(entries.contains { $0.entityID == ownedSet.id })
     }
 
     func testRunTombstonesMissingExerciseForUpdateEntry() async throws {
@@ -2717,9 +2715,7 @@ final class SyncCoordinatorTests: XCTestCase {
         try await coordinator.run(ownerTokenIdentifier: "issuer|owner_a", context: context)
 
         XCTAssertTrue(client.tombstones.isEmpty)
-        let entry = try XCTUnwrap(context.fetch(FetchDescriptor<SyncOutboxEntry>()).first)
-        XCTAssertEqual(entry.status, .failed)
-        XCTAssertEqual(entry.lastErrorMessage, "Cannot sync exercise \(exercise.id.uuidString) because the local record belongs to a different owner.")
+        XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
     }
 
     func testRunLeavesSecondPendingEntryPendingAfterFirstEntryFailure() async throws {

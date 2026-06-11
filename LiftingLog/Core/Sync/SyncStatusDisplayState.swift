@@ -12,6 +12,7 @@ struct SyncStatusDisplayState {
     enum Tint: Equatable {
         case secondary
         case attention
+        case success
     }
 
     let kind: Kind
@@ -103,7 +104,7 @@ struct SyncStatusDisplayState {
             detailText: nil,
             trailingText: "Up to date",
             systemImage: "checkmark.icloud",
-            tint: .secondary,
+            tint: .success,
             canRetry: false,
             showsGlobalFailureNotice: false,
             userVisibleFailureMessage: nil
@@ -158,5 +159,77 @@ struct SyncStatusDisplayState {
         if hours < 24 { return "\(hours) hr ago" }
         let days = hours / 24
         return "\(days) d ago"
+    }
+}
+
+struct SyncFailureNoticePresentation {
+    func shouldShowNotice(
+        showsGlobalFailureNotice: Bool,
+        currentFailureSignature: String?,
+        dismissedFailureSignature: String?
+    ) -> Bool {
+        guard showsGlobalFailureNotice, let currentFailureSignature else {
+            return false
+        }
+        return currentFailureSignature != dismissedFailureSignature
+    }
+
+    func dismissedSignature(
+        currentFailureSignature: String?,
+        dismissedFailureSignature: String?
+    ) -> String? {
+        currentFailureSignature ?? dismissedFailureSignature
+    }
+}
+
+struct SyncDiagnosticsEntry {
+    let entityKind: String
+    let operation: String
+    let status: String
+    let ownerTokenIdentifier: String?
+    let attemptCount: Int
+    let updatedAt: Date
+    let lastErrorMessage: String?
+}
+
+struct SyncDiagnosticsSnapshot {
+    let summary: String
+
+    static func make(
+        ownerTokenIdentifier: String?,
+        isSyncing: Bool,
+        lastFailureMessage: String?,
+        entries: [SyncDiagnosticsEntry]
+    ) -> SyncDiagnosticsSnapshot {
+        let failedCount = entries.filter { $0.status == SyncOutboxStatus.failed.rawValue }.count
+        let pendingCount = entries.filter { $0.status == SyncOutboxStatus.pending.rawValue }.count
+        let inFlightCount = entries.filter { $0.status == SyncOutboxStatus.inFlight.rawValue }.count
+
+        var lines = [
+            "owner: \(ownerTokenIdentifier ?? "nil")",
+            "isSyncing: \(isSyncing)",
+            "lastFailure: \(lastFailureMessage ?? "nil")",
+            "pending: \(pendingCount)",
+            "inFlight: \(inFlightCount)",
+            "failed: \(failedCount)",
+        ]
+
+        guard !entries.isEmpty else {
+            lines.append("activeOutbox: none")
+            return SyncDiagnosticsSnapshot(summary: lines.joined(separator: "\n"))
+        }
+
+        lines.append("activeOutbox:")
+        for entry in entries {
+            var line = "- \(entry.entityKind) \(entry.operation) \(entry.status) attempts=\(entry.attemptCount)"
+            line += " owner=\(entry.ownerTokenIdentifier ?? "nil")"
+            line += " updatedAt=\(Int(entry.updatedAt.timeIntervalSince1970))"
+            if let lastErrorMessage = entry.lastErrorMessage, !lastErrorMessage.isEmpty {
+                line += " error=\(lastErrorMessage)"
+            }
+            lines.append(line)
+        }
+
+        return SyncDiagnosticsSnapshot(summary: lines.joined(separator: "\n"))
     }
 }

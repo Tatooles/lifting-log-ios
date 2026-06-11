@@ -113,6 +113,8 @@ struct SettingsAccountSection: View {
             return .secondary
         case .attention:
             return AppTheme.accentBright
+        case .success:
+            return AppTheme.success
         }
     }
 }

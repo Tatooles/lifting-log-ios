@@ -29,7 +29,10 @@ final class SyncScheduler {
     private var syncTask: Task<Void, Never>?
     private var needsSync = false
 
-    init(coordinator: SyncCoordinator? = nil, modelContext: ModelContext? = nil) {
+    init(
+        coordinator: SyncCoordinator? = nil,
+        modelContext: ModelContext? = nil
+    ) {
         self.coordinator = coordinator
         self.modelContext = modelContext
     }
@@ -99,7 +102,7 @@ final class SyncScheduler {
                 hasQueuedSyncRequest = false
                 let syncOwnerTokenIdentifier = currentOwnerTokenIdentifier
                 do {
-                    try await coordinator.run(ownerTokenIdentifier: syncOwnerTokenIdentifier, context: modelContext)
+                    let result = try await coordinator.run(ownerTokenIdentifier: syncOwnerTokenIdentifier, context: modelContext)
                     guard !Task.isCancelled, currentOwnerTokenIdentifier == syncOwnerTokenIdentifier else {
                         break
                     }
@@ -110,7 +113,11 @@ final class SyncScheduler {
                         lastFailure = Failure(message: Self.incompleteSyncFailureMessage, occurredAt: .now)
                         break
                     }
-                    lastSyncedAt = .now
+                    if result.hasMorePendingEntries {
+                        needsSync = true
+                    } else {
+                        lastSyncedAt = .now
+                    }
                     lastFailure = nil
                 } catch is CancellationError {
                     break
@@ -125,6 +132,7 @@ final class SyncScheduler {
                     break
                 }
                 guard needsSync else { break }
+                await Task.yield()
             }
 
             let shouldStartQueuedSync = needsSync && currentOwnerTokenIdentifier != nil
@@ -143,12 +151,17 @@ final class SyncScheduler {
         context: ModelContext
     ) -> Bool {
         guard let ownerTokenIdentifier else { return false }
-        let entries = (try? context.fetch(FetchDescriptor<SyncOutboxEntry>())) ?? []
+        let failedStatus = SyncOutboxStatus.failed.rawValue
+        let entries = (try? context.fetch(FetchDescriptor<SyncOutboxEntry>(
+            predicate: #Predicate { entry in
+                entry.statusRaw == failedStatus
+                    && (entry.ownerTokenIdentifier == ownerTokenIdentifier || entry.ownerTokenIdentifier == nil)
+            }
+        ))) ?? []
         return entries.contains { entry in
             guard entry.isActive else { return false }
             guard entry.entityKind?.isV1Synced == true else { return false }
-            guard entry.status == .failed else { return false }
-            return entry.ownerTokenIdentifier == ownerTokenIdentifier || entry.ownerTokenIdentifier == nil
+            return true
         }
     }
 }
