@@ -939,6 +939,55 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         XCTAssertEqual(try fetchEntries(context).count, 70)
     }
 
+    func testCoordinatorSortsAllPendingDeletesByDependencyBeforeBatchLimit() async throws {
+        let owner = "issuer|owner_a"
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        context.insert(SyncCursorState(
+            ownerTokenIdentifier: owner,
+            userSettingsCursor: 1,
+            exercisesCursor: 1,
+            workoutSessionsCursor: 1,
+            loggedExercisesCursor: 1,
+            loggedSetsCursor: 1,
+            hasBootstrappedSettingsExercises: true,
+            hasBootstrappedWorkoutGraph: true
+        ))
+
+        context.insert(SyncOutboxEntry(
+            entityKind: .workoutSession,
+            entityID: UUID(),
+            operation: .delete,
+            ownerTokenIdentifier: owner,
+            now: Date(timeIntervalSince1970: 100)
+        ))
+        context.insert(SyncOutboxEntry(
+            entityKind: .loggedExercise,
+            entityID: UUID(),
+            operation: .delete,
+            ownerTokenIdentifier: owner,
+            now: Date(timeIntervalSince1970: 101)
+        ))
+        for index in 0..<60 {
+            context.insert(SyncOutboxEntry(
+                entityKind: .loggedSet,
+                entityID: UUID(),
+                operation: .delete,
+                ownerTokenIdentifier: owner,
+                now: Date(timeIntervalSince1970: Double(200 + index))
+            ))
+        }
+        try context.save()
+
+        let client = FakeSyncClient()
+        let result = try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
+
+        XCTAssertTrue(result.hasMorePendingEntries)
+        XCTAssertEqual(client.tombstones.count, 50)
+        XCTAssertTrue(client.tombstones.allSatisfy { kind, _, _ in kind == .loggedSet })
+        XCTAssertEqual(try fetchEntries(context).count, 12)
+    }
+
     private func fetchEntries(_ context: ModelContext) throws -> [SyncOutboxEntry] {
         try context.fetch(FetchDescriptor<SyncOutboxEntry>())
             .sorted { lhs, rhs in

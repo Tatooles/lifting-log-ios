@@ -430,12 +430,10 @@ final class SyncCoordinator {
     private func pushPendingEntries(ownerTokenIdentifier: String, context: ModelContext) async throws -> SyncPushResult {
         let fetchedEntries = try recorder.pendingEntries(
             ownerTokenIdentifier: ownerTokenIdentifier,
-            context: context,
-            limit: maxPendingPushEntriesPerRun + 1
+            context: context
         )
         let hasMorePendingEntries = fetchedEntries.count > maxPendingPushEntriesPerRun
         let entries = fetchedEntries
-            .prefix(maxPendingPushEntriesPerRun)
             .sorted { lhs, rhs in
                 let lhsRank = syncPushRank(for: lhs)
                 let rhsRank = syncPushRank(for: rhs)
@@ -447,6 +445,7 @@ final class SyncCoordinator {
                 }
                 return lhs.updatedAt < rhs.updatedAt
             }
+            .prefix(maxPendingPushEntriesPerRun)
 
         var needsSave = false
         var completedSinceLastSave = 0

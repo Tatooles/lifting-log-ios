@@ -222,11 +222,10 @@ struct SyncOutboxRecorder {
 
     func pendingEntries(
         ownerTokenIdentifier: String,
-        context: ModelContext,
-        limit: Int
+        context: ModelContext
     ) throws -> [SyncOutboxEntry] {
         let pendingStatus = SyncOutboxStatus.pending.rawValue
-        var descriptor = FetchDescriptor<SyncOutboxEntry>(
+        let descriptor = FetchDescriptor<SyncOutboxEntry>(
             predicate: #Predicate { entry in
                 entry.statusRaw == pendingStatus
                     && entry.ownerTokenIdentifier == ownerTokenIdentifier
@@ -237,7 +236,6 @@ struct SyncOutboxRecorder {
                 SortDescriptor(\.createdAt),
             ]
         )
-        descriptor.fetchLimit = limit
 
         return try context.fetch(descriptor)
             .filter { entry in
