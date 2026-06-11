@@ -98,10 +98,3 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(fetched.defaultRestTimerSeconds, 120)
     }
 }
-
-private func callUpdateWeightUnitFromNonisolatedContext(
-    settings: UserSettings,
-    context: ModelContext
-) throws {
-    try settings.updateWeightUnit(.kilograms, context: context)
-}

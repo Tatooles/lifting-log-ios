@@ -822,7 +822,7 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         assertEntry(entries, kind: .loggedSet, id: set.id, operation: .delete)
     }
 
-    func testLargeWeightUnitConversionSyncDrainsWithoutFailure() async throws {
+    func testSettingsUpdateSyncBootstrapsLargeOwnedWorkoutGraphWithoutFailure() async throws {
         let owner = "issuer|owner_a"
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
@@ -862,6 +862,8 @@ final class SyncOutboxIntegrationTests: XCTestCase {
             context: context,
             now: Date(timeIntervalSince1970: 2_000)
         )
+
+        XCTAssertEqual(scheduler.requestCount, 1)
 
         try await waitUntil(timeout: 5.0) {
             scheduler.lastSyncedAt != nil || scheduler.lastFailure != nil
