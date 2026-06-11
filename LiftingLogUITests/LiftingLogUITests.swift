@@ -388,6 +388,17 @@ final class LiftingLogUITests: XCTestCase {
         let secondWeightField = app.textFields["SetWeightField-0-1"]
         XCTAssertTrue(secondWeightField.waitForExistence(timeout: 3))
         XCTAssertEqual(secondWeightField.value as? String, "100")
+
+        app.buttons["ProfileTab"].tap()
+        if !app.segmentedControls["WeightUnitPicker"].waitForExistence(timeout: 1) {
+            app.buttons["ProfileSettingsLink"].tap()
+            XCTAssertTrue(app.segmentedControls["WeightUnitPicker"].waitForExistence(timeout: 3))
+        }
+        app.segmentedControls["WeightUnitPicker"].buttons["Pounds"].tap()
+
+        app.buttons["WorkoutTab"].tap()
+        XCTAssertEqual(app.textFields["SetWeightField-0-0"].value as? String, "220.46")
+        XCTAssertEqual(app.textFields["SetWeightField-0-1"].value as? String, "220.46")
     }
 
     @MainActor
