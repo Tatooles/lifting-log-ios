@@ -113,7 +113,7 @@ struct WorkoutDataExportService {
             String(set.orderIndex + 1),
             set.kind.rawValue,
             String(set.isCompleted),
-            set.weight.map(Self.formatDouble) ?? "",
+            unit.displayWeight(fromCanonicalPounds: set.weight).map(Self.formatDouble) ?? "",
             set.reps.map(String.init) ?? "",
             unit.rawValue,
             set.rpe.map(Self.formatDouble) ?? "",

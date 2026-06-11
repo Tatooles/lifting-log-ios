@@ -213,6 +213,39 @@ final class WorkoutDataExportServiceTests: XCTestCase {
         XCTAssertEqual(rows[5][1], "Tie B")
     }
 
+    func testCSVConvertsCanonicalPoundsToSelectedKilogramUnit() throws {
+        let session = WorkoutSession(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000009001")!,
+            title: "Metric Export",
+            startedAt: Date(timeIntervalSince1970: 100),
+            endedAt: Date(timeIntervalSince1970: 200),
+            status: .completed,
+            source: .blank
+        )
+        let loggedExercise = LoggedExercise(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000009002")!,
+            orderIndex: 0,
+            exerciseSnapshotName: "Bench Press"
+        )
+        let set = LoggedSet(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000009003")!,
+            orderIndex: 0,
+            weight: 220.462262185,
+            reps: 5,
+            rpe: 8,
+            isCompleted: true
+        )
+        set.loggedExercise = loggedExercise
+        loggedExercise.session = session
+        loggedExercise.sets.append(set)
+        session.loggedExercises.append(loggedExercise)
+
+        let rows = try parseCSV(WorkoutDataExportService().csv(for: [session], unit: .kilograms))
+
+        XCTAssertEqual(rows[1][9], "100")
+        XCTAssertEqual(rows[1][11], "kilograms")
+    }
+
     func testCSVUsesUUIDTieBreakersWhenSortKeysMatch() throws {
         let sessionAID = uuid("00000000-0000-0000-0000-000000000001")
         let sessionBID = uuid("00000000-0000-0000-0000-000000000002")
