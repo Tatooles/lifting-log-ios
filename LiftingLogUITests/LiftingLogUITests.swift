@@ -364,6 +364,33 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
+    func testKilogramFirstWorkoutEntryDisplaysCleanWeightAndPlaceholder() {
+        let app = makeApp()
+        app.launch()
+
+        app.buttons["ProfileTab"].tap()
+        app.buttons["ProfileSettingsLink"].tap()
+        XCTAssertTrue(app.segmentedControls["WeightUnitPicker"].waitForExistence(timeout: 3))
+        app.segmentedControls["WeightUnitPicker"].buttons["Kilograms"].tap()
+
+        app.buttons["WorkoutTab"].tap()
+        app.buttons["StartBlankWorkoutButton"].tap()
+        XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
+        addBenchPress(in: app)
+
+        let firstWeightField = app.textFields["SetWeightField-0-0"]
+        firstWeightField.tap()
+        firstWeightField.typeText("100")
+        dismissKeyboardIfNeeded(in: app)
+        XCTAssertEqual(firstWeightField.value as? String, "100")
+
+        app.buttons["AddSetButton-0"].tap()
+        let secondWeightField = app.textFields["SetWeightField-0-1"]
+        XCTAssertTrue(secondWeightField.waitForExistence(timeout: 3))
+        XCTAssertEqual(secondWeightField.value as? String, "100")
+    }
+
+    @MainActor
     func testSettingsEditRequestsSyncInUITestMode() {
         let app = makeApp(extraArguments: ["--uitest-sync-owner", "issuer|ui_owner"])
         app.launch()
