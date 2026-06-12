@@ -25,7 +25,7 @@ See the [dedicated section below](#last-time-performance-design) — this deserv
 
 ### 3. Set-row visual noise
 
-Each card shows column headers (LBS/REPS/RPE) *and* identical placeholder text in every field, so a fresh card repeats "LBS REPS RPE" up to four times. Drop one of the two. Also: RPE is always shown, but many lifters never log it — make the RPE column a settings toggle (off by default). This simplifies the most-used screen by a third and frees row width for the "Previous" column below.
+Each card shows column headers (LBS/REPS/RPE) *and* identical placeholder text in every field, so a fresh card repeats "LBS REPS RPE" up to four times. Drop one of the two. Also: RPE is always shown as a full column, but many lifters never log it. Remove the column entirely and move RPE entry to the keyboard toolbar — see the [RPE entry design](#rpe-entry-design) below. This simplifies the most-used screen by a third and frees row width for the "Previous" column.
 
 ### 4. Always-visible notes box
 
@@ -66,7 +66,7 @@ The Units/Theme/Data Source rows display values but aren't editable, and the sam
 
 The pattern Strong and Hevy converged on. Each set row shows last session's same-index set as small, non-editable tertiary text ("135 × 8") next to the input fields. Tapping it — or tapping ✓ on an empty row — fills the fields.
 
-Row layout: `# | Previous | LBS | REPS | ✓`, with RPE hidden by default (item 3 above frees the width; bundle the two changes).
+Row layout: `# | Previous | LBS | REPS | ✓`, with the RPE column removed entirely (see [RPE entry design](#rpe-entry-design); bundle the two changes — they compete for the same row width).
 
 Why this beats ghost placeholders:
 
@@ -89,3 +89,25 @@ One practical note: Convex validates existing documents against the schema, so f
 ### Rejected alternative
 
 A one-line "Last: 135×8, 140×6 · Jun 5" summary under the exercise header. Cheaper, but answers the question at the wrong granularity — mid-workout you want *this set's* target at *this row's* eye line. Only worth it if set rows must stay untouched.
+
+---
+
+## RPE entry design
+
+RPE is a power-user dimension: it shouldn't cost a full column on every set row, but it also shouldn't hide behind a global setting (that just relocates the problem). Entry should live where the user's fingers already are mid-logging.
+
+### Recommended design: keyboard-toolbar chips + badge on the reps field
+
+- **Entry:** while a weight or reps field is focused, the existing keyboard accessory toolbar (prev/next/Done in `WorkoutSessionView`) gains an "RPE" item. Tapping it shows a row of chips — `6 · 7 · 8 · 8.5 · 9 · 9.5 · 10` — either swapping the toolbar content or as a small glass capsule above it. Tapping a chip records the value and advances focus to the next field (same behavior as the Next button).
+- **Display:** the chosen value renders as a small "@9" badge overlaid on the top-right corner of the reps field (ZStack overlay — true superscript inside a `TextField` isn't practical). Tapping the badge re-opens the chips to edit or clear, which also covers post-completion editing.
+- **No custom keyboard.** A fully custom numeric keyboard (the Hevy approach) would also work but looks slightly foreign next to Liquid Glass, costs system keyboard features (cursor sliding, hardware-keyboard passthrough), and is far more code. A `.glass`-style chip capsule riding above the system keyboard is native vocabulary and gets the same result.
+- **Data model:** RPE stays `Double?` on `LoggedSet`; chips at 0.5 increments cover the domain. Free-text RPE entry goes away — treated as a feature (no more `9.25`).
+
+Technical scope is modest: one toolbar item, one chip-row view, one badge overlay; no changes to the focus system.
+
+### Rejected alternatives
+
+- **Global settings toggle for the RPE column:** hides the feature; users who want RPE shouldn't need to find a preference first.
+- **Per-exercise "Track RPE" in the ellipsis menu:** better targeting, but still a toggle, and it resurrects the three-column width problem on exactly the rows that also want the Previous column.
+- **Completion-time "@ RPE" chip next to the checkmark:** matches the mental model (RPE is assessed after the set) and costs zero space during entry, but adds a tap per set for habitual RPE users and changes the row's shape post-completion. Its one good idea — tap-to-edit after completion — is kept via the badge.
+- **Gestures (long-press the checkmark, swipe):** undiscoverable, and the row already owns swipe-to-delete.
