@@ -25,9 +25,7 @@ struct ExerciseCardView: View {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
                     Button {
-                        withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
-                            isCollapsed.toggle()
-                        }
+                        isCollapsed.toggle()
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "chevron.down")
@@ -89,8 +87,7 @@ struct ExerciseCardView: View {
                     .accessibilityLabel("\(loggedExercise.exerciseSnapshotName) options")
                     .accessibilityIdentifier("ExerciseMenuButton-\(exerciseIndex)")
                 }
-                .padding(.top, 12)
-                .padding(.bottom, 6)
+                .padding(.vertical, 12)
                 .padding(.horizontal, 16)
                 .confirmationDialog(
                     "Remove \(loggedExercise.exerciseSnapshotName)?",
@@ -197,7 +194,6 @@ struct ExerciseCardView: View {
                             .padding(.horizontal, 16)
                         }
                     }
-                    .transition(.opacity.combined(with: .move(edge: .top)))
                     .padding(.bottom, 16)
                 }
             }
