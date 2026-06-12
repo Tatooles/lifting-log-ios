@@ -43,6 +43,17 @@ type TombstoneResult =
   | { status: "ignored_stale"; serverUpdatedAt: number }
   | { status: "missing" };
 
+type AccountDataDeletionResult = {
+  status: "deleted";
+  deletedCounts: {
+    loggedSets: number;
+    loggedExercises: number;
+    workoutSessions: number;
+    exercises: number;
+    userSettings: number;
+  };
+};
+
 type ChangePage<TRecord extends { serverUpdatedAt: number }> = {
   records: TRecord[];
   hasMore: boolean;
@@ -713,6 +724,96 @@ async function fetchLoggedSetChanges(
   return pageFromOverfetch(records, limit);
 }
 
+async function deleteUserSettingsForOwner(
+  ctx: MutationCtx,
+  ownerTokenIdentifier: string,
+): Promise<number> {
+  const rows = await ctx.db
+    .query("userSettings")
+    .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
+      q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
+    )
+    .take(1000);
+
+  for (const row of rows) {
+    await ctx.db.delete(row._id);
+  }
+
+  return rows.length;
+}
+
+async function deleteExercisesForOwner(
+  ctx: MutationCtx,
+  ownerTokenIdentifier: string,
+): Promise<number> {
+  const rows = await ctx.db
+    .query("exercises")
+    .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
+      q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
+    )
+    .take(1000);
+
+  for (const row of rows) {
+    await ctx.db.delete(row._id);
+  }
+
+  return rows.length;
+}
+
+async function deleteWorkoutSessionsForOwner(
+  ctx: MutationCtx,
+  ownerTokenIdentifier: string,
+): Promise<number> {
+  const rows = await ctx.db
+    .query("workoutSessions")
+    .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
+      q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
+    )
+    .take(1000);
+
+  for (const row of rows) {
+    await ctx.db.delete(row._id);
+  }
+
+  return rows.length;
+}
+
+async function deleteLoggedExercisesForOwner(
+  ctx: MutationCtx,
+  ownerTokenIdentifier: string,
+): Promise<number> {
+  const rows = await ctx.db
+    .query("loggedExercises")
+    .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
+      q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
+    )
+    .take(1000);
+
+  for (const row of rows) {
+    await ctx.db.delete(row._id);
+  }
+
+  return rows.length;
+}
+
+async function deleteLoggedSetsForOwner(
+  ctx: MutationCtx,
+  ownerTokenIdentifier: string,
+): Promise<number> {
+  const rows = await ctx.db
+    .query("loggedSets")
+    .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
+      q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
+    )
+    .take(1000);
+
+  for (const row of rows) {
+    await ctx.db.delete(row._id);
+  }
+
+  return rows.length;
+}
+
 export const upsertUserSettings = mutation({
   args: { record: userSettingsPayloadValidator },
   handler: async (ctx, args) => {
@@ -817,6 +918,39 @@ export const tombstone = mutation({
           args.deletedAt,
         );
     }
+  },
+});
+
+export const deleteAccountData = mutation({
+  args: {},
+  handler: async (ctx): Promise<AccountDataDeletionResult> => {
+    const ownerTokenIdentifier = await requireOwnerTokenIdentifier(ctx);
+
+    const loggedSets = await deleteLoggedSetsForOwner(ctx, ownerTokenIdentifier);
+    const loggedExercises = await deleteLoggedExercisesForOwner(
+      ctx,
+      ownerTokenIdentifier,
+    );
+    const workoutSessions = await deleteWorkoutSessionsForOwner(
+      ctx,
+      ownerTokenIdentifier,
+    );
+    const exercises = await deleteExercisesForOwner(ctx, ownerTokenIdentifier);
+    const userSettings = await deleteUserSettingsForOwner(
+      ctx,
+      ownerTokenIdentifier,
+    );
+
+    return {
+      status: "deleted",
+      deletedCounts: {
+        loggedSets,
+        loggedExercises,
+        workoutSessions,
+        exercises,
+        userSettings,
+      },
+    };
   },
 });
 

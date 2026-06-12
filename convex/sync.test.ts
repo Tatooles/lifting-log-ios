@@ -285,6 +285,113 @@ describe("sync access control", () => {
   });
 });
 
+describe("account data deletion", () => {
+  async function seedFullSyncGraphForOwner(
+    t: ReturnType<typeof testDb>,
+    identity: typeof userA,
+    suffix: string,
+  ) {
+    const clientSuffix = suffix.toLowerCase();
+    await t.withIdentity(identity).mutation(api.sync.upsertUserSettings, {
+      record: userSettingsRecord({ clientId: `settings-${clientSuffix}` }),
+    });
+    await t.withIdentity(identity).mutation(api.sync.upsertExercise, {
+      record: exerciseRecord({ clientId: `exercise-${clientSuffix}` }),
+    });
+    await t.withIdentity(identity).mutation(api.sync.upsertWorkoutSession, {
+      record: workoutSessionRecord({ clientId: `session-${clientSuffix}` }),
+    });
+    await t.withIdentity(identity).mutation(api.sync.upsertLoggedExercise, {
+      record: loggedExerciseRecord({
+        clientId: `logged-exercise-${clientSuffix}`,
+        sessionClientId: `session-${clientSuffix}`,
+        exerciseClientId: `exercise-${clientSuffix}`,
+      }),
+    });
+    await t.withIdentity(identity).mutation(api.sync.upsertLoggedSet, {
+      record: loggedSetRecord({
+        clientId: `logged-set-${clientSuffix}`,
+        loggedExerciseClientId: `logged-exercise-${clientSuffix}`,
+      }),
+    });
+  }
+
+  test("deleteAccountData rejects unauthenticated callers", async () => {
+    const t = testDb();
+
+    await expect(t.mutation(api.sync.deleteAccountData, {})).rejects.toThrow(
+      "Not authenticated",
+    );
+  });
+
+  test("deleteAccountData deletes only the authenticated owner rows", async () => {
+    const t = testDb();
+    await seedFullSyncGraphForOwner(t, userA, "A");
+    await seedFullSyncGraphForOwner(t, userB, "B");
+
+    await expect(
+      t.withIdentity(userA).mutation(api.sync.deleteAccountData, {}),
+    ).resolves.toEqual({
+      status: "deleted",
+      deletedCounts: {
+        loggedSets: 1,
+        loggedExercises: 1,
+        workoutSessions: 1,
+        exercises: 1,
+        userSettings: 1,
+      },
+    });
+
+    const userAChanges = await t
+      .withIdentity(userA)
+      .query(api.sync.fetchChanges, { cursors: zeroCursors });
+    const userBChanges = await t
+      .withIdentity(userB)
+      .query(api.sync.fetchChanges, { cursors: zeroCursors });
+
+    expect(userAChanges.userSettings).toEqual([]);
+    expect(userAChanges.exercises).toEqual([]);
+    expect(userAChanges.workoutSessions).toEqual([]);
+    expect(userAChanges.loggedExercises).toEqual([]);
+    expect(userAChanges.loggedSets).toEqual([]);
+    expect(userBChanges.userSettings.map((record) => record.clientId)).toEqual([
+      "settings-b",
+    ]);
+    expect(userBChanges.exercises.map((record) => record.clientId)).toEqual([
+      "exercise-b",
+    ]);
+    expect(userBChanges.workoutSessions.map((record) => record.clientId)).toEqual([
+      "session-b",
+    ]);
+    expect(userBChanges.loggedExercises.map((record) => record.clientId)).toEqual([
+      "logged-exercise-b",
+    ]);
+    expect(userBChanges.loggedSets.map((record) => record.clientId)).toEqual([
+      "logged-set-b",
+    ]);
+  });
+
+  test("deleteAccountData is idempotent", async () => {
+    const t = testDb();
+    await seedFullSyncGraphForOwner(t, userA, "A");
+
+    await t.withIdentity(userA).mutation(api.sync.deleteAccountData, {});
+
+    await expect(
+      t.withIdentity(userA).mutation(api.sync.deleteAccountData, {}),
+    ).resolves.toEqual({
+      status: "deleted",
+      deletedCounts: {
+        loggedSets: 0,
+        loggedExercises: 0,
+        workoutSessions: 0,
+        exercises: 0,
+        userSettings: 0,
+      },
+    });
+  });
+});
+
 describe("sync conflict behavior", () => {
   test("legacy stored exercise docs without muscle group are normalized in changes", async () => {
     const t = testDb();
