@@ -186,6 +186,43 @@ export function accountDeletionPassLimitReached(
   return passIndex >= maxAccountDeletionPassesPerAction;
 }
 
+export async function deleteAccountDataWithBatches(
+  runBatch: (
+    tableName: AccountDeletionTable,
+  ) => Promise<AccountDataDeletionTableBatchResult>,
+  maxPasses = maxAccountDeletionPassesPerAction,
+): Promise<AccountDataDeletionResult> {
+  const deletedCounts: AccountDataDeletionResult["deletedCounts"] = {
+    loggedSets: 0,
+    loggedExercises: 0,
+    workoutSessions: 0,
+    exercises: 0,
+    userSettings: 0,
+  };
+
+  for (let passIndex = 0; passIndex < maxPasses; passIndex++) {
+    let verifiedEmpty = true;
+
+    for (const tableName of accountDeletionTableOrder) {
+      const result = await runBatch(tableName);
+      deletedCounts[result.tableName] += result.deletedCount;
+
+      if (result.deletedCount > 0 || result.hasMore) {
+        verifiedEmpty = false;
+      }
+    }
+
+    if (verifiedEmpty) {
+      return {
+        status: "deleted",
+        deletedCounts,
+      };
+    }
+  }
+
+  throw new Error("Account data deletion did not finish. Retry account deletion.");
+}
+
 function normalizeExercisePayload(record: ExercisePayload): NormalizedExercisePayload {
   return {
     ...record,
@@ -1028,40 +1065,12 @@ export const deleteAccountData = action({
     }
 
     const ownerTokenIdentifier = identity.tokenIdentifier;
-    const deletedCounts: AccountDataDeletionResult["deletedCounts"] = {
-      loggedSets: 0,
-      loggedExercises: 0,
-      workoutSessions: 0,
-      exercises: 0,
-      userSettings: 0,
-    };
-
-    for (let passIndex = 0; passIndex < maxAccountDeletionPassesPerAction; passIndex++) {
-      let verifiedEmpty = true;
-
-      for (const tableName of accountDeletionTableOrder) {
-        const result: AccountDataDeletionTableBatchResult =
-          await ctx.runMutation(internal.sync.deleteAccountDataBatch, {
-            ownerTokenIdentifier,
-            tableName,
-          });
-
-        deletedCounts[result.tableName] += result.deletedCount;
-
-        if (result.deletedCount > 0 || result.hasMore) {
-          verifiedEmpty = false;
-        }
-      }
-
-      if (verifiedEmpty) {
-        return {
-          status: "deleted",
-          deletedCounts,
-        };
-      }
-    }
-
-    throw new Error("Account data deletion did not finish. Retry account deletion.");
+    return await deleteAccountDataWithBatches(async (tableName) => {
+      return await ctx.runMutation(internal.sync.deleteAccountDataBatch, {
+        ownerTokenIdentifier,
+        tableName,
+      });
+    });
   },
 });
 

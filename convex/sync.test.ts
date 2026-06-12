@@ -1,7 +1,10 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "./_generated/api";
-import { accountDeletionPassLimitReached } from "./sync";
+import {
+  accountDeletionPassLimitReached,
+  deleteAccountDataWithBatches,
+} from "./sync";
 import schema from "./schema";
 
 declare global {
@@ -493,6 +496,34 @@ describe("account data deletion", () => {
   test("account deletion pass limit helper respects the configured cap", async () => {
     expect(accountDeletionPassLimitReached(99)).toBe(false);
     expect(accountDeletionPassLimitReached(100)).toBe(true);
+  });
+
+  test("deleteAccountDataWithBatches throws after the pass cap", async () => {
+    const seenTables: string[] = [];
+
+    await expect(
+      deleteAccountDataWithBatches(async (tableName) => {
+        seenTables.push(tableName);
+        return {
+          tableName,
+          deletedCount: 0,
+          hasMore: true,
+        };
+      }, 2),
+    ).rejects.toThrow("Account data deletion did not finish. Retry account deletion.");
+
+    expect(seenTables).toEqual([
+      "loggedSets",
+      "loggedExercises",
+      "workoutSessions",
+      "exercises",
+      "userSettings",
+      "loggedSets",
+      "loggedExercises",
+      "workoutSessions",
+      "exercises",
+      "userSettings",
+    ]);
   });
 
   test("deleteAccountDataBatch only deletes the requested table", async () => {
