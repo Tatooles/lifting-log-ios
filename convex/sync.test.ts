@@ -1,6 +1,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "./_generated/api";
+import { accountDeletionPassLimitReached } from "./sync";
 import schema from "./schema";
 
 declare global {
@@ -487,6 +488,11 @@ describe("account data deletion", () => {
         userSettings: 0,
       },
     });
+  });
+
+  test("account deletion pass limit helper respects the configured cap", async () => {
+    expect(accountDeletionPassLimitReached(99)).toBe(false);
+    expect(accountDeletionPassLimitReached(100)).toBe(true);
   });
 
   test("deleteAccountDataBatch only deletes the requested table", async () => {

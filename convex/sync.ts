@@ -99,6 +99,7 @@ type ChangePage<TRecord extends { serverUpdatedAt: number }> = {
 const defaultFetchLimit = 100;
 const maxFetchLimit = 500;
 const accountDeletionBatchSize = 1000;
+const maxAccountDeletionPassesPerAction = 100;
 const defaultPrimaryMuscleGroupRaw = "other";
 const defaultExerciseSnapshotEquipmentRaw = "other";
 const defaultExerciseSnapshotPrimaryMuscleGroupRaw = "other";
@@ -177,6 +178,12 @@ function withServerFields<TRecord extends { clientId: string }>(
     ownerTokenIdentifier,
     serverUpdatedAt,
   };
+}
+
+export function accountDeletionPassLimitReached(
+  passIndex: number,
+): boolean {
+  return passIndex >= maxAccountDeletionPassesPerAction;
 }
 
 function normalizeExercisePayload(record: ExercisePayload): NormalizedExercisePayload {
@@ -1029,7 +1036,7 @@ export const deleteAccountData = action({
       userSettings: 0,
     };
 
-    while (true) {
+    for (let passIndex = 0; passIndex < maxAccountDeletionPassesPerAction; passIndex++) {
       let verifiedEmpty = true;
 
       for (const tableName of accountDeletionTableOrder) {
@@ -1047,14 +1054,14 @@ export const deleteAccountData = action({
       }
 
       if (verifiedEmpty) {
-        break;
+        return {
+          status: "deleted",
+          deletedCounts,
+        };
       }
     }
 
-    return {
-      status: "deleted",
-      deletedCounts,
-    };
+    throw new Error("Account data deletion did not finish. Retry account deletion.");
   },
 });
 
