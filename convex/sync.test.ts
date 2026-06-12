@@ -316,6 +316,38 @@ describe("account data deletion", () => {
     });
   }
 
+  async function seedLoggedSetsDirectlyForOwner(
+    t: ReturnType<typeof testDb>,
+    identity: typeof userA,
+    count: number,
+  ) {
+    await t.run(async (ctx) => {
+      for (let i = 0; i < count; i++) {
+        await ctx.db.insert("loggedSets", {
+          ownerTokenIdentifier: identity.tokenIdentifier,
+          clientId: `bulk-logged-set-${i}`,
+          loggedExerciseClientId: "bulk-logged-exercise",
+          orderIndex: i,
+          weight: 135,
+          reps: 10,
+          rpe: 8,
+          placeholderWeight: null,
+          placeholderReps: null,
+          placeholderRPE: null,
+          kindRaw: "working",
+          isCompleted: true,
+          completedAt: 2,
+          notes: "",
+          healthLinkID: null,
+          createdAt: i + 1,
+          updatedAt: i + 1,
+          deletedAt: null,
+          serverUpdatedAt: i + 1,
+        });
+      }
+    });
+  }
+
   test("deleteAccountData rejects unauthenticated callers", async () => {
     const t = testDb();
 
@@ -389,6 +421,30 @@ describe("account data deletion", () => {
         userSettings: 0,
       },
     });
+  });
+
+  test("deleteAccountData deletes more than one batch of logged sets", async () => {
+    const t = testDb();
+    await seedLoggedSetsDirectlyForOwner(t, userA, 1001);
+
+    await expect(
+      t.withIdentity(userA).mutation(api.sync.deleteAccountData, {}),
+    ).resolves.toEqual({
+      status: "deleted",
+      deletedCounts: {
+        loggedSets: 1001,
+        loggedExercises: 0,
+        workoutSessions: 0,
+        exercises: 0,
+        userSettings: 0,
+      },
+    });
+
+    const changes = await t
+      .withIdentity(userA)
+      .query(api.sync.fetchChanges, { cursors: zeroCursors });
+
+    expect(changes.loggedSets).toEqual([]);
   });
 });
 

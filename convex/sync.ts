@@ -61,6 +61,7 @@ type ChangePage<TRecord extends { serverUpdatedAt: number }> = {
 
 const defaultFetchLimit = 100;
 const maxFetchLimit = 500;
+const accountDeletionBatchSize = 1000;
 const defaultPrimaryMuscleGroupRaw = "other";
 const defaultExerciseSnapshotEquipmentRaw = "other";
 const defaultExerciseSnapshotPrimaryMuscleGroupRaw = "other";
@@ -724,94 +725,104 @@ async function fetchLoggedSetChanges(
   return pageFromOverfetch(records, limit);
 }
 
+async function deleteRowsInBatches<TRecord extends { _id: string }>(
+  fetchBatch: () => Promise<TRecord[]>,
+  deleteRow: (row: TRecord) => Promise<void>,
+): Promise<number> {
+  let deletedCount = 0;
+
+  while (true) {
+    const rows = await fetchBatch();
+    if (rows.length === 0) {
+      return deletedCount;
+    }
+
+    for (const row of rows) {
+      await deleteRow(row);
+    }
+
+    deletedCount += rows.length;
+  }
+}
+
 async function deleteUserSettingsForOwner(
   ctx: MutationCtx,
   ownerTokenIdentifier: string,
 ): Promise<number> {
-  const rows = await ctx.db
-    .query("userSettings")
-    .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
-      q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
-    )
-    .take(1000);
-
-  for (const row of rows) {
-    await ctx.db.delete(row._id);
-  }
-
-  return rows.length;
+  return await deleteRowsInBatches(
+    () =>
+      ctx.db
+        .query("userSettings")
+        .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
+          q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
+        )
+        .take(accountDeletionBatchSize),
+    (row) => ctx.db.delete(row._id),
+  );
 }
 
 async function deleteExercisesForOwner(
   ctx: MutationCtx,
   ownerTokenIdentifier: string,
 ): Promise<number> {
-  const rows = await ctx.db
-    .query("exercises")
-    .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
-      q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
-    )
-    .take(1000);
-
-  for (const row of rows) {
-    await ctx.db.delete(row._id);
-  }
-
-  return rows.length;
+  return await deleteRowsInBatches(
+    () =>
+      ctx.db
+        .query("exercises")
+        .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
+          q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
+        )
+        .take(accountDeletionBatchSize),
+    (row) => ctx.db.delete(row._id),
+  );
 }
 
 async function deleteWorkoutSessionsForOwner(
   ctx: MutationCtx,
   ownerTokenIdentifier: string,
 ): Promise<number> {
-  const rows = await ctx.db
-    .query("workoutSessions")
-    .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
-      q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
-    )
-    .take(1000);
-
-  for (const row of rows) {
-    await ctx.db.delete(row._id);
-  }
-
-  return rows.length;
+  return await deleteRowsInBatches(
+    () =>
+      ctx.db
+        .query("workoutSessions")
+        .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
+          q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
+        )
+        .take(accountDeletionBatchSize),
+    (row) => ctx.db.delete(row._id),
+  );
 }
 
 async function deleteLoggedExercisesForOwner(
   ctx: MutationCtx,
   ownerTokenIdentifier: string,
 ): Promise<number> {
-  const rows = await ctx.db
-    .query("loggedExercises")
-    .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
-      q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
-    )
-    .take(1000);
-
-  for (const row of rows) {
-    await ctx.db.delete(row._id);
-  }
-
-  return rows.length;
+  return await deleteRowsInBatches(
+    () =>
+      ctx.db
+        .query("loggedExercises")
+        .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
+          q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
+        )
+        .take(accountDeletionBatchSize),
+    (row) => ctx.db.delete(row._id),
+  );
 }
 
 async function deleteLoggedSetsForOwner(
   ctx: MutationCtx,
   ownerTokenIdentifier: string,
 ): Promise<number> {
-  const rows = await ctx.db
-    .query("loggedSets")
-    .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
-      q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
-    )
-    .take(1000);
-
-  for (const row of rows) {
-    await ctx.db.delete(row._id);
-  }
-
-  return rows.length;
+  return await deleteRowsInBatches(
+    () =>
+      ctx.db
+        .query("loggedSets")
+        .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
+          q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
+        )
+        .take(accountDeletionBatchSize),
+    (row) => ctx.db.delete(row._id),
+  );
 }
 
 export const upsertUserSettings = mutation({
