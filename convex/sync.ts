@@ -62,7 +62,32 @@ type AccountDataDeletionResult = {
   };
 };
 
-type AccountDataDeletionBatchResult = AccountDataDeletionResult & {
+type AccountDeletionTable =
+  | "loggedSets"
+  | "loggedExercises"
+  | "workoutSessions"
+  | "exercises"
+  | "userSettings";
+
+const accountDeletionTableValidator = v.union(
+  v.literal("loggedSets"),
+  v.literal("loggedExercises"),
+  v.literal("workoutSessions"),
+  v.literal("exercises"),
+  v.literal("userSettings"),
+);
+
+const accountDeletionTableOrder: AccountDeletionTable[] = [
+  "loggedSets",
+  "loggedExercises",
+  "workoutSessions",
+  "exercises",
+  "userSettings",
+];
+
+type AccountDataDeletionTableBatchResult = {
+  tableName: AccountDeletionTable;
+  deletedCount: number;
   hasMore: boolean;
 };
 
@@ -942,45 +967,48 @@ export const tombstone = mutation({
 });
 
 export const deleteAccountDataBatch = internalMutation({
-  args: { ownerTokenIdentifier: v.string() },
-  handler: async (ctx, args): Promise<AccountDataDeletionBatchResult> => {
-    const loggedSets = await deleteLoggedSetsForOwnerBatch(
-      ctx,
-      args.ownerTokenIdentifier,
-    );
-    const loggedExercises = await deleteLoggedExercisesForOwnerBatch(
-      ctx,
-      args.ownerTokenIdentifier,
-    );
-    const workoutSessions = await deleteWorkoutSessionsForOwnerBatch(
-      ctx,
-      args.ownerTokenIdentifier,
-    );
-    const exercises = await deleteExercisesForOwnerBatch(
-      ctx,
-      args.ownerTokenIdentifier,
-    );
-    const userSettings = await deleteUserSettingsForOwnerBatch(
-      ctx,
-      args.ownerTokenIdentifier,
-    );
-
-    return {
-      status: "deleted",
-      deletedCounts: {
-        loggedSets: loggedSets.deletedCount,
-        loggedExercises: loggedExercises.deletedCount,
-        workoutSessions: workoutSessions.deletedCount,
-        exercises: exercises.deletedCount,
-        userSettings: userSettings.deletedCount,
-      },
-      hasMore:
-        loggedSets.hasMore ||
-        loggedExercises.hasMore ||
-        workoutSessions.hasMore ||
-        exercises.hasMore ||
-        userSettings.hasMore,
-    };
+  args: {
+    ownerTokenIdentifier: v.string(),
+    tableName: accountDeletionTableValidator,
+  },
+  handler: async (ctx, args): Promise<AccountDataDeletionTableBatchResult> => {
+    switch (args.tableName) {
+      case "loggedSets": {
+        const result = await deleteLoggedSetsForOwnerBatch(
+          ctx,
+          args.ownerTokenIdentifier,
+        );
+        return { tableName: args.tableName, ...result };
+      }
+      case "loggedExercises": {
+        const result = await deleteLoggedExercisesForOwnerBatch(
+          ctx,
+          args.ownerTokenIdentifier,
+        );
+        return { tableName: args.tableName, ...result };
+      }
+      case "workoutSessions": {
+        const result = await deleteWorkoutSessionsForOwnerBatch(
+          ctx,
+          args.ownerTokenIdentifier,
+        );
+        return { tableName: args.tableName, ...result };
+      }
+      case "exercises": {
+        const result = await deleteExercisesForOwnerBatch(
+          ctx,
+          args.ownerTokenIdentifier,
+        );
+        return { tableName: args.tableName, ...result };
+      }
+      case "userSettings": {
+        const result = await deleteUserSettingsForOwnerBatch(
+          ctx,
+          args.ownerTokenIdentifier,
+        );
+        return { tableName: args.tableName, ...result };
+      }
+    }
   },
 });
 
@@ -1002,18 +1030,23 @@ export const deleteAccountData = action({
     };
 
     while (true) {
-      const result: AccountDataDeletionBatchResult = await ctx.runMutation(
-        internal.sync.deleteAccountDataBatch,
-        { ownerTokenIdentifier },
-      );
+      let verifiedEmpty = true;
 
-      deletedCounts.loggedSets += result.deletedCounts.loggedSets;
-      deletedCounts.loggedExercises += result.deletedCounts.loggedExercises;
-      deletedCounts.workoutSessions += result.deletedCounts.workoutSessions;
-      deletedCounts.exercises += result.deletedCounts.exercises;
-      deletedCounts.userSettings += result.deletedCounts.userSettings;
+      for (const tableName of accountDeletionTableOrder) {
+        const result: AccountDataDeletionTableBatchResult =
+          await ctx.runMutation(internal.sync.deleteAccountDataBatch, {
+            ownerTokenIdentifier,
+            tableName,
+          });
 
-      if (!result.hasMore) {
+        deletedCounts[result.tableName] += result.deletedCount;
+
+        if (result.deletedCount > 0 || result.hasMore) {
+          verifiedEmpty = false;
+        }
+      }
+
+      if (verifiedEmpty) {
         break;
       }
     }

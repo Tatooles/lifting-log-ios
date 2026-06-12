@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import schema from "./schema";
 
 declare global {
@@ -348,6 +348,72 @@ describe("account data deletion", () => {
     });
   }
 
+  async function seedMixedDeletionGraphForOwner(
+    t: ReturnType<typeof testDb>,
+    identity: typeof userA,
+  ) {
+    await t.run(async (ctx) => {
+      await ctx.db.insert("exercises", {
+        ownerTokenIdentifier: identity.tokenIdentifier,
+        clientId: "mixed-exercise-1",
+        seedIdentifier: null,
+        name: "Mixed Bench Press",
+        categoryRaw: "strength",
+        equipmentRaw: "barbell",
+        primaryMuscleRaw: "Chest",
+        primaryMuscleGroupRaw: "chest",
+        notes: "",
+        isArchived: false,
+        isSeeded: false,
+        createdAt: 1,
+        updatedAt: 1,
+        deletedAt: null,
+        serverUpdatedAt: 1,
+      });
+      await ctx.db.insert("exercises", {
+        ownerTokenIdentifier: identity.tokenIdentifier,
+        clientId: "mixed-exercise-2",
+        seedIdentifier: null,
+        name: "Mixed Squat",
+        categoryRaw: "strength",
+        equipmentRaw: "barbell",
+        primaryMuscleRaw: "Legs",
+        primaryMuscleGroupRaw: "legs",
+        notes: "",
+        isArchived: false,
+        isSeeded: false,
+        createdAt: 2,
+        updatedAt: 2,
+        deletedAt: null,
+        serverUpdatedAt: 2,
+      });
+
+      for (let i = 0; i < 1001; i++) {
+        await ctx.db.insert("loggedSets", {
+          ownerTokenIdentifier: identity.tokenIdentifier,
+          clientId: `mixed-logged-set-${i}`,
+          loggedExerciseClientId: "mixed-logged-exercise",
+          orderIndex: i,
+          weight: 135,
+          reps: 10,
+          rpe: 8,
+          placeholderWeight: null,
+          placeholderReps: null,
+          placeholderRPE: null,
+          kindRaw: "working",
+          isCompleted: true,
+          completedAt: 2,
+          notes: "",
+          healthLinkID: null,
+          createdAt: i + 1,
+          updatedAt: i + 1,
+          deletedAt: null,
+          serverUpdatedAt: i + 3,
+        });
+      }
+    });
+  }
+
   test("deleteAccountData rejects unauthenticated callers", async () => {
     const t = testDb();
 
@@ -421,6 +487,75 @@ describe("account data deletion", () => {
         userSettings: 0,
       },
     });
+  });
+
+  test("deleteAccountDataBatch only deletes the requested table", async () => {
+    const t = testDb();
+    await t.run(async (ctx) => {
+      await ctx.db.insert("exercises", {
+        ownerTokenIdentifier: userA.tokenIdentifier,
+        clientId: "isolation-exercise",
+        seedIdentifier: null,
+        name: "Isolation Bench Press",
+        categoryRaw: "strength",
+        equipmentRaw: "barbell",
+        primaryMuscleRaw: "Chest",
+        primaryMuscleGroupRaw: "chest",
+        notes: "",
+        isArchived: false,
+        isSeeded: false,
+        createdAt: 1,
+        updatedAt: 1,
+        deletedAt: null,
+        serverUpdatedAt: 1,
+      });
+    });
+    await seedLoggedSetsDirectlyForOwner(t, userA, 1001);
+
+    await expect(
+      t.mutation(internal.sync.deleteAccountDataBatch, {
+        ownerTokenIdentifier: userA.tokenIdentifier,
+        tableName: "loggedSets",
+      }),
+    ).resolves.toEqual({
+      tableName: "loggedSets",
+      deletedCount: 1000,
+      hasMore: true,
+    });
+
+    const changes = await t
+      .withIdentity(userA)
+      .query(api.sync.fetchChanges, { cursors: zeroCursors });
+
+    expect(changes.exercises.map((record) => record.clientId)).toEqual([
+      "isolation-exercise",
+    ]);
+    expect(changes.loggedSets).toHaveLength(1);
+  });
+
+  test("deleteAccountData handles mixed tables in separate batches", async () => {
+    const t = testDb();
+    await seedMixedDeletionGraphForOwner(t, userA);
+
+    await expect(
+      t.withIdentity(userA).action(api.sync.deleteAccountData, {}),
+    ).resolves.toEqual({
+      status: "deleted",
+      deletedCounts: {
+        loggedSets: 1001,
+        loggedExercises: 0,
+        workoutSessions: 0,
+        exercises: 2,
+        userSettings: 0,
+      },
+    });
+
+    const changes = await t
+      .withIdentity(userA)
+      .query(api.sync.fetchChanges, { cursors: zeroCursors });
+
+    expect(changes.loggedSets).toEqual([]);
+    expect(changes.exercises).toEqual([]);
   });
 
   test("deleteAccountData deletes more than one batch of logged sets", async () => {
