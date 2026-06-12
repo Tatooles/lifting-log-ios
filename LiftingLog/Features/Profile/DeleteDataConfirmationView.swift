@@ -37,10 +37,16 @@ struct DeleteDataConfirmationView: View {
     @Environment(\.dismiss) private var dismiss
 
     let mode: DeleteDataMode
+    let onCompleted: () -> Void
     @State private var confirmationText = ""
 
-    init(mode: DeleteDataMode, coordinator: AccountDeletionCoordinator) {
+    init(
+        mode: DeleteDataMode,
+        coordinator: AccountDeletionCoordinator,
+        onCompleted: @escaping () -> Void = {}
+    ) {
         self.mode = mode
+        self.onCompleted = onCompleted
         _coordinator = StateObject(wrappedValue: coordinator)
     }
 
@@ -103,6 +109,7 @@ struct DeleteDataConfirmationView: View {
         .interactiveDismissDisabled(coordinator.phase.isRunning)
         .onChange(of: coordinator.phase) { _, phase in
             if phase == .completed {
+                onCompleted()
                 dismiss()
             }
         }

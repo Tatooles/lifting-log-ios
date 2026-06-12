@@ -93,11 +93,9 @@ final class AccountDeletionCoordinator: ObservableObject {
         syncScheduler.beginDeletionMode()
         let cancellationToken = attemptStore.persistedCancellationToken ?? UUID()
         attemptStore.persistedCancellationToken = cancellationToken
-        var shouldRecoverCloudSync = false
 
         do {
             phase = .deletingCloudData
-            shouldRecoverCloudSync = true
             _ = try await syncClient.deleteAccountData(cancellationToken: cancellationToken)
 
             phase = .deletingAccount
@@ -108,27 +106,19 @@ final class AccountDeletionCoordinator: ObservableObject {
                     _ = try await syncClient.cancelAccountDeletion(cancellationToken: cancellationToken)
                     attemptStore.persistedCancellationToken = nil
                     syncScheduler.recoverAfterFailedAccountDeletion()
-                    shouldRecoverCloudSync = false
                     throw error
                 } catch {
-                    shouldRecoverCloudSync = false
                     throw error
                 }
             }
 
-            shouldRecoverCloudSync = false
             attemptStore.persistedCancellationToken = nil
             phase = .clearingLocalData
             try localDataResetService.reset(context: modelContext)
             syncScheduler.resetAfterDataDeletion()
             phase = .completed
         } catch {
-            if shouldRecoverCloudSync {
-                attemptStore.persistedCancellationToken = nil
-                syncScheduler.recoverAfterFailedAccountDeletion()
-            } else {
-                syncScheduler.endDeletionMode()
-            }
+            syncScheduler.endDeletionMode()
             switch phase {
             case .deletingCloudData:
                 phase = .failed("Cloud data could not be deleted. Your account and data are still intact.")

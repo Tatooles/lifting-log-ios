@@ -7,6 +7,7 @@ struct SettingsView: View {
     @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
 
     let settings: UserSettings
+    let onDataDeletionCompleted: () -> Void
     @State private var alert: SettingsAlert?
     @State private var exportFile: ExportFile?
 
@@ -32,7 +33,8 @@ struct SettingsView: View {
 
             PrivacyDataSection(
                 exportWorkoutHistory: exportWorkoutHistory,
-                links: .issue13Development
+                links: .issue13Development,
+                onDeletionCompleted: onDataDeletionCompleted
             )
         }
         .scrollContentBackground(.hidden)

@@ -481,6 +481,27 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
+    func testDeleteLocalDataReturnsToProfileAfterReset() {
+        let app = makeApp()
+        app.launchArguments.append("--uitest-force-signed-out-auth")
+        app.launch()
+
+        app.buttons["ProfileTab"].tap()
+        XCTAssertTrue(app.staticTexts["ProfileTitle"].waitForExistence(timeout: 3))
+        app.buttons["ProfileSettingsLink"].tap()
+        XCTAssertTrue(app.buttons["SettingsDeleteLocalDataRow"].waitForExistence(timeout: 3))
+        app.buttons["SettingsDeleteLocalDataRow"].tap()
+
+        XCTAssertTrue(app.navigationBars["Delete Local Data"].waitForExistence(timeout: 3))
+        app.textFields["DeleteDataConfirmationField"].tap()
+        app.textFields["DeleteDataConfirmationField"].typeText("DELETE")
+        app.buttons["DeleteDataConfirmButton"].tap()
+
+        XCTAssertTrue(app.staticTexts["ProfileTitle"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.navigationBars["Settings"].exists)
+    }
+
+    @MainActor
     func testSettingsShowsSignedInAccountDeletionOnly() {
         let app = makeApp(extraArguments: ["--uitest-force-signed-in-auth"])
         app.launch()

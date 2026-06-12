@@ -33,15 +33,12 @@ final class AccountDeletionCoordinatorTests: XCTestCase {
         await coordinator.deleteAccount()
 
         XCTAssertEqual(client.deleteAccountDataCallCount, 1)
-        XCTAssertNil(attemptStore.persistedCancellationToken)
+        XCTAssertEqual(attemptStore.persistedCancellationToken, client.deleteAccountDataTokens.first)
         XCTAssertEqual(accountDeleter.deleteCallCount, 0)
-        XCTAssertEqual(scheduler.requestCount, 1)
+        XCTAssertEqual(scheduler.requestCount, 0)
         XCTAssertEqual(try context.fetch(FetchDescriptor<UserSettings>()).count, 1)
         let outboxEntries = try context.fetch(FetchDescriptor<SyncOutboxEntry>())
-        XCTAssertEqual(outboxEntries.count, 1)
-        XCTAssertEqual(outboxEntries.first?.entityKind, .userSettings)
-        XCTAssertEqual(outboxEntries.first?.operation, .create)
-        XCTAssertEqual(outboxEntries.first?.ownerTokenIdentifier, "issuer|owner_a")
+        XCTAssertEqual(outboxEntries.count, 0)
         XCTAssertEqual(coordinator.phase, .failed("Cloud data could not be deleted. Your account and data are still intact."))
         XCTAssertFalse(scheduler.isDeletionModeEnabled)
     }
