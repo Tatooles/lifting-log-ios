@@ -420,6 +420,18 @@ async function markAccountDeletionStarted(
   });
 }
 
+async function clearAccountDeletionMarker(
+  ctx: MutationCtx,
+  ownerTokenIdentifier: string,
+): Promise<void> {
+  const existing = await accountDeletionMarkerForOwner(ctx, ownerTokenIdentifier);
+  if (existing === null) {
+    return;
+  }
+
+  await ctx.db.delete(existing._id);
+}
+
 async function upsertUserSettingsByClientId(
   ctx: MutationCtx,
   ownerTokenIdentifier: string,
@@ -1064,6 +1076,15 @@ export const startAccountDeletion = internalMutation({
   },
 });
 
+export const clearAccountDeletion = internalMutation({
+  args: {
+    ownerTokenIdentifier: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await clearAccountDeletionMarker(ctx, args.ownerTokenIdentifier);
+  },
+});
+
 export const deleteAccountDataBatch = internalMutation({
   args: {
     ownerTokenIdentifier: v.string(),
@@ -1119,18 +1140,44 @@ export const deleteAccountData = action({
     }
 
     const ownerTokenIdentifier = identity.tokenIdentifier;
-    await ctx.runMutation(internal.sync.startAccountDeletion, {
-      ownerTokenIdentifier,
-    });
 
-    return await deleteAccountDataWithBatches(async (tableName) => {
-      return await ctx.runMutation(internal.sync.deleteAccountDataBatch, {
-        ownerTokenIdentifier,
-        tableName,
-      });
-    });
+    return await deleteAccountDataForOwner(
+      async () => {
+        await ctx.runMutation(internal.sync.startAccountDeletion, {
+          ownerTokenIdentifier,
+        });
+      },
+      async () => {
+        await ctx.runMutation(internal.sync.clearAccountDeletion, {
+          ownerTokenIdentifier,
+        });
+      },
+      async (tableName) => {
+        return await ctx.runMutation(internal.sync.deleteAccountDataBatch, {
+          ownerTokenIdentifier,
+          tableName,
+        });
+      },
+    );
   },
 });
+
+export async function deleteAccountDataForOwner(
+  startDeletion: () => Promise<void>,
+  clearDeletionMarker: () => Promise<void>,
+  runBatch: (
+    tableName: AccountDeletionTable,
+  ) => Promise<AccountDataDeletionTableBatchResult>,
+): Promise<AccountDataDeletionResult> {
+  await startDeletion();
+
+  try {
+    return await deleteAccountDataWithBatches(runBatch);
+  } catch (error) {
+    await clearDeletionMarker();
+    throw error;
+  }
+}
 
 export const fetchChanges = query({
   args: {

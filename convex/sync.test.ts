@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import { api, internal } from "./_generated/api";
 import {
   accountDeletionPassLimitReached,
+  deleteAccountDataForOwner,
   deleteAccountDataWithBatches,
 } from "./sync";
 import schema from "./schema";
@@ -536,6 +537,31 @@ describe("account data deletion", () => {
     expect(userBChanges.exercises.map((record) => record.clientId)).toEqual([
       "other-owner-exercise",
     ]);
+  });
+
+  test("deleteAccountDataForOwner clears the marker when deletion fails", async () => {
+    let started = false;
+    let cleared = false;
+    const seenTables: string[] = [];
+
+    await expect(
+      deleteAccountDataForOwner(
+        async () => {
+          started = true;
+        },
+        async () => {
+          cleared = true;
+        },
+        async (tableName) => {
+          seenTables.push(tableName);
+          throw new Error(`failed ${tableName}`);
+        },
+      ),
+    ).rejects.toThrow("failed loggedSets");
+
+    expect(started).toBe(true);
+    expect(cleared).toBe(true);
+    expect(seenTables).toEqual(["loggedSets"]);
   });
 
   test("account deletion pass limit helper respects the configured cap", async () => {
