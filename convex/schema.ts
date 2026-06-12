@@ -14,6 +14,11 @@ const syncFields = {
 };
 
 export default defineSchema({
+  accountDeletionMarkers: defineTable({
+    ownerTokenIdentifier: v.string(),
+    createdAt: v.number(),
+  }).index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"]),
+
   userSettings: defineTable({
     ...syncFields,
     weightUnitRaw: v.union(v.literal("pounds"), v.literal("kilograms")),

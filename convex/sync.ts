@@ -381,6 +381,45 @@ async function nextServerUpdatedAt(
   return Math.max(Date.now(), maxExisting + 1);
 }
 
+async function accountDeletionMarkerForOwner(
+  ctx: MutationCtx,
+  ownerTokenIdentifier: string,
+): Promise<Doc<"accountDeletionMarkers"> | null> {
+  const markers = await ctx.db
+    .query("accountDeletionMarkers")
+    .withIndex("by_ownerTokenIdentifier", (q) =>
+      q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
+    )
+    .take(1);
+
+  return markers[0] ?? null;
+}
+
+async function assertAccountDeletionNotStarted(
+  ctx: MutationCtx,
+  ownerTokenIdentifier: string,
+): Promise<void> {
+  const marker = await accountDeletionMarkerForOwner(ctx, ownerTokenIdentifier);
+  if (marker !== null) {
+    throw new Error("Account deletion is in progress");
+  }
+}
+
+async function markAccountDeletionStarted(
+  ctx: MutationCtx,
+  ownerTokenIdentifier: string,
+): Promise<void> {
+  const existing = await accountDeletionMarkerForOwner(ctx, ownerTokenIdentifier);
+  if (existing !== null) {
+    return;
+  }
+
+  await ctx.db.insert("accountDeletionMarkers", {
+    ownerTokenIdentifier,
+    createdAt: Date.now(),
+  });
+}
+
 async function upsertUserSettingsByClientId(
   ctx: MutationCtx,
   ownerTokenIdentifier: string,
@@ -908,6 +947,7 @@ export const upsertUserSettings = mutation({
   handler: async (ctx, args) => {
     assertFinitePayloadNumbers(args.record);
     const ownerTokenIdentifier = await requireOwnerTokenIdentifier(ctx);
+    await assertAccountDeletionNotStarted(ctx, ownerTokenIdentifier);
     return await upsertUserSettingsByClientId(
       ctx,
       ownerTokenIdentifier,
@@ -921,6 +961,7 @@ export const upsertExercise = mutation({
   handler: async (ctx, args) => {
     assertFinitePayloadNumbers(args.record);
     const ownerTokenIdentifier = await requireOwnerTokenIdentifier(ctx);
+    await assertAccountDeletionNotStarted(ctx, ownerTokenIdentifier);
     return await upsertExerciseByClientId(ctx, ownerTokenIdentifier, args.record);
   },
 });
@@ -930,6 +971,7 @@ export const upsertWorkoutSession = mutation({
   handler: async (ctx, args) => {
     assertFinitePayloadNumbers(args.record);
     const ownerTokenIdentifier = await requireOwnerTokenIdentifier(ctx);
+    await assertAccountDeletionNotStarted(ctx, ownerTokenIdentifier);
     return await upsertWorkoutSessionByClientId(
       ctx,
       ownerTokenIdentifier,
@@ -943,6 +985,7 @@ export const upsertLoggedExercise = mutation({
   handler: async (ctx, args) => {
     assertFinitePayloadNumbers(args.record);
     const ownerTokenIdentifier = await requireOwnerTokenIdentifier(ctx);
+    await assertAccountDeletionNotStarted(ctx, ownerTokenIdentifier);
     return await upsertLoggedExerciseByClientId(
       ctx,
       ownerTokenIdentifier,
@@ -956,6 +999,7 @@ export const upsertLoggedSet = mutation({
   handler: async (ctx, args) => {
     assertFinitePayloadNumbers(args.record);
     const ownerTokenIdentifier = await requireOwnerTokenIdentifier(ctx);
+    await assertAccountDeletionNotStarted(ctx, ownerTokenIdentifier);
     return await upsertLoggedSetByClientId(ctx, ownerTokenIdentifier, args.record);
   },
 });
@@ -969,6 +1013,7 @@ export const tombstone = mutation({
   handler: async (ctx, args) => {
     assertFiniteNumber(args.deletedAt, "deletedAt");
     const ownerTokenIdentifier = await requireOwnerTokenIdentifier(ctx);
+    await assertAccountDeletionNotStarted(ctx, ownerTokenIdentifier);
 
     switch (args.entityKind) {
       case "userSettings":
@@ -1007,6 +1052,15 @@ export const tombstone = mutation({
           args.deletedAt,
         );
     }
+  },
+});
+
+export const startAccountDeletion = internalMutation({
+  args: {
+    ownerTokenIdentifier: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await markAccountDeletionStarted(ctx, args.ownerTokenIdentifier);
   },
 });
 
@@ -1065,6 +1119,10 @@ export const deleteAccountData = action({
     }
 
     const ownerTokenIdentifier = identity.tokenIdentifier;
+    await ctx.runMutation(internal.sync.startAccountDeletion, {
+      ownerTokenIdentifier,
+    });
+
     return await deleteAccountDataWithBatches(async (tableName) => {
       return await ctx.runMutation(internal.sync.deleteAccountDataBatch, {
         ownerTokenIdentifier,

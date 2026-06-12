@@ -493,6 +493,51 @@ describe("account data deletion", () => {
     });
   });
 
+  test("account deletion marker blocks new writes for the deleted owner", async () => {
+    const t = testDb();
+
+    await t.withIdentity(userA).action(api.sync.deleteAccountData, {});
+
+    await expect(
+      t.withIdentity(userA).mutation(api.sync.upsertExercise, {
+        record: exerciseRecord({ clientId: "late-exercise" }),
+      }),
+    ).rejects.toThrow("Account deletion is in progress");
+    await expect(
+      t.withIdentity(userA).mutation(api.sync.tombstone, {
+        entityKind: "exercises",
+        clientId: "late-exercise",
+        deletedAt: 3,
+      }),
+    ).rejects.toThrow("Account deletion is in progress");
+
+    const changes = await t
+      .withIdentity(userA)
+      .query(api.sync.fetchChanges, { cursors: zeroCursors });
+
+    expect(changes.exercises).toEqual([]);
+  });
+
+  test("account deletion marker does not block other owners", async () => {
+    const t = testDb();
+
+    await t.withIdentity(userA).action(api.sync.deleteAccountData, {});
+
+    await expect(
+      t.withIdentity(userB).mutation(api.sync.upsertExercise, {
+        record: exerciseRecord({ clientId: "other-owner-exercise" }),
+      }),
+    ).resolves.toMatchObject({ status: "inserted" });
+
+    const userBChanges = await t
+      .withIdentity(userB)
+      .query(api.sync.fetchChanges, { cursors: zeroCursors });
+
+    expect(userBChanges.exercises.map((record) => record.clientId)).toEqual([
+      "other-owner-exercise",
+    ]);
+  });
+
   test("account deletion pass limit helper respects the configured cap", async () => {
     expect(accountDeletionPassLimitReached(99)).toBe(false);
     expect(accountDeletionPassLimitReached(100)).toBe(true);
