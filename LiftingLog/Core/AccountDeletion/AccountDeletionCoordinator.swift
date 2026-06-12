@@ -104,11 +104,16 @@ final class AccountDeletionCoordinator: ObservableObject {
             do {
                 try await accountDeleter.deleteCurrentAccount()
             } catch {
-                _ = try await syncClient.cancelAccountDeletion(cancellationToken: cancellationToken)
-                attemptStore.persistedCancellationToken = nil
-                syncScheduler.recoverAfterFailedAccountDeletion()
-                shouldRecoverCloudSync = false
-                throw error
+                do {
+                    _ = try await syncClient.cancelAccountDeletion(cancellationToken: cancellationToken)
+                    attemptStore.persistedCancellationToken = nil
+                    syncScheduler.recoverAfterFailedAccountDeletion()
+                    shouldRecoverCloudSync = false
+                    throw error
+                } catch {
+                    shouldRecoverCloudSync = false
+                    throw error
+                }
             }
 
             shouldRecoverCloudSync = false

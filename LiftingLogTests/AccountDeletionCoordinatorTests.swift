@@ -191,6 +191,47 @@ final class AccountDeletionCoordinatorTests: XCTestCase {
         XCTAssertNil(attemptStore.persistedCancellationToken)
         XCTAssertEqual(coordinator.phase, .failed("Account deletion could not finish. Your local data is still saved on this iPhone."))
     }
+
+    func testAccountDeletionPreservesPersistedTokenWhenCancellationFails() async throws {
+        struct ClerkError: LocalizedError {
+            var errorDescription: String? { "Clerk failed" }
+        }
+
+        struct CancellationError: LocalizedError {
+            var errorDescription: String? { "Cancellation failed" }
+        }
+
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let client = FakeSyncClient()
+        client.cancelAccountDeletionError = CancellationError()
+        let accountDeleter = FakeAccountDeleter()
+        accountDeleter.error = ClerkError()
+        let attemptStore = TestAccountDeletionAttemptStore()
+        let scheduler = SyncScheduler()
+        scheduler.configure(modelContext: context)
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+        context.insert(UserSettings(syncOwnerTokenIdentifier: "issuer|owner_a"))
+        try context.save()
+
+        let coordinator = AccountDeletionCoordinator(
+            syncClient: client,
+            accountDeleter: accountDeleter,
+            attemptStore: attemptStore,
+            localDataResetService: LocalDataResetService(),
+            syncScheduler: scheduler,
+            modelContext: context
+        )
+
+        await coordinator.deleteAccount()
+
+        XCTAssertEqual(client.deleteAccountDataTokens.count, 1)
+        XCTAssertEqual(client.cancelAccountDeletionTokens, client.deleteAccountDataTokens)
+        XCTAssertEqual(attemptStore.persistedCancellationToken, client.deleteAccountDataTokens.first)
+        XCTAssertEqual(scheduler.requestCount, 0)
+        XCTAssertFalse(scheduler.isDeletionModeEnabled)
+        XCTAssertEqual(coordinator.phase, .failed("Account deletion could not finish. Your local data is still saved on this iPhone."))
+    }
 }
 
 @MainActor
