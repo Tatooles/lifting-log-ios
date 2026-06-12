@@ -2772,6 +2772,18 @@ final class FakeSyncClient: SyncClient, @unchecked Sendable {
     var loggedSetMutationResults: [SyncMutationResult] = []
     var tombstoneResults: [SyncMutationResult] = []
     var fetchResponses: [SyncFetchChangesResponse] = []
+    var deleteAccountDataCallCount = 0
+    var deleteAccountDataError: Error?
+    var deleteAccountDataResult = AccountDataDeletionResult(
+        status: "deleted",
+        deletedCounts: AccountDataDeletionCounts(
+            loggedSets: 0,
+            loggedExercises: 0,
+            workoutSessions: 0,
+            exercises: 0,
+            userSettings: 0
+        )
+    )
     var fetchResponse = SyncFetchChangesResponse(
         userSettings: [],
         exercises: [],
@@ -2850,5 +2862,12 @@ final class FakeSyncClient: SyncClient, @unchecked Sendable {
             return fetchResponses.removeFirst()
         }
         return fetchResponse
+    }
+
+    func deleteAccountData() async throws -> AccountDataDeletionResult {
+        deleteAccountDataCallCount += 1
+        if let deleteAccountDataError { throw deleteAccountDataError }
+        if let error { throw error }
+        return deleteAccountDataResult
     }
 }

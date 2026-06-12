@@ -23,6 +23,7 @@ final class SyncScheduler {
     private(set) var hasQueuedSyncRequest = false
     private(set) var lastSyncedAt: Date?
     private(set) var lastFailure: Failure?
+    private(set) var isDeletionModeEnabled = false
 
     private var coordinator: SyncCoordinator?
     private var modelContext: ModelContext?
@@ -44,6 +45,7 @@ final class SyncScheduler {
 
     func requestSync() {
         requestCount += 1
+        guard !isDeletionModeEnabled else { return }
         guard currentOwnerTokenIdentifier != nil else { return }
         guard let coordinator, let modelContext else { return }
         guard syncTask == nil else {
@@ -57,6 +59,23 @@ final class SyncScheduler {
 
     func retrySync() {
         requestSync()
+    }
+
+    func beginDeletionMode() {
+        isDeletionModeEnabled = true
+        cancelInFlightSync()
+        clearRuntimeStateForOwnerChange()
+    }
+
+    func endDeletionMode() {
+        isDeletionModeEnabled = false
+    }
+
+    func resetAfterDataDeletion() {
+        isDeletionModeEnabled = false
+        currentOwnerTokenIdentifier = nil
+        cancelInFlightSync()
+        clearRuntimeStateForOwnerChange()
     }
 
     func seedDefaultsForCurrentOwner() {
@@ -135,7 +154,7 @@ final class SyncScheduler {
                 await Task.yield()
             }
 
-            let shouldStartQueuedSync = needsSync && currentOwnerTokenIdentifier != nil
+            let shouldStartQueuedSync = needsSync && currentOwnerTokenIdentifier != nil && !isDeletionModeEnabled
             needsSync = false
             hasQueuedSyncRequest = false
             isSyncing = false

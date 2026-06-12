@@ -70,6 +70,10 @@ struct ConvexSyncClient: SyncClient, @unchecked Sendable {
 
         throw ConvexSyncClientError.noFetchChangesValue
     }
+
+    func deleteAccountData() async throws -> AccountDataDeletionResult {
+        try await client.action("sync:deleteAccountData")
+    }
 }
 
 enum ConvexSyncArgumentMapper {
