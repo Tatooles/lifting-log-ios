@@ -591,18 +591,14 @@ describe("account data deletion", () => {
     ).rejects.toThrow("Account deletion is in progress");
   });
 
-  test("deleteAccountDataForOwner clears the marker when deletion fails", async () => {
+  test("deleteAccountDataForOwner keeps the marker when deletion fails", async () => {
     let started = false;
-    let cleared = false;
     const seenTables: string[] = [];
 
     await expect(
       deleteAccountDataForOwner(
         async () => {
           started = true;
-        },
-        async () => {
-          cleared = true;
         },
         async (tableName) => {
           seenTables.push(tableName);
@@ -612,7 +608,6 @@ describe("account data deletion", () => {
     ).rejects.toThrow("failed loggedSets");
 
     expect(started).toBe(true);
-    expect(cleared).toBe(true);
     expect(seenTables).toEqual(["loggedSets"]);
   });
 

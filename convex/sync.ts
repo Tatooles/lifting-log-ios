@@ -1170,12 +1170,6 @@ export const deleteAccountData = action({
           cancellationToken: args.cancellationToken,
         });
       },
-      async () => {
-        await ctx.runMutation(internal.sync.clearAccountDeletion, {
-          ownerTokenIdentifier,
-          cancellationToken: args.cancellationToken,
-        });
-      },
       async (tableName) => {
         return await ctx.runMutation(internal.sync.deleteAccountDataBatch, {
           ownerTokenIdentifier,
@@ -1207,19 +1201,13 @@ export const cancelAccountDeletion = action({
 
 export async function deleteAccountDataForOwner(
   startDeletion: () => Promise<void>,
-  clearDeletionMarker: () => Promise<void>,
   runBatch: (
     tableName: AccountDeletionTable,
   ) => Promise<AccountDataDeletionTableBatchResult>,
 ): Promise<AccountDataDeletionResult> {
   await startDeletion();
 
-  try {
-    return await deleteAccountDataWithBatches(runBatch);
-  } catch (error) {
-    await clearDeletionMarker();
-    throw error;
-  }
+  return await deleteAccountDataWithBatches(runBatch);
 }
 
 export const fetchChanges = query({
