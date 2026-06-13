@@ -40,6 +40,11 @@ enum AppTheme {
     static let accentGlow = accent.opacity(0.34)
     static let success = Color(.systemGreen)
 
+    /// Foreground for content sitting on `accent`/`accentGradient` fills. Fixed
+    /// white rather than the adaptive label color, since the accent red reads
+    /// well with white in both light and dark appearance.
+    static let onAccent = Color.white
+
     // MARK: Text
 
     static let textPrimary = Color(.label)

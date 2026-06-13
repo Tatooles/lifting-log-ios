@@ -75,7 +75,7 @@ struct ProfileAccountCard: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 9)
                         .background(AppTheme.accentGradient)
-                        .foregroundStyle(AppTheme.textPrimary)
+                        .foregroundStyle(AppTheme.onAccent)
                         .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)

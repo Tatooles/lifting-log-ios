@@ -34,7 +34,7 @@ struct StartWorkoutView: View {
                                 .overlay {
                                     Image(systemName: "plus")
                                         .font(.title2.weight(.bold))
-                                        .foregroundStyle(.white)
+                                        .foregroundStyle(AppTheme.onAccent)
                                 }
                                 .shadow(color: AppTheme.accentGlow, radius: 10, y: 4)
 
