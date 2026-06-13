@@ -55,6 +55,7 @@
 		62CC4C91F44643AFC8FE3656 /* LoggedExercise.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54AEC1C879FEDA6709B30F53 /* LoggedExercise.swift */; };
 		6422651CFAD70FAD28BF57CD /* SettingsMutationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB615D5B5B32CE190F916A25 /* SettingsMutationService.swift */; };
 		66685586FC6F6B07A7D2E3E8 /* SyncDiagnosticsSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAF6EA77302603FC120740B7 /* SyncDiagnosticsSnapshotTests.swift */; };
+		69690F55300E7C171DB1C9B5 /* SwipeToDeleteRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = C01C01CDEA607FF076F78219 /* SwipeToDeleteRow.swift */; };
 		69C6F8BFD46A46AA9E573D81 /* ExerciseHistoryDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 358C22D3418EBFADE814392B /* ExerciseHistoryDetailView.swift */; };
 		6A5923712E74EB5D11FC7CA4 /* LocalDataResetService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D921BC5CE7C78FB99BC04CF /* LocalDataResetService.swift */; };
 		6AB7A0F44B97D2ED6BC30998 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07892AE17A746B9D8CC8A876 /* AppTheme.swift */; };
@@ -238,6 +239,7 @@
 		B1685B10552EB34C72044415 /* SyncStatusDisplayStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncStatusDisplayStateTests.swift; sourceTree = "<group>"; };
 		B56F2E9441085CD8E6678F46 /* ExerciseHistorySessionGroupCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseHistorySessionGroupCard.swift; sourceTree = "<group>"; };
 		BAF6EA77302603FC120740B7 /* SyncDiagnosticsSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncDiagnosticsSnapshotTests.swift; sourceTree = "<group>"; };
+		C01C01CDEA607FF076F78219 /* SwipeToDeleteRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwipeToDeleteRow.swift; sourceTree = "<group>"; };
 		C37735BFE84A31020F06E74E /* WorkoutDataExportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutDataExportService.swift; sourceTree = "<group>"; };
 		C49456C7E43AE7F75A3AC9FA /* ExerciseCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseCategory.swift; sourceTree = "<group>"; };
 		C52A1C061D09E267CE5764DA /* ClerkConfigurationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClerkConfigurationTests.swift; sourceTree = "<group>"; };
@@ -454,6 +456,7 @@
 				FFF5FB0831E995AE3CE166AC /* ActivityView.swift */,
 				DFEA6BDEE13C9DA08AF2DDD9 /* StateViews.swift */,
 				C73C4CD0795B7A76A57EBA16 /* SurfaceCard.swift */,
+				C01C01CDEA607FF076F78219 /* SwipeToDeleteRow.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -811,6 +814,7 @@
 				3F8D7956C2A8FB3E3174E0F2 /* StartWorkoutView.swift in Sources */,
 				4E8E9E1E3FF56E8A2B23B1F1 /* StateViews.swift in Sources */,
 				2BCA7BFEB45C2DCC66943507 /* SurfaceCard.swift in Sources */,
+				69690F55300E7C171DB1C9B5 /* SwipeToDeleteRow.swift in Sources */,
 				3ED94241B48E627EAF382A60 /* SyncClient.swift in Sources */,
 				5C18C6001D9DC438F89DA206 /* SyncConflictResolver.swift in Sources */,
 				9AA3396E81F6B3F541F35112 /* SyncCoordinator.swift in Sources */,
@@ -870,7 +874,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -889,7 +893,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -908,7 +912,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -936,7 +940,7 @@
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -964,7 +968,7 @@
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -982,7 +986,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1041,7 +1045,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1103,7 +1107,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;

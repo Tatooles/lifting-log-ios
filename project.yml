@@ -4,7 +4,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: 6.0
-    IPHONEOS_DEPLOYMENT_TARGET: 17.0
+    IPHONEOS_DEPLOYMENT_TARGET: 26.0
 packages:
   Clerk:
     url: https://github.com/clerk/clerk-ios
@@ -19,7 +19,7 @@ targets:
   LiftingLog:
     type: application
     platform: iOS
-    deploymentTarget: "17.0"
+    deploymentTarget: "26.0"
     attributes:
       DevelopmentTeam: RJGJJ38RV9
       ProvisioningStyle: Automatic
@@ -59,7 +59,7 @@ targets:
   LiftingLogTests:
     type: bundle.unit-test
     platform: iOS
-    deploymentTarget: "17.0"
+    deploymentTarget: "26.0"
     sources:
       - path: LiftingLogTests
     dependencies:
@@ -71,7 +71,7 @@ targets:
   LiftingLogUITests:
     type: bundle.ui-testing
     platform: iOS
-    deploymentTarget: "17.0"
+    deploymentTarget: "26.0"
     sources:
       - path: LiftingLogUITests
     dependencies:

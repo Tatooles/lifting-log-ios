@@ -264,6 +264,8 @@ final class LiftingLogUITests: XCTestCase {
         XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
         addExercise("Variant Bench, Dumbbell • Chest", in: app)
         dismissKeyboardIfNeeded(in: app)
+        app.buttons["ExerciseMenuButton-0"].tap()
+        XCTAssertTrue(app.buttons["ExerciseHistoryButton-0"].waitForExistence(timeout: 3))
         app.buttons["ExerciseHistoryButton-0"].tap()
 
         XCTAssertTrue(app.staticTexts["Dumbbell Variant"].waitForExistence(timeout: 3))
@@ -628,6 +630,31 @@ final class LiftingLogUITests: XCTestCase {
         relaunchedApp.buttons["WorkoutHistoryButton-0"].tap()
         XCTAssertTrue(relaunchedApp.staticTexts["Relaunch Push"].waitForExistence(timeout: 3))
         XCTAssertTrue(relaunchedApp.staticTexts["Bench Press"].exists)
+    }
+
+    @MainActor
+    func testSwipeToDeleteSetRemovesSet() {
+        let app = makeApp()
+        app.launch()
+
+        app.buttons["StartBlankWorkoutButton"].tap()
+        XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
+
+        addExercise("Bench Press, Barbell • Chest", in: app)
+        dismissKeyboardIfNeeded(in: app)
+
+        app.buttons["AddSetButton-0"].tap()
+        dismissKeyboardIfNeeded(in: app)
+        let secondWeightField = app.textFields["SetWeightField-0-1"]
+        XCTAssertTrue(secondWeightField.waitForExistence(timeout: 3))
+
+        secondWeightField.swipeLeft()
+        let deleteButton = app.buttons["DeleteSetButton-0-1"]
+        XCTAssertTrue(deleteButton.waitForExistence(timeout: 2))
+        deleteButton.tap()
+
+        XCTAssertFalse(app.textFields["SetWeightField-0-1"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.textFields["SetWeightField-0-0"].exists)
     }
 
     @MainActor

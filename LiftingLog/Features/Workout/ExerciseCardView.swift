@@ -10,6 +10,7 @@ struct ExerciseCardView: View {
     @Binding var isCollapsed: Bool
     var focusedField: FocusState<WorkoutField?>.Binding
     let viewHistory: () -> Void
+    @State private var showsRemoveConfirmation = false
     @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
 
     private var weightUnit: MeasurementUnit {
@@ -24,24 +25,24 @@ struct ExerciseCardView: View {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
                     Button {
-                        withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                        withAnimation(.snappy(duration: 0.3, extraBounce: 0)) {
                             isCollapsed.toggle()
                         }
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "chevron.down")
-                                .font(.system(size: 14, weight: .bold))
+                                .font(.footnote.weight(.bold))
                                 .foregroundStyle(AppTheme.textSecondary)
                                 .rotationEffect(.degrees(isCollapsed ? -90 : 0))
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(loggedExercise.exerciseSnapshotName)
-                                    .font(.system(size: 20, weight: .bold))
+                                    .font(.title3.weight(.bold))
                                     .foregroundStyle(AppTheme.textPrimary)
                                     .lineLimit(1)
                                 if let metadataDisplayText = loggedExercise.metadataDisplayText {
                                     Text(metadataDisplayText)
-                                        .font(.system(size: 13, weight: .medium))
+                                        .font(.footnote.weight(.medium))
                                         .foregroundStyle(AppTheme.textSecondary)
                                         .lineLimit(1)
                                 }
@@ -51,38 +52,57 @@ struct ExerciseCardView: View {
 
                             let progress = Self.setProgress(for: loggedExercise)
                             Text("\(progress.completed)/\(progress.total)")
-                                .font(.system(size: 14, weight: .bold))
+                                .font(.footnote.weight(.bold).monospacedDigit())
                                 .foregroundStyle(progress.isComplete ? AppTheme.accentBright : AppTheme.textSecondary)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
-                                .background(AppTheme.surfaceMuted)
-                                .clipShape(Capsule())
+                                .background(
+                                    progress.isComplete ? AnyShapeStyle(AppTheme.accentMuted) : AnyShapeStyle(AppTheme.surfaceMuted),
+                                    in: Capsule()
+                                )
                         }
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("ExerciseHeader-\(exerciseIndex)")
 
-                    Button(action: viewHistory) {
-                        Image(systemName: "clock.arrow.circlepath")
-                            .font(.system(size: 15, weight: .semibold))
+                    Menu {
+                        Button(action: viewHistory) {
+                            Label("View History", systemImage: "clock.arrow.circlepath")
+                        }
+                        .accessibilityIdentifier("ExerciseHistoryButton-\(exerciseIndex)")
+
+                        Button(role: .destructive) {
+                            showsRemoveConfirmation = true
+                        } label: {
+                            Label("Remove Exercise", systemImage: "trash")
+                        }
+                        .accessibilityIdentifier("RemoveExerciseButton-\(exerciseIndex)")
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.subheadline.weight(.semibold))
                             .foregroundStyle(AppTheme.textSecondary)
                             .frame(width: 44, height: 44)
+                            .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("View \(loggedExercise.exerciseSnapshotName) history")
-                    .accessibilityIdentifier("ExerciseHistoryButton-\(exerciseIndex)")
-
-                    Button(role: .destructive) {
-                        try? engine.removeLoggedExercise(loggedExercise, context: modelContext)
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(AppTheme.textSecondary)
-                    }
-                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(loggedExercise.exerciseSnapshotName) options")
+                    .accessibilityIdentifier("ExerciseMenuButton-\(exerciseIndex)")
                 }
-                .padding(16)
+                .padding(.vertical, 12)
+                .padding(.horizontal, 16)
+                .confirmationDialog(
+                    "Remove \(loggedExercise.exerciseSnapshotName)?",
+                    isPresented: $showsRemoveConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Remove Exercise", role: .destructive) {
+                        try? engine.removeLoggedExercise(loggedExercise, context: modelContext)
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("This removes the exercise and its sets from this workout.")
+                }
 
                 if !isCollapsed {
                     VStack(spacing: 14) {
@@ -91,18 +111,11 @@ struct ExerciseCardView: View {
                             columnHeader(weightUnit.fieldLabel)
                             columnHeader("REPS")
                             columnHeader("RPE")
-                            Color.clear.frame(width: 54)
+                            Color.clear.frame(width: 44)
                         }
                         .padding(.horizontal, 16)
-                        .padding(.bottom, 10)
-                        .overlay(alignment: .bottom) {
-                            Rectangle()
-                                .fill(AppTheme.border)
-                                .frame(height: 1)
-                                .padding(.horizontal, 16)
-                        }
 
-                        VStack(spacing: 12) {
+                        VStack(spacing: 10) {
                             ForEach(Array(loggedExercise.sortedSets.enumerated()), id: \.element.id) { index, set in
                                 SetRowView(
                                     set: set,
@@ -124,15 +137,11 @@ struct ExerciseCardView: View {
                             }
                         } label: {
                             Label("Add Set", systemImage: "plus")
-                                .font(.system(size: 16, weight: .bold))
+                                .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(AppTheme.accentBright)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 18)
-                                        .stroke(style: StrokeStyle(lineWidth: 1.25, dash: [5, 4]))
-                                        .foregroundStyle(AppTheme.borderStrong)
-                                )
+                                .padding(.horizontal, 12)
+                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("AddSetButton-\(exerciseIndex)")
@@ -146,17 +155,25 @@ struct ExerciseCardView: View {
                             ),
                             axis: .vertical
                         )
-                        .font(.system(size: 16))
+                        .font(.body)
                         .foregroundStyle(AppTheme.textPrimary)
                         .focused(focusedField, equals: .exerciseNotes(loggedExercise.id))
                         .padding(14)
-                        .frame(minHeight: 92, alignment: .topLeading)
-                        .background(AppTheme.surfaceMuted)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 18)
-                                .stroke(AppTheme.border)
+                        .frame(minHeight: 88, alignment: .topLeading)
+                        .background(
+                            AppTheme.fieldFill,
+                            in: RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
                         )
-                        .clipShape(RoundedRectangle(cornerRadius: 18))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
+                                .strokeBorder(
+                                    focusedField.wrappedValue == .exerciseNotes(loggedExercise.id)
+                                        ? AppTheme.accentBright.opacity(0.7)
+                                        : .clear,
+                                    lineWidth: 1.5
+                                )
+                        )
+                        .animation(.easeOut(duration: 0.15), value: focusedField.wrappedValue == .exerciseNotes(loggedExercise.id))
                         .padding(.horizontal, 16)
                         .accessibilityIdentifier("ExerciseNotesField-\(exerciseIndex)")
                         .id(WorkoutField.exerciseNotes(loggedExercise.id))
@@ -168,18 +185,20 @@ struct ExerciseCardView: View {
                                     .padding(.bottom, 4)
 
                                 Text("LAST TIME")
-                                    .font(.system(size: 10, weight: .bold))
+                                    .font(.caption2.weight(.bold))
                                     .tracking(1.4)
                                     .foregroundStyle(AppTheme.textTertiary)
                                 Text(referenceNotes)
-                                    .font(.system(size: 14))
+                                    .font(.footnote)
                                     .foregroundStyle(AppTheme.textSecondary)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             .padding(.horizontal, 16)
                         }
                     }
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    // Content stays put and fades while the clipped card edge
+                    // swallows it; a .move transition here reads as jank.
+                    .transition(.opacity)
                     .padding(.bottom, 16)
                 }
             }
@@ -199,7 +218,8 @@ struct ExerciseCardView: View {
 
     private func columnHeader(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 13, weight: .bold))
+            .font(.caption.weight(.semibold))
+            .tracking(0.6)
             .foregroundStyle(AppTheme.textTertiary)
             .frame(maxWidth: .infinity)
     }
