@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Reveals a trailing delete action when the row is swiped left, mirroring
-/// `List` swipe actions for rows hosted in a plain `ScrollView`.
+/// `List` swipe actions — including full-swipe-to-delete with a threshold
+/// haptic — for rows hosted in a plain `ScrollView`.
 struct SwipeToDeleteRow<Content: View>: View {
     let deleteAccessibilityLabel: String
     var deleteAccessibilityIdentifier: String?
@@ -12,10 +13,11 @@ struct SwipeToDeleteRow<Content: View>: View {
     @State private var isOpen = false
     @State private var lockedAxis: Axis?
     @State private var rowWidth: CGFloat = 0
+    @State private var isArmedForFullSwipe = false
 
     private let revealWidth: CGFloat = 72
-    /// Dragging past this fraction of the row width commits the delete
-    /// directly on release, like a full swipe in List.
+    /// Dragging past this fraction of the row width commits the delete, like a
+    /// full swipe in `List`.
     private let fullSwipeFraction: CGFloat = 0.5
     private let deleteShape = RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
 
@@ -27,9 +29,7 @@ struct SwipeToDeleteRow<Content: View>: View {
                 // revealed, flush against the sliding content, like a List
                 // swipe action.
                 if offsetX < -1 {
-                    Button(role: .destructive) {
-                        performDelete()
-                    } label: {
+                    Button(role: .destructive, action: performDelete) {
                         deleteShape
                             .fill(Color(.systemRed))
                             .overlay(
@@ -46,76 +46,71 @@ struct SwipeToDeleteRow<Content: View>: View {
                     .accessibilityIdentifier(deleteAccessibilityIdentifier ?? deleteAccessibilityLabel)
                 }
             }
-            .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { width in
-                rowWidth = width
-            }
+            .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { rowWidth = $0 }
             .contentShape(Rectangle())
-            .onTapGesture {
-                if isOpen {
-                    close()
+            .onTapGesture { if isOpen { close() } }
+            .simultaneousGesture(dragGesture)
+            // Native haptic when the swipe crosses the full-swipe threshold,
+            // matching Mail/Messages. Fires only on the false→true transition,
+            // so it re-arms if you pull back out and cross again, and stays
+            // silent for a button tap.
+            .sensoryFeedback(trigger: isArmedForFullSwipe) { _, armed in
+                armed ? .impact(weight: .medium) : nil
+            }
+            .accessibilityAction(named: deleteAccessibilityLabel, performDelete)
+    }
+
+    private var dragGesture: some Gesture {
+        DragGesture(minimumDistance: 15)
+            .onChanged { value in
+                // Lock to the dominant axis once per drag; vertical drags stay
+                // with the enclosing scroll view.
+                if lockedAxis == nil {
+                    lockedAxis = abs(value.translation.width) > abs(value.translation.height) ? .horizontal : .vertical
+                }
+                guard lockedAxis == .horizontal else { return }
+
+                let proposed = restingOffset + value.translation.width
+                // Resist swiping right past the resting position.
+                offsetX = proposed > 0 ? proposed / 6 : proposed
+                isArmedForFullSwipe = isPastFullSwipe(proposed)
+            }
+            .onEnded { value in
+                defer {
+                    lockedAxis = nil
+                    isArmedForFullSwipe = false
+                }
+                guard lockedAxis == .horizontal else { return }
+
+                // Actual distance commits the delete; a quick flick only reveals
+                // the button (so a fast short flick never deletes).
+                if isPastFullSwipe(restingOffset + value.translation.width) {
+                    withAnimation(slideAnimation) { offsetX = -rowWidth }
+                    performDelete()
+                } else {
+                    setOpen(restingOffset + value.predictedEndTranslation.width < -revealWidth * 0.5)
                 }
             }
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 15)
-                    .onChanged { value in
-                        // Decide once per drag whether it is a horizontal swipe;
-                        // vertical drags stay with the enclosing scroll view.
-                        if lockedAxis == nil {
-                            lockedAxis = abs(value.translation.width) > abs(value.translation.height)
-                                ? .horizontal
-                                : .vertical
-                        }
-                        guard lockedAxis == .horizontal else { return }
-
-                        let base: CGFloat = isOpen ? -revealWidth : 0
-                        let proposed = base + value.translation.width
-                        // Resist swiping right past the resting position.
-                        offsetX = proposed > 0 ? proposed / 6 : proposed
-                    }
-                    .onEnded { value in
-                        defer { lockedAxis = nil }
-                        guard lockedAxis == .horizontal else { return }
-
-                        let base: CGFloat = isOpen ? -revealWidth : 0
-                        let dragged = base + value.translation.width
-                        let projected = base + value.predictedEndTranslation.width
-
-                        // Actual distance (not flick projection) commits the
-                        // delete, so a quick flick only reveals the button.
-                        if rowWidth > 0, dragged < -rowWidth * fullSwipeFraction {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                                offsetX = -rowWidth
-                            }
-                            performDelete()
-                            return
-                        }
-
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                            if projected < -revealWidth * 0.5 {
-                                offsetX = -revealWidth
-                                isOpen = true
-                            } else {
-                                offsetX = 0
-                                isOpen = false
-                            }
-                        }
-                    }
-            )
-            .accessibilityAction(named: deleteAccessibilityLabel) {
-                performDelete()
-            }
     }
+
+    private var restingOffset: CGFloat { isOpen ? -revealWidth : 0 }
+
+    private func isPastFullSwipe(_ offset: CGFloat) -> Bool {
+        rowWidth > 0 && offset < -rowWidth * fullSwipeFraction
+    }
+
+    private func setOpen(_ open: Bool) {
+        withAnimation(slideAnimation) {
+            offsetX = open ? -revealWidth : 0
+            isOpen = open
+        }
+    }
+
+    private func close() { setOpen(false) }
 
     private func performDelete() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-            onDelete()
-        }
+        withAnimation(slideAnimation) { onDelete() }
     }
 
-    private func close() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-            offsetX = 0
-            isOpen = false
-        }
-    }
+    private let slideAnimation = Animation.spring(response: 0.3, dampingFraction: 0.85)
 }
