@@ -457,7 +457,7 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
-    func testSettingsShowsAccountShellAndDeleteAccountPlaceholder() {
+    func testSettingsShowsSignedOutLocalDataDeletionOnly() {
         let app = makeApp()
         app.launchArguments.append("--uitest-force-signed-out-auth")
         app.launch()
@@ -466,20 +466,60 @@ final class LiftingLogUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["ProfileTitle"].waitForExistence(timeout: 3))
         app.buttons["ProfileSettingsLink"].tap()
 
-        XCTAssertTrue(app.staticTexts["Account"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["Sync Status"].exists)
-        XCTAssertTrue(app.staticTexts["Local only"].exists)
-        XCTAssertTrue(app.staticTexts["Cloud sync starts after you sign in."].exists)
-        XCTAssertFalse(app.staticTexts["Cloud sync is not configured yet."].exists)
+        XCTAssertTrue(app.staticTexts["Privacy & Data"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["SettingsDeleteLocalDataRow"].exists)
+        XCTAssertFalse(app.buttons["SettingsDeleteAccountRow"].exists)
+        XCTAssertTrue(app.staticTexts["Privacy Policy"].exists)
+        XCTAssertTrue(app.staticTexts["Support"].exists)
+
+        app.buttons["SettingsDeleteLocalDataRow"].tap()
+        XCTAssertTrue(app.navigationBars["Delete Local Data"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["DeleteDataConfirmButton"].isEnabled)
+        app.textFields["DeleteDataConfirmationField"].tap()
+        app.textFields["DeleteDataConfirmationField"].typeText("DELETE")
+        XCTAssertTrue(app.buttons["DeleteDataConfirmButton"].isEnabled)
+    }
+
+    @MainActor
+    func testDeleteLocalDataReturnsToProfileAfterReset() {
+        let app = makeApp()
+        app.launchArguments.append("--uitest-force-signed-out-auth")
+        app.launch()
+
+        app.buttons["ProfileTab"].tap()
+        XCTAssertTrue(app.staticTexts["ProfileTitle"].waitForExistence(timeout: 3))
+        app.buttons["ProfileSettingsLink"].tap()
+        XCTAssertTrue(app.buttons["SettingsDeleteLocalDataRow"].waitForExistence(timeout: 3))
+        app.buttons["SettingsDeleteLocalDataRow"].tap()
+
+        XCTAssertTrue(app.navigationBars["Delete Local Data"].waitForExistence(timeout: 3))
+        app.textFields["DeleteDataConfirmationField"].tap()
+        app.textFields["DeleteDataConfirmationField"].typeText("DELETE")
+        app.buttons["DeleteDataConfirmButton"].tap()
+
+        XCTAssertTrue(app.staticTexts["ProfileTitle"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.navigationBars["Settings"].exists)
+    }
+
+    @MainActor
+    func testSettingsShowsSignedInAccountDeletionOnly() {
+        let app = makeApp(extraArguments: ["--uitest-force-signed-in-auth"])
+        app.launch()
+
+        app.buttons["ProfileTab"].tap()
+        XCTAssertTrue(app.staticTexts["ProfileTitle"].waitForExistence(timeout: 3))
+        app.buttons["ProfileSettingsLink"].tap()
+
+        XCTAssertTrue(app.staticTexts["Privacy & Data"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["SettingsDeleteAccountRow"].exists)
+        XCTAssertFalse(app.buttons["SettingsDeleteLocalDataRow"].exists)
 
         app.buttons["SettingsDeleteAccountRow"].tap()
-
-        XCTAssertTrue(app.staticTexts["SettingsDeleteAccountPlaceholder"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["Account deletion is not available yet."].exists)
-        let placeholderMessage = "This release still stores your workouts locally. Account deletion will be available before release after cloud data deletion is connected."
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label == %@", placeholderMessage)).firstMatch.exists)
-        XCTAssertFalse(app.buttons["Delete"].exists)
+        XCTAssertTrue(app.navigationBars["Delete Account"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["DeleteDataConfirmButton"].isEnabled)
+        app.textFields["DeleteDataConfirmationField"].tap()
+        app.textFields["DeleteDataConfirmationField"].typeText("DELETE")
+        XCTAssertTrue(app.buttons["DeleteDataConfirmButton"].isEnabled)
     }
 
     @MainActor

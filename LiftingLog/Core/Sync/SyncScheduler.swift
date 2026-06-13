@@ -23,6 +23,7 @@ final class SyncScheduler {
     private(set) var hasQueuedSyncRequest = false
     private(set) var lastSyncedAt: Date?
     private(set) var lastFailure: Failure?
+    private(set) var isDeletionModeEnabled = false
 
     private var coordinator: SyncCoordinator?
     private var modelContext: ModelContext?
@@ -42,8 +43,13 @@ final class SyncScheduler {
         self.modelContext = modelContext
     }
 
+    func configure(modelContext: ModelContext) {
+        self.modelContext = modelContext
+    }
+
     func requestSync() {
         requestCount += 1
+        guard !isDeletionModeEnabled else { return }
         guard currentOwnerTokenIdentifier != nil else { return }
         guard let coordinator, let modelContext else { return }
         guard syncTask == nil else {
@@ -57,6 +63,40 @@ final class SyncScheduler {
 
     func retrySync() {
         requestSync()
+    }
+
+    func beginDeletionMode() {
+        isDeletionModeEnabled = true
+        cancelInFlightSync()
+        clearRuntimeStateForOwnerChange()
+    }
+
+    func endDeletionMode() {
+        isDeletionModeEnabled = false
+    }
+
+    func recoverAfterFailedAccountDeletion() {
+        guard let currentOwnerTokenIdentifier, let modelContext else {
+            endDeletionMode()
+            return
+        }
+
+        let recorder = SyncOutboxRecorder()
+        try? recorder.enqueueOwnedV1SyncableRecords(
+            ownerTokenIdentifier: currentOwnerTokenIdentifier,
+            context: modelContext,
+            now: .now
+        )
+        try? modelContext.save()
+        endDeletionMode()
+        requestSync()
+    }
+
+    func resetAfterDataDeletion() {
+        isDeletionModeEnabled = false
+        currentOwnerTokenIdentifier = nil
+        cancelInFlightSync()
+        clearRuntimeStateForOwnerChange()
     }
 
     func seedDefaultsForCurrentOwner() {
@@ -135,7 +175,7 @@ final class SyncScheduler {
                 await Task.yield()
             }
 
-            let shouldStartQueuedSync = needsSync && currentOwnerTokenIdentifier != nil
+            let shouldStartQueuedSync = needsSync && currentOwnerTokenIdentifier != nil && !isDeletionModeEnabled
             needsSync = false
             hasQueuedSyncRequest = false
             isSyncing = false

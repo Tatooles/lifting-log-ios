@@ -98,7 +98,7 @@ struct AppShellView: View {
             .tag(AppTab.workout)
 
             NavigationStack(path: $navigationState.profilePath) {
-                ProfileView()
+                ProfileView(navigationState: navigationState)
             }
             .tabItem {
                 Label(AppTab.profile.title(isWorkoutActive: activeSession != nil), systemImage: AppTab.profile.symbolName(isWorkoutActive: activeSession != nil))

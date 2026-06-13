@@ -2772,6 +2772,25 @@ final class FakeSyncClient: SyncClient, @unchecked Sendable {
     var loggedSetMutationResults: [SyncMutationResult] = []
     var tombstoneResults: [SyncMutationResult] = []
     var fetchResponses: [SyncFetchChangesResponse] = []
+    var deleteAccountDataCallCount = 0
+    var deleteAccountDataTokens: [UUID] = []
+    var deleteAccountDataError: Error?
+    var deleteAccountDataResult = AccountDataDeletionResult(
+        status: "deleted",
+        deletedCounts: AccountDataDeletionCounts(
+            loggedSets: 0,
+            loggedExercises: 0,
+            workoutSessions: 0,
+            exercises: 0,
+            userSettings: 0
+        )
+    )
+    var cancelAccountDeletionCallCount = 0
+    var cancelAccountDeletionTokens: [UUID] = []
+    var cancelAccountDeletionError: Error?
+    var cancelAccountDeletionResult = AccountDeletionCancellationResult(
+        status: "cancelled"
+    )
     var fetchResponse = SyncFetchChangesResponse(
         userSettings: [],
         exercises: [],
@@ -2850,5 +2869,23 @@ final class FakeSyncClient: SyncClient, @unchecked Sendable {
             return fetchResponses.removeFirst()
         }
         return fetchResponse
+    }
+
+    func deleteAccountData(cancellationToken: UUID) async throws -> AccountDataDeletionResult {
+        deleteAccountDataCallCount += 1
+        deleteAccountDataTokens.append(cancellationToken)
+        operationLog.append("deleteAccountData")
+        if let deleteAccountDataError { throw deleteAccountDataError }
+        if let error { throw error }
+        return deleteAccountDataResult
+    }
+
+    func cancelAccountDeletion(cancellationToken: UUID) async throws -> AccountDeletionCancellationResult {
+        cancelAccountDeletionCallCount += 1
+        cancelAccountDeletionTokens.append(cancellationToken)
+        operationLog.append("cancelAccountDeletion")
+        if let cancelAccountDeletionError { throw cancelAccountDeletionError }
+        if let error { throw error }
+        return cancelAccountDeletionResult
     }
 }
