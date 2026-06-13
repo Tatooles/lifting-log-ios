@@ -61,7 +61,10 @@ struct SwipeToDeleteRow<Content: View>: View {
     }
 
     private var dragGesture: some Gesture {
-        DragGesture(minimumDistance: 15)
+        // A higher minimum distance lets the enclosing scroll view win the
+        // recognition race for vertical drags — especially when a drag starts
+        // on a text field — before this horizontal swipe engages.
+        DragGesture(minimumDistance: 22)
             .onChanged { value in
                 // Lock to the dominant axis once per drag; vertical drags stay
                 // with the enclosing scroll view.
