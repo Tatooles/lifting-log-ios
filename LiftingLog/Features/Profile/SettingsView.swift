@@ -7,6 +7,7 @@ struct SettingsView: View {
     @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
 
     let settings: UserSettings
+    let onDataDeletionCompleted: () -> Void
     @State private var alert: SettingsAlert?
     @State private var exportFile: ExportFile?
 
@@ -30,12 +31,11 @@ struct SettingsView: View {
 
             SettingsAccountSection()
 
-            Section("Data") {
-                Button(action: exportWorkoutHistory) {
-                    Label("Export Workout History", systemImage: "square.and.arrow.up")
-                }
-                .accessibilityIdentifier("ExportWorkoutHistoryButton")
-            }
+            PrivacyDataSection(
+                exportWorkoutHistory: exportWorkoutHistory,
+                links: .issue13Development,
+                onDeletionCompleted: onDataDeletionCompleted
+            )
         }
         .scrollContentBackground(.hidden)
         .background(AppTheme.subtleBackground.ignoresSafeArea())

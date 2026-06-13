@@ -284,3 +284,20 @@ struct SyncMutationResult: Codable, Equatable {
     let status: String
     let serverUpdatedAt: Double?
 }
+
+struct AccountDataDeletionCounts: Codable, Equatable {
+    let loggedSets: Int
+    let loggedExercises: Int
+    let workoutSessions: Int
+    let exercises: Int
+    let userSettings: Int
+}
+
+struct AccountDataDeletionResult: Codable, Equatable {
+    let status: String
+    let deletedCounts: AccountDataDeletionCounts
+}
+
+struct AccountDeletionCancellationResult: Codable, Equatable {
+    let status: String
+}

@@ -346,15 +346,33 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
-    func testSettingsWeightUnitConversionRoundsDisplayedWorkoutValues() {
+    func testSettingsWeightUnitPreferenceRoundsDisplayedWorkoutAndHistoryValues() {
         let app = makeApp()
         app.launch()
 
-        app.buttons["StartBlankWorkoutButton"].tap()
-        XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
-        addBenchPress(in: app)
-        fillFirstBenchSet(in: app)
-        dismissKeyboardIfNeeded(in: app)
+        createCompletedBenchWorkout(in: app, title: "Metric Display")
+
+        app.buttons["ProfileTab"].tap()
+        app.buttons["ProfileSettingsLink"].tap()
+        XCTAssertTrue(app.segmentedControls["WeightUnitPicker"].waitForExistence(timeout: 3))
+        app.segmentedControls["WeightUnitPicker"].buttons["Kilograms"].tap()
+
+        app.buttons["HistoryTab"].tap()
+        XCTAssertTrue(app.buttons["WorkoutHistoryButton-0"].waitForExistence(timeout: 3))
+        app.buttons["WorkoutHistoryButton-0"].tap()
+        XCTAssertTrue(app.staticTexts["83.91"].waitForExistence(timeout: 3))
+
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.segmentedControls["HistoryModePicker"].buttons["Exercises"].tap()
+        XCTAssertTrue(app.buttons["ExerciseHistoryButton-0"].waitForExistence(timeout: 3))
+        app.buttons["ExerciseHistoryButton-0"].tap()
+        XCTAssertTrue(app.staticTexts["83.91 x 5 @ 8"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    func testKilogramFirstWorkoutEntryDisplaysCleanWeightAndPlaceholder() {
+        let app = makeApp()
+        app.launch()
 
         app.buttons["ProfileTab"].tap()
         app.buttons["ProfileSettingsLink"].tap()
@@ -362,7 +380,31 @@ final class LiftingLogUITests: XCTestCase {
         app.segmentedControls["WeightUnitPicker"].buttons["Kilograms"].tap()
 
         app.buttons["WorkoutTab"].tap()
-        XCTAssertEqual(app.textFields["SetWeightField-0-0"].value as? String, "83.91")
+        app.buttons["StartBlankWorkoutButton"].tap()
+        XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
+        addBenchPress(in: app)
+
+        let firstWeightField = app.textFields["SetWeightField-0-0"]
+        firstWeightField.tap()
+        firstWeightField.typeText("100")
+        dismissKeyboardIfNeeded(in: app)
+        XCTAssertEqual(firstWeightField.value as? String, "100")
+
+        app.buttons["AddSetButton-0"].tap()
+        let secondWeightField = app.textFields["SetWeightField-0-1"]
+        XCTAssertTrue(secondWeightField.waitForExistence(timeout: 3))
+        XCTAssertEqual(secondWeightField.value as? String, "100")
+
+        app.buttons["ProfileTab"].tap()
+        if !app.segmentedControls["WeightUnitPicker"].waitForExistence(timeout: 1) {
+            app.buttons["ProfileSettingsLink"].tap()
+            XCTAssertTrue(app.segmentedControls["WeightUnitPicker"].waitForExistence(timeout: 3))
+        }
+        app.segmentedControls["WeightUnitPicker"].buttons["Pounds"].tap()
+
+        app.buttons["WorkoutTab"].tap()
+        XCTAssertEqual(app.textFields["SetWeightField-0-0"].value as? String, "220.46")
+        XCTAssertEqual(app.textFields["SetWeightField-0-1"].value as? String, "220.46")
     }
 
     @MainActor
@@ -417,7 +459,7 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
-    func testSettingsShowsAccountShellAndDeleteAccountPlaceholder() {
+    func testSettingsShowsSignedOutLocalDataDeletionOnly() {
         let app = makeApp()
         app.launchArguments.append("--uitest-force-signed-out-auth")
         app.launch()
@@ -426,20 +468,60 @@ final class LiftingLogUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["ProfileTitle"].waitForExistence(timeout: 3))
         app.buttons["ProfileSettingsLink"].tap()
 
-        XCTAssertTrue(app.staticTexts["Account"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["Sync Status"].exists)
-        XCTAssertTrue(app.staticTexts["Local only"].exists)
-        XCTAssertTrue(app.staticTexts["Cloud sync starts after you sign in."].exists)
-        XCTAssertFalse(app.staticTexts["Cloud sync is not configured yet."].exists)
+        XCTAssertTrue(app.staticTexts["Privacy & Data"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["SettingsDeleteLocalDataRow"].exists)
+        XCTAssertFalse(app.buttons["SettingsDeleteAccountRow"].exists)
+        XCTAssertTrue(app.staticTexts["Privacy Policy"].exists)
+        XCTAssertTrue(app.staticTexts["Support"].exists)
+
+        app.buttons["SettingsDeleteLocalDataRow"].tap()
+        XCTAssertTrue(app.navigationBars["Delete Local Data"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["DeleteDataConfirmButton"].isEnabled)
+        app.textFields["DeleteDataConfirmationField"].tap()
+        app.textFields["DeleteDataConfirmationField"].typeText("DELETE")
+        XCTAssertTrue(app.buttons["DeleteDataConfirmButton"].isEnabled)
+    }
+
+    @MainActor
+    func testDeleteLocalDataReturnsToProfileAfterReset() {
+        let app = makeApp()
+        app.launchArguments.append("--uitest-force-signed-out-auth")
+        app.launch()
+
+        app.buttons["ProfileTab"].tap()
+        XCTAssertTrue(app.staticTexts["ProfileTitle"].waitForExistence(timeout: 3))
+        app.buttons["ProfileSettingsLink"].tap()
+        XCTAssertTrue(app.buttons["SettingsDeleteLocalDataRow"].waitForExistence(timeout: 3))
+        app.buttons["SettingsDeleteLocalDataRow"].tap()
+
+        XCTAssertTrue(app.navigationBars["Delete Local Data"].waitForExistence(timeout: 3))
+        app.textFields["DeleteDataConfirmationField"].tap()
+        app.textFields["DeleteDataConfirmationField"].typeText("DELETE")
+        app.buttons["DeleteDataConfirmButton"].tap()
+
+        XCTAssertTrue(app.staticTexts["ProfileTitle"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.navigationBars["Settings"].exists)
+    }
+
+    @MainActor
+    func testSettingsShowsSignedInAccountDeletionOnly() {
+        let app = makeApp(extraArguments: ["--uitest-force-signed-in-auth"])
+        app.launch()
+
+        app.buttons["ProfileTab"].tap()
+        XCTAssertTrue(app.staticTexts["ProfileTitle"].waitForExistence(timeout: 3))
+        app.buttons["ProfileSettingsLink"].tap()
+
+        XCTAssertTrue(app.staticTexts["Privacy & Data"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["SettingsDeleteAccountRow"].exists)
+        XCTAssertFalse(app.buttons["SettingsDeleteLocalDataRow"].exists)
 
         app.buttons["SettingsDeleteAccountRow"].tap()
-
-        XCTAssertTrue(app.staticTexts["SettingsDeleteAccountPlaceholder"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["Account deletion is not available yet."].exists)
-        let placeholderMessage = "This release still stores your workouts locally. Account deletion will be available before release after cloud data deletion is connected."
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label == %@", placeholderMessage)).firstMatch.exists)
-        XCTAssertFalse(app.buttons["Delete"].exists)
+        XCTAssertTrue(app.navigationBars["Delete Account"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["DeleteDataConfirmButton"].isEnabled)
+        app.textFields["DeleteDataConfirmationField"].tap()
+        app.textFields["DeleteDataConfirmationField"].typeText("DELETE")
+        XCTAssertTrue(app.buttons["DeleteDataConfirmButton"].isEnabled)
     }
 
     @MainActor

@@ -4,6 +4,38 @@ import XCTest
 
 @MainActor
 final class SyncSchedulerStatusTests: XCTestCase {
+    func testDeletionModeSuppressesSyncRequests() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let client = FakeSyncClient()
+        let scheduler = SyncScheduler(coordinator: SyncCoordinator(client: client), modelContext: context)
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+
+        scheduler.beginDeletionMode()
+        scheduler.requestSync()
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(scheduler.requestCount, 1)
+        XCTAssertFalse(scheduler.isSyncing)
+        XCTAssertTrue(client.fetchRequests.isEmpty)
+    }
+
+    func testResetAfterDataDeletionClearsOwnerAndRuntimeState() {
+        let scheduler = SyncScheduler()
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+        scheduler.recordFailureForTesting(message: "offline", at: Date(timeIntervalSince1970: 100))
+        scheduler.beginDeletionMode()
+
+        scheduler.resetAfterDataDeletion()
+
+        XCTAssertNil(scheduler.currentOwnerTokenIdentifier)
+        XCTAssertNil(scheduler.lastFailure)
+        XCTAssertNil(scheduler.lastSyncedAt)
+        XCTAssertFalse(scheduler.hasQueuedSyncRequest)
+        XCTAssertFalse(scheduler.isSyncing)
+        XCTAssertFalse(scheduler.isDeletionModeEnabled)
+    }
+
     func testSchedulerReportsSyncingDuringActiveRunAndSuccessAfterCompletion() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

@@ -4,6 +4,7 @@ import SwiftUI
 struct ProfileView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SyncScheduler.self) private var syncScheduler
+    @Bindable var navigationState: AppNavigationState
     @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
     @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
     @Query(sort: \Exercise.name) private var exercises: [Exercise]
@@ -53,10 +54,8 @@ struct ProfileView: View {
                     }
                 }
 
-                if let settings {
-                    NavigationLink {
-                        SettingsView(settings: settings)
-                    } label: {
+                if settings != nil {
+                    NavigationLink(value: ProfileRoute.settings) {
                         settingsRow(title: "Settings", systemImage: "gearshape")
                     }
                     .buttonStyle(.plain)
@@ -78,7 +77,9 @@ struct ProfileView: View {
         .navigationDestination(for: ProfileRoute.self) { route in
             switch route {
             case .settings:
-                SettingsRouteView()
+                SettingsRouteView {
+                    navigationState.profilePath = []
+                }
             }
         }
         .task(id: syncScheduler.currentOwnerTokenIdentifier) {
@@ -140,6 +141,8 @@ private struct SettingsRouteView: View {
     @Environment(SyncScheduler.self) private var syncScheduler
     @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
 
+    let onDataDeletionCompleted: () -> Void
+
     private var settings: UserSettings? {
         UserSettings.visibleSettingsRecords(
             from: settingsRecords,
@@ -150,7 +153,10 @@ private struct SettingsRouteView: View {
     var body: some View {
         Group {
             if let settings {
-                SettingsView(settings: settings)
+                SettingsView(
+                    settings: settings,
+                    onDataDeletionCompleted: onDataDeletionCompleted
+                )
             } else {
                 ProgressView()
                     .tint(AppTheme.accentBright)

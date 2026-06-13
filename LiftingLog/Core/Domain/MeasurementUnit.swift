@@ -5,6 +5,7 @@ enum MeasurementUnit: String, CaseIterable, Codable, Identifiable {
     case kilograms
 
     private static let poundsPerKilogram = 2.20462262185
+    static let canonicalWeightUnit: MeasurementUnit = .pounds
 
     var id: String { rawValue }
 
@@ -46,5 +47,13 @@ enum MeasurementUnit: String, CaseIterable, Codable, Identifiable {
         case (.pounds, .pounds), (.kilograms, .kilograms):
             return weight
         }
+    }
+
+    func displayWeight(fromCanonicalPounds canonicalPounds: Double?) -> Double? {
+        canonicalPounds.map { Self.canonicalWeightUnit.convert($0, to: self) }
+    }
+
+    func canonicalWeight(fromDisplayWeight displayWeight: Double?) -> Double? {
+        displayWeight.map { self.convert($0, to: Self.canonicalWeightUnit) }
     }
 }

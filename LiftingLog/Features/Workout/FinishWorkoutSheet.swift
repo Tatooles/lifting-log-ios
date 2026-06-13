@@ -9,9 +9,17 @@ struct FinishWorkoutSheet: View {
     @Bindable var engine: ActiveWorkoutEngine
     @State private var showsDiscardConfirmation = false
     @State private var actionError: WorkoutActionError?
+    @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
 
     private var metrics: WorkoutMetrics {
         WorkoutMetrics(session: session)
+    }
+
+    private var weightUnit: MeasurementUnit {
+        UserSettings.visibleSettingsRecords(
+            from: settingsRecords,
+            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
+        ).first?.weightUnit ?? .pounds
     }
 
     var body: some View {
@@ -29,7 +37,10 @@ struct FinishWorkoutSheet: View {
             HStack(spacing: 10) {
                 summaryCard(title: "Duration", value: AppTheme.formatDuration(metrics.durationSeconds))
                 summaryCard(title: "Sets Done", value: "\(metrics.completedSetCount)/\(metrics.totalSetCount)")
-                summaryCard(title: "Volume", value: WorkoutFormatters.number(metrics.completedVolume))
+                summaryCard(
+                    title: "Volume (\(weightUnit.fieldLabel))",
+                    value: WorkoutFormatters.volume(canonicalPounds: metrics.completedVolume, unit: weightUnit)
+                )
             }
 
             Button {

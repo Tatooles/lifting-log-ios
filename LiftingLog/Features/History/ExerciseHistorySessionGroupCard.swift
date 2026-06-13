@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ExerciseHistorySessionGroupCard: View {
     let group: ExerciseHistorySessionGroup
+    var weightUnit: MeasurementUnit = .pounds
     var showsExerciseNotes: Bool = true
 
     var body: some View {
@@ -84,7 +85,7 @@ struct ExerciseHistorySessionGroupCard: View {
     }
 
     private func setSummary(for set: LoggedSet) -> String {
-        let weight = set.weight.map(WorkoutFormatters.number) ?? "-"
+        let weight = weightUnit.displayWeight(fromCanonicalPounds: set.weight).map(WorkoutFormatters.number) ?? "-"
         let reps = set.reps.map(String.init) ?? "-"
 
         if let rpe = set.rpe {

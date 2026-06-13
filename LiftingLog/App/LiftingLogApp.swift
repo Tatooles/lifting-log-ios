@@ -47,6 +47,10 @@ struct LiftingLogApp: App {
             .modelContainer(modelContainer)
             .environment(Clerk.shared)
             .environment(syncScheduler)
+            .environment(
+                \.accountDeletionFactory,
+                AccountDeletionFactory.live(syncClient: ConvexSyncClient(client: convexClient))
+            )
             .overlay(alignment: .bottom) {
                 if uiTestSyncOwner != nil {
                     Text("UITestSyncRequestCount-\(syncScheduler.requestCount)")

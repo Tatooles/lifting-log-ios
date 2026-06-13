@@ -21,6 +21,27 @@ final class FormattingTests: XCTestCase {
         XCTAssertEqual(MeasurementUnit.kilograms.fieldPlaceholder, "KG")
     }
 
+    func testKilogramDisplayInputRoundTripsThroughCanonicalPounds() {
+        let storedPounds = MeasurementUnit.kilograms.canonicalWeight(fromDisplayWeight: 100)
+
+        XCTAssertEqual(storedPounds ?? 0, 220.462262185, accuracy: 0.000_001)
+        XCTAssertEqual(MeasurementUnit.kilograms.displayWeight(fromCanonicalPounds: storedPounds) ?? 0, 100, accuracy: 0.000_001)
+        XCTAssertEqual(
+            storedPounds.flatMap { MeasurementUnit.kilograms.displayWeight(fromCanonicalPounds: $0) }.map(WorkoutFormatters.number),
+            "100"
+        )
+    }
+
+    func testPoundDisplayInputKeepsCanonicalPoundsUnchanged() {
+        XCTAssertEqual(MeasurementUnit.pounds.canonicalWeight(fromDisplayWeight: 185), 185)
+        XCTAssertEqual(MeasurementUnit.pounds.displayWeight(fromCanonicalPounds: 185), 185)
+    }
+
+    func testWeightConversionHelpersPreserveNilValues() {
+        XCTAssertNil(MeasurementUnit.kilograms.canonicalWeight(fromDisplayWeight: nil))
+        XCTAssertNil(MeasurementUnit.kilograms.displayWeight(fromCanonicalPounds: nil))
+    }
+
     func testDecimalWorkoutInputPreservesTrailingSeparatorWhileEditing() {
         var input = WorkoutNumberInputText()
 
@@ -46,5 +67,12 @@ final class FormattingTests: XCTestCase {
 
     func testNumberFormatterRoundsConvertedWeightForDisplay() {
         XCTAssertEqual(WorkoutFormatters.number(102.058), "102.06")
+    }
+
+    func testVolumeFormatterDisplaysCanonicalPoundVolumeInSelectedUnit() {
+        let canonicalVolume = MeasurementUnit.kilograms.canonicalWeight(fromDisplayWeight: 100)! * 5
+
+        XCTAssertEqual(WorkoutFormatters.volume(canonicalPounds: canonicalVolume, unit: .kilograms), "500")
+        XCTAssertEqual(WorkoutFormatters.volume(canonicalPounds: canonicalVolume, unit: .pounds), "1,102.31")
     }
 }

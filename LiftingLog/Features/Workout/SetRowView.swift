@@ -117,7 +117,7 @@ struct SetRowView: View {
 
     private var weightBinding: Binding<String> {
         Binding(
-            get: { weightInputText.displayText(for: set.weight) },
+            get: { weightInputText.displayText(for: weightUnit.displayWeight(fromCanonicalPounds: set.weight)) },
             set: { value in
                 if shouldSuppressDecimalClear(value, field: .setWeight(set.id)) {
                     weightInputText.endEditing()
@@ -125,13 +125,16 @@ struct SetRowView: View {
                 }
 
                 weightInputText.updateDraft(value)
-                try? engine.updateSet(set, weight: WorkoutFormatters.parseNumber(value), reps: set.reps, rpe: set.rpe, context: modelContext)
+                let displayWeight = WorkoutFormatters.parseNumber(value)
+                let canonicalWeight = weightUnit.canonicalWeight(fromDisplayWeight: displayWeight)
+                try? engine.updateSet(set, weight: canonicalWeight, reps: set.reps, rpe: set.rpe, context: modelContext)
             }
         )
     }
 
     private var weightPlaceholder: String {
-        return set.placeholderWeight.map(WorkoutFormatters.number) ?? weightUnit.fieldPlaceholder
+        return weightUnit.displayWeight(fromCanonicalPounds: set.placeholderWeight).map(WorkoutFormatters.number)
+            ?? weightUnit.fieldPlaceholder
     }
 
     private var repsBinding: Binding<String> {

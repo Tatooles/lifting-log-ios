@@ -1,5 +1,13 @@
 import { v, type Infer } from "convex/values";
-import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
+import {
+  action,
+  internalMutation,
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from "./_generated/server";
 import { type Doc } from "./_generated/dataModel";
 import { requireOwnerTokenIdentifier } from "./lib/auth";
 import {
@@ -43,6 +51,46 @@ type TombstoneResult =
   | { status: "ignored_stale"; serverUpdatedAt: number }
   | { status: "missing" };
 
+type AccountDataDeletionResult = {
+  status: "deleted";
+  deletedCounts: {
+    loggedSets: number;
+    loggedExercises: number;
+    workoutSessions: number;
+    exercises: number;
+    userSettings: number;
+  };
+};
+
+type AccountDeletionTable =
+  | "loggedSets"
+  | "loggedExercises"
+  | "workoutSessions"
+  | "exercises"
+  | "userSettings";
+
+const accountDeletionTableValidator = v.union(
+  v.literal("loggedSets"),
+  v.literal("loggedExercises"),
+  v.literal("workoutSessions"),
+  v.literal("exercises"),
+  v.literal("userSettings"),
+);
+
+const accountDeletionTableOrder: AccountDeletionTable[] = [
+  "loggedSets",
+  "loggedExercises",
+  "workoutSessions",
+  "exercises",
+  "userSettings",
+];
+
+type AccountDataDeletionTableBatchResult = {
+  tableName: AccountDeletionTable;
+  deletedCount: number;
+  hasMore: boolean;
+};
+
 type ChangePage<TRecord extends { serverUpdatedAt: number }> = {
   records: TRecord[];
   hasMore: boolean;
@@ -50,6 +98,8 @@ type ChangePage<TRecord extends { serverUpdatedAt: number }> = {
 
 const defaultFetchLimit = 100;
 const maxFetchLimit = 500;
+const accountDeletionBatchSize = 1000;
+const maxAccountDeletionPassesPerAction = 100;
 const defaultPrimaryMuscleGroupRaw = "other";
 const defaultExerciseSnapshotEquipmentRaw = "other";
 const defaultExerciseSnapshotPrimaryMuscleGroupRaw = "other";
@@ -128,6 +178,49 @@ function withServerFields<TRecord extends { clientId: string }>(
     ownerTokenIdentifier,
     serverUpdatedAt,
   };
+}
+
+export function accountDeletionPassLimitReached(
+  passIndex: number,
+): boolean {
+  return passIndex >= maxAccountDeletionPassesPerAction;
+}
+
+export async function deleteAccountDataWithBatches(
+  runBatch: (
+    tableName: AccountDeletionTable,
+  ) => Promise<AccountDataDeletionTableBatchResult>,
+  maxPasses = maxAccountDeletionPassesPerAction,
+): Promise<AccountDataDeletionResult> {
+  const deletedCounts: AccountDataDeletionResult["deletedCounts"] = {
+    loggedSets: 0,
+    loggedExercises: 0,
+    workoutSessions: 0,
+    exercises: 0,
+    userSettings: 0,
+  };
+
+  for (let passIndex = 0; passIndex < maxPasses; passIndex++) {
+    let verifiedEmpty = true;
+
+    for (const tableName of accountDeletionTableOrder) {
+      const result = await runBatch(tableName);
+      deletedCounts[result.tableName] += result.deletedCount;
+
+      if (result.deletedCount > 0 || result.hasMore) {
+        verifiedEmpty = false;
+      }
+    }
+
+    if (verifiedEmpty) {
+      return {
+        status: "deleted",
+        deletedCounts,
+      };
+    }
+  }
+
+  throw new Error("Account data deletion did not finish. Retry account deletion.");
 }
 
 function normalizeExercisePayload(record: ExercisePayload): NormalizedExercisePayload {
@@ -286,6 +379,67 @@ async function nextServerUpdatedAt(
   const maxExisting = Math.max(0, ...latestValues);
 
   return Math.max(Date.now(), maxExisting + 1);
+}
+
+async function accountDeletionMarkerForOwner(
+  ctx: MutationCtx,
+  ownerTokenIdentifier: string,
+): Promise<Doc<"accountDeletionMarkers"> | null> {
+  const markers = await ctx.db
+    .query("accountDeletionMarkers")
+    .withIndex("by_ownerTokenIdentifier", (q) =>
+      q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
+    )
+    .take(1);
+
+  return markers[0] ?? null;
+}
+
+async function assertAccountDeletionNotStarted(
+  ctx: MutationCtx,
+  ownerTokenIdentifier: string,
+): Promise<void> {
+  const marker = await accountDeletionMarkerForOwner(ctx, ownerTokenIdentifier);
+  if (marker !== null) {
+    throw new Error("Account deletion is in progress");
+  }
+}
+
+async function markAccountDeletionStarted(
+  ctx: MutationCtx,
+  ownerTokenIdentifier: string,
+  cancellationToken: string,
+): Promise<void> {
+  const existing = await accountDeletionMarkerForOwner(ctx, ownerTokenIdentifier);
+  if (existing !== null) {
+    if (existing.cancellationToken !== cancellationToken) {
+      throw new Error("Account deletion is already in progress on another client");
+    }
+    return;
+  }
+
+  await ctx.db.insert("accountDeletionMarkers", {
+    ownerTokenIdentifier,
+    cancellationToken,
+    createdAt: Date.now(),
+  });
+}
+
+async function clearAccountDeletionMarker(
+  ctx: MutationCtx,
+  ownerTokenIdentifier: string,
+  cancellationToken: string,
+): Promise<void> {
+  const existing = await accountDeletionMarkerForOwner(ctx, ownerTokenIdentifier);
+  if (existing === null) {
+    return;
+  }
+
+  if (existing.cancellationToken !== cancellationToken) {
+    throw new Error("Account deletion is already in progress on another client");
+  }
+
+  await ctx.db.delete(existing._id);
 }
 
 async function upsertUserSettingsByClientId(
@@ -713,11 +867,109 @@ async function fetchLoggedSetChanges(
   return pageFromOverfetch(records, limit);
 }
 
+async function deleteRowsForOwnerBatch<TRecord extends { _id: string }>(
+  fetchBatch: () => Promise<TRecord[]>,
+  deleteRow: (row: TRecord) => Promise<void>,
+): Promise<{ deletedCount: number; hasMore: boolean }> {
+  const rows = await fetchBatch();
+  const rowsToDelete = rows.slice(0, accountDeletionBatchSize);
+
+  for (const row of rowsToDelete) {
+    await deleteRow(row);
+  }
+
+  return {
+    deletedCount: rowsToDelete.length,
+    hasMore: rows.length > accountDeletionBatchSize,
+  };
+}
+
+async function deleteUserSettingsForOwnerBatch(
+  ctx: MutationCtx,
+  ownerTokenIdentifier: string,
+): Promise<{ deletedCount: number; hasMore: boolean }> {
+  return await deleteRowsForOwnerBatch(
+    () =>
+      ctx.db
+        .query("userSettings")
+        .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
+          q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
+        )
+        .take(accountDeletionBatchSize + 1),
+    (row) => ctx.db.delete(row._id),
+  );
+}
+
+async function deleteExercisesForOwnerBatch(
+  ctx: MutationCtx,
+  ownerTokenIdentifier: string,
+): Promise<{ deletedCount: number; hasMore: boolean }> {
+  return await deleteRowsForOwnerBatch(
+    () =>
+      ctx.db
+        .query("exercises")
+        .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
+          q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
+        )
+        .take(accountDeletionBatchSize + 1),
+    (row) => ctx.db.delete(row._id),
+  );
+}
+
+async function deleteWorkoutSessionsForOwnerBatch(
+  ctx: MutationCtx,
+  ownerTokenIdentifier: string,
+): Promise<{ deletedCount: number; hasMore: boolean }> {
+  return await deleteRowsForOwnerBatch(
+    () =>
+      ctx.db
+        .query("workoutSessions")
+        .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
+          q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
+        )
+        .take(accountDeletionBatchSize + 1),
+    (row) => ctx.db.delete(row._id),
+  );
+}
+
+async function deleteLoggedExercisesForOwnerBatch(
+  ctx: MutationCtx,
+  ownerTokenIdentifier: string,
+): Promise<{ deletedCount: number; hasMore: boolean }> {
+  return await deleteRowsForOwnerBatch(
+    () =>
+      ctx.db
+        .query("loggedExercises")
+        .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
+          q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
+        )
+        .take(accountDeletionBatchSize + 1),
+    (row) => ctx.db.delete(row._id),
+  );
+}
+
+async function deleteLoggedSetsForOwnerBatch(
+  ctx: MutationCtx,
+  ownerTokenIdentifier: string,
+): Promise<{ deletedCount: number; hasMore: boolean }> {
+  return await deleteRowsForOwnerBatch(
+    () =>
+      ctx.db
+        .query("loggedSets")
+        .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
+          q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
+        )
+        .take(accountDeletionBatchSize + 1),
+    (row) => ctx.db.delete(row._id),
+  );
+}
+
 export const upsertUserSettings = mutation({
   args: { record: userSettingsPayloadValidator },
   handler: async (ctx, args) => {
     assertFinitePayloadNumbers(args.record);
     const ownerTokenIdentifier = await requireOwnerTokenIdentifier(ctx);
+    await assertAccountDeletionNotStarted(ctx, ownerTokenIdentifier);
     return await upsertUserSettingsByClientId(
       ctx,
       ownerTokenIdentifier,
@@ -731,6 +983,7 @@ export const upsertExercise = mutation({
   handler: async (ctx, args) => {
     assertFinitePayloadNumbers(args.record);
     const ownerTokenIdentifier = await requireOwnerTokenIdentifier(ctx);
+    await assertAccountDeletionNotStarted(ctx, ownerTokenIdentifier);
     return await upsertExerciseByClientId(ctx, ownerTokenIdentifier, args.record);
   },
 });
@@ -740,6 +993,7 @@ export const upsertWorkoutSession = mutation({
   handler: async (ctx, args) => {
     assertFinitePayloadNumbers(args.record);
     const ownerTokenIdentifier = await requireOwnerTokenIdentifier(ctx);
+    await assertAccountDeletionNotStarted(ctx, ownerTokenIdentifier);
     return await upsertWorkoutSessionByClientId(
       ctx,
       ownerTokenIdentifier,
@@ -753,6 +1007,7 @@ export const upsertLoggedExercise = mutation({
   handler: async (ctx, args) => {
     assertFinitePayloadNumbers(args.record);
     const ownerTokenIdentifier = await requireOwnerTokenIdentifier(ctx);
+    await assertAccountDeletionNotStarted(ctx, ownerTokenIdentifier);
     return await upsertLoggedExerciseByClientId(
       ctx,
       ownerTokenIdentifier,
@@ -766,6 +1021,7 @@ export const upsertLoggedSet = mutation({
   handler: async (ctx, args) => {
     assertFinitePayloadNumbers(args.record);
     const ownerTokenIdentifier = await requireOwnerTokenIdentifier(ctx);
+    await assertAccountDeletionNotStarted(ctx, ownerTokenIdentifier);
     return await upsertLoggedSetByClientId(ctx, ownerTokenIdentifier, args.record);
   },
 });
@@ -779,6 +1035,7 @@ export const tombstone = mutation({
   handler: async (ctx, args) => {
     assertFiniteNumber(args.deletedAt, "deletedAt");
     const ownerTokenIdentifier = await requireOwnerTokenIdentifier(ctx);
+    await assertAccountDeletionNotStarted(ctx, ownerTokenIdentifier);
 
     switch (args.entityKind) {
       case "userSettings":
@@ -819,6 +1076,139 @@ export const tombstone = mutation({
     }
   },
 });
+
+export const startAccountDeletion = internalMutation({
+  args: {
+    ownerTokenIdentifier: v.string(),
+    cancellationToken: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await markAccountDeletionStarted(
+      ctx,
+      args.ownerTokenIdentifier,
+      args.cancellationToken,
+    );
+  },
+});
+
+export const clearAccountDeletion = internalMutation({
+  args: {
+    ownerTokenIdentifier: v.string(),
+    cancellationToken: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await clearAccountDeletionMarker(
+      ctx,
+      args.ownerTokenIdentifier,
+      args.cancellationToken,
+    );
+  },
+});
+
+export const deleteAccountDataBatch = internalMutation({
+  args: {
+    ownerTokenIdentifier: v.string(),
+    tableName: accountDeletionTableValidator,
+  },
+  handler: async (ctx, args): Promise<AccountDataDeletionTableBatchResult> => {
+    switch (args.tableName) {
+      case "loggedSets": {
+        const result = await deleteLoggedSetsForOwnerBatch(
+          ctx,
+          args.ownerTokenIdentifier,
+        );
+        return { tableName: args.tableName, ...result };
+      }
+      case "loggedExercises": {
+        const result = await deleteLoggedExercisesForOwnerBatch(
+          ctx,
+          args.ownerTokenIdentifier,
+        );
+        return { tableName: args.tableName, ...result };
+      }
+      case "workoutSessions": {
+        const result = await deleteWorkoutSessionsForOwnerBatch(
+          ctx,
+          args.ownerTokenIdentifier,
+        );
+        return { tableName: args.tableName, ...result };
+      }
+      case "exercises": {
+        const result = await deleteExercisesForOwnerBatch(
+          ctx,
+          args.ownerTokenIdentifier,
+        );
+        return { tableName: args.tableName, ...result };
+      }
+      case "userSettings": {
+        const result = await deleteUserSettingsForOwnerBatch(
+          ctx,
+          args.ownerTokenIdentifier,
+        );
+        return { tableName: args.tableName, ...result };
+      }
+    }
+  },
+});
+
+export const deleteAccountData = action({
+  args: {
+    cancellationToken: v.string(),
+  },
+  handler: async (ctx, args): Promise<AccountDataDeletionResult> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (identity === null) {
+      throw new Error("Not authenticated");
+    }
+
+    const ownerTokenIdentifier = identity.tokenIdentifier;
+
+    return await deleteAccountDataForOwner(
+      async () => {
+        await ctx.runMutation(internal.sync.startAccountDeletion, {
+          ownerTokenIdentifier,
+          cancellationToken: args.cancellationToken,
+        });
+      },
+      async (tableName) => {
+        return await ctx.runMutation(internal.sync.deleteAccountDataBatch, {
+          ownerTokenIdentifier,
+          tableName,
+        });
+      },
+    );
+  },
+});
+
+export const cancelAccountDeletion = action({
+  args: {
+    cancellationToken: v.string(),
+  },
+  handler: async (ctx, args): Promise<{ status: "cancelled" }> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (identity === null) {
+      throw new Error("Not authenticated");
+    }
+
+    await ctx.runMutation(internal.sync.clearAccountDeletion, {
+      ownerTokenIdentifier: identity.tokenIdentifier,
+      cancellationToken: args.cancellationToken,
+    });
+
+    return { status: "cancelled" };
+  },
+});
+
+export async function deleteAccountDataForOwner(
+  startDeletion: () => Promise<void>,
+  runBatch: (
+    tableName: AccountDeletionTable,
+  ) => Promise<AccountDataDeletionTableBatchResult>,
+): Promise<AccountDataDeletionResult> {
+  await startDeletion();
+
+  return await deleteAccountDataWithBatches(runBatch);
+}
 
 export const fetchChanges = query({
   args: {

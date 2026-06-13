@@ -33,6 +33,10 @@ enum WorkoutFormatters {
         return formatter.string(from: NSNumber(value: value)) ?? String(value)
     }
 
+    static func volume(canonicalPounds: Double, unit: MeasurementUnit) -> String {
+        number(unit.displayWeight(fromCanonicalPounds: canonicalPounds) ?? canonicalPounds)
+    }
+
     static func parseNumber(_ value: String, locale: Locale = .current) -> Double? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }

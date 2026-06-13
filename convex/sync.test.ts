@@ -1,6 +1,11 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
+import {
+  accountDeletionPassLimitReached,
+  deleteAccountDataForOwner,
+  deleteAccountDataWithBatches,
+} from "./sync";
 import schema from "./schema";
 
 declare global {
@@ -282,6 +287,458 @@ describe("sync access control", () => {
     expect(userBChanges.exercises.map((record) => record.clientId)).toEqual([
       "exercise-2",
     ]);
+  });
+});
+
+describe("account data deletion", () => {
+  async function seedFullSyncGraphForOwner(
+    t: ReturnType<typeof testDb>,
+    identity: typeof userA,
+    suffix: string,
+  ) {
+    const clientSuffix = suffix.toLowerCase();
+    await t.withIdentity(identity).mutation(api.sync.upsertUserSettings, {
+      record: userSettingsRecord({ clientId: `settings-${clientSuffix}` }),
+    });
+    await t.withIdentity(identity).mutation(api.sync.upsertExercise, {
+      record: exerciseRecord({ clientId: `exercise-${clientSuffix}` }),
+    });
+    await t.withIdentity(identity).mutation(api.sync.upsertWorkoutSession, {
+      record: workoutSessionRecord({ clientId: `session-${clientSuffix}` }),
+    });
+    await t.withIdentity(identity).mutation(api.sync.upsertLoggedExercise, {
+      record: loggedExerciseRecord({
+        clientId: `logged-exercise-${clientSuffix}`,
+        sessionClientId: `session-${clientSuffix}`,
+        exerciseClientId: `exercise-${clientSuffix}`,
+      }),
+    });
+    await t.withIdentity(identity).mutation(api.sync.upsertLoggedSet, {
+      record: loggedSetRecord({
+        clientId: `logged-set-${clientSuffix}`,
+        loggedExerciseClientId: `logged-exercise-${clientSuffix}`,
+      }),
+    });
+  }
+
+  async function seedLoggedSetsDirectlyForOwner(
+    t: ReturnType<typeof testDb>,
+    identity: typeof userA,
+    count: number,
+  ) {
+    await t.run(async (ctx) => {
+      for (let i = 0; i < count; i++) {
+        await ctx.db.insert("loggedSets", {
+          ownerTokenIdentifier: identity.tokenIdentifier,
+          clientId: `bulk-logged-set-${i}`,
+          loggedExerciseClientId: "bulk-logged-exercise",
+          orderIndex: i,
+          weight: 135,
+          reps: 10,
+          rpe: 8,
+          placeholderWeight: null,
+          placeholderReps: null,
+          placeholderRPE: null,
+          kindRaw: "working",
+          isCompleted: true,
+          completedAt: 2,
+          notes: "",
+          healthLinkID: null,
+          createdAt: i + 1,
+          updatedAt: i + 1,
+          deletedAt: null,
+          serverUpdatedAt: i + 1,
+        });
+      }
+    });
+  }
+
+  async function seedMixedDeletionGraphForOwner(
+    t: ReturnType<typeof testDb>,
+    identity: typeof userA,
+  ) {
+    await t.run(async (ctx) => {
+      await ctx.db.insert("exercises", {
+        ownerTokenIdentifier: identity.tokenIdentifier,
+        clientId: "mixed-exercise-1",
+        seedIdentifier: null,
+        name: "Mixed Bench Press",
+        categoryRaw: "strength",
+        equipmentRaw: "barbell",
+        primaryMuscleRaw: "Chest",
+        primaryMuscleGroupRaw: "chest",
+        notes: "",
+        isArchived: false,
+        isSeeded: false,
+        createdAt: 1,
+        updatedAt: 1,
+        deletedAt: null,
+        serverUpdatedAt: 1,
+      });
+      await ctx.db.insert("exercises", {
+        ownerTokenIdentifier: identity.tokenIdentifier,
+        clientId: "mixed-exercise-2",
+        seedIdentifier: null,
+        name: "Mixed Squat",
+        categoryRaw: "strength",
+        equipmentRaw: "barbell",
+        primaryMuscleRaw: "Legs",
+        primaryMuscleGroupRaw: "legs",
+        notes: "",
+        isArchived: false,
+        isSeeded: false,
+        createdAt: 2,
+        updatedAt: 2,
+        deletedAt: null,
+        serverUpdatedAt: 2,
+      });
+
+      for (let i = 0; i < 1001; i++) {
+        await ctx.db.insert("loggedSets", {
+          ownerTokenIdentifier: identity.tokenIdentifier,
+          clientId: `mixed-logged-set-${i}`,
+          loggedExerciseClientId: "mixed-logged-exercise",
+          orderIndex: i,
+          weight: 135,
+          reps: 10,
+          rpe: 8,
+          placeholderWeight: null,
+          placeholderReps: null,
+          placeholderRPE: null,
+          kindRaw: "working",
+          isCompleted: true,
+          completedAt: 2,
+          notes: "",
+          healthLinkID: null,
+          createdAt: i + 1,
+          updatedAt: i + 1,
+          deletedAt: null,
+          serverUpdatedAt: i + 3,
+        });
+      }
+    });
+  }
+
+  test("deleteAccountData rejects unauthenticated callers", async () => {
+    const t = testDb();
+
+    await expect(
+      t.action(api.sync.deleteAccountData, {
+        cancellationToken: "device-a",
+      }),
+    ).rejects.toThrow("Not authenticated");
+  });
+
+  test("deleteAccountData deletes only the authenticated owner rows", async () => {
+    const t = testDb();
+    await seedFullSyncGraphForOwner(t, userA, "A");
+    await seedFullSyncGraphForOwner(t, userB, "B");
+
+    await expect(
+      t.withIdentity(userA).action(api.sync.deleteAccountData, {
+        cancellationToken: "device-a",
+      }),
+    ).resolves.toEqual({
+      status: "deleted",
+      deletedCounts: {
+        loggedSets: 1,
+        loggedExercises: 1,
+        workoutSessions: 1,
+        exercises: 1,
+        userSettings: 1,
+      },
+    });
+
+    const userAChanges = await t
+      .withIdentity(userA)
+      .query(api.sync.fetchChanges, { cursors: zeroCursors });
+    const userBChanges = await t
+      .withIdentity(userB)
+      .query(api.sync.fetchChanges, { cursors: zeroCursors });
+
+    expect(userAChanges.userSettings).toEqual([]);
+    expect(userAChanges.exercises).toEqual([]);
+    expect(userAChanges.workoutSessions).toEqual([]);
+    expect(userAChanges.loggedExercises).toEqual([]);
+    expect(userAChanges.loggedSets).toEqual([]);
+    expect(userBChanges.userSettings.map((record) => record.clientId)).toEqual([
+      "settings-b",
+    ]);
+    expect(userBChanges.exercises.map((record) => record.clientId)).toEqual([
+      "exercise-b",
+    ]);
+    expect(userBChanges.workoutSessions.map((record) => record.clientId)).toEqual([
+      "session-b",
+    ]);
+    expect(userBChanges.loggedExercises.map((record) => record.clientId)).toEqual([
+      "logged-exercise-b",
+    ]);
+    expect(userBChanges.loggedSets.map((record) => record.clientId)).toEqual([
+      "logged-set-b",
+    ]);
+  });
+
+  test("deleteAccountData is idempotent", async () => {
+    const t = testDb();
+    await seedFullSyncGraphForOwner(t, userA, "A");
+
+    await t.withIdentity(userA).action(api.sync.deleteAccountData, {
+      cancellationToken: "device-a",
+    });
+
+    await expect(
+      t.withIdentity(userA).action(api.sync.deleteAccountData, {
+        cancellationToken: "device-a",
+      }),
+    ).resolves.toEqual({
+      status: "deleted",
+      deletedCounts: {
+        loggedSets: 0,
+        loggedExercises: 0,
+        workoutSessions: 0,
+        exercises: 0,
+        userSettings: 0,
+      },
+    });
+  });
+
+  test("account deletion marker blocks new writes for the deleted owner", async () => {
+    const t = testDb();
+
+    await t.withIdentity(userA).action(api.sync.deleteAccountData, {
+      cancellationToken: "device-a",
+    });
+
+    await expect(
+      t.withIdentity(userA).mutation(api.sync.upsertExercise, {
+        record: exerciseRecord({ clientId: "late-exercise" }),
+      }),
+    ).rejects.toThrow("Account deletion is in progress");
+    await expect(
+      t.withIdentity(userA).mutation(api.sync.tombstone, {
+        entityKind: "exercises",
+        clientId: "late-exercise",
+        deletedAt: 3,
+      }),
+    ).rejects.toThrow("Account deletion is in progress");
+
+    const changes = await t
+      .withIdentity(userA)
+      .query(api.sync.fetchChanges, { cursors: zeroCursors });
+
+    expect(changes.exercises).toEqual([]);
+  });
+
+  test("account deletion marker does not block other owners", async () => {
+    const t = testDb();
+
+    await t.withIdentity(userA).action(api.sync.deleteAccountData, {
+      cancellationToken: "device-a",
+    });
+
+    await expect(
+      t.withIdentity(userB).mutation(api.sync.upsertExercise, {
+        record: exerciseRecord({ clientId: "other-owner-exercise" }),
+      }),
+    ).resolves.toMatchObject({ status: "inserted" });
+
+    const userBChanges = await t
+      .withIdentity(userB)
+      .query(api.sync.fetchChanges, { cursors: zeroCursors });
+
+    expect(userBChanges.exercises.map((record) => record.clientId)).toEqual([
+      "other-owner-exercise",
+    ]);
+  });
+
+  test("cancelAccountDeletion clears the marker for the initiating client token", async () => {
+    const t = testDb();
+
+    await t.withIdentity(userA).action(api.sync.deleteAccountData, {
+      cancellationToken: "device-a",
+    });
+
+    await expect(
+      t.withIdentity(userA).action(api.sync.cancelAccountDeletion, {
+        cancellationToken: "device-a",
+      }),
+    ).resolves.toEqual({ status: "cancelled" });
+
+    await expect(
+      t.withIdentity(userA).mutation(api.sync.upsertExercise, {
+        record: exerciseRecord({ clientId: "post-cancel-exercise" }),
+      }),
+    ).resolves.toMatchObject({ status: "inserted" });
+  });
+
+  test("cancelAccountDeletion rejects a different client token for the same owner", async () => {
+    const t = testDb();
+
+    await t.withIdentity(userA).action(api.sync.deleteAccountData, {
+      cancellationToken: "device-a",
+    });
+
+    await expect(
+      t.withIdentity(userA).action(api.sync.cancelAccountDeletion, {
+        cancellationToken: "different-client-token",
+      }),
+    ).rejects.toThrow("Account deletion is already in progress on another client");
+
+    await expect(
+      t.withIdentity(userA).mutation(api.sync.upsertExercise, {
+        record: exerciseRecord({ clientId: "still-blocked-exercise" }),
+      }),
+    ).rejects.toThrow("Account deletion is in progress");
+  });
+
+  test("deleteAccountDataForOwner keeps the marker when deletion fails", async () => {
+    let started = false;
+    const seenTables: string[] = [];
+
+    await expect(
+      deleteAccountDataForOwner(
+        async () => {
+          started = true;
+        },
+        async (tableName) => {
+          seenTables.push(tableName);
+          throw new Error(`failed ${tableName}`);
+        },
+      ),
+    ).rejects.toThrow("failed loggedSets");
+
+    expect(started).toBe(true);
+    expect(seenTables).toEqual(["loggedSets"]);
+  });
+
+  test("account deletion pass limit helper respects the configured cap", async () => {
+    expect(accountDeletionPassLimitReached(99)).toBe(false);
+    expect(accountDeletionPassLimitReached(100)).toBe(true);
+  });
+
+  test("deleteAccountDataWithBatches throws after the pass cap", async () => {
+    const seenTables: string[] = [];
+
+    await expect(
+      deleteAccountDataWithBatches(async (tableName) => {
+        seenTables.push(tableName);
+        return {
+          tableName,
+          deletedCount: 0,
+          hasMore: true,
+        };
+      }, 2),
+    ).rejects.toThrow("Account data deletion did not finish. Retry account deletion.");
+
+    expect(seenTables).toEqual([
+      "loggedSets",
+      "loggedExercises",
+      "workoutSessions",
+      "exercises",
+      "userSettings",
+      "loggedSets",
+      "loggedExercises",
+      "workoutSessions",
+      "exercises",
+      "userSettings",
+    ]);
+  });
+
+  test("deleteAccountDataBatch only deletes the requested table", async () => {
+    const t = testDb();
+    await t.run(async (ctx) => {
+      await ctx.db.insert("exercises", {
+        ownerTokenIdentifier: userA.tokenIdentifier,
+        clientId: "isolation-exercise",
+        seedIdentifier: null,
+        name: "Isolation Bench Press",
+        categoryRaw: "strength",
+        equipmentRaw: "barbell",
+        primaryMuscleRaw: "Chest",
+        primaryMuscleGroupRaw: "chest",
+        notes: "",
+        isArchived: false,
+        isSeeded: false,
+        createdAt: 1,
+        updatedAt: 1,
+        deletedAt: null,
+        serverUpdatedAt: 1,
+      });
+    });
+    await seedLoggedSetsDirectlyForOwner(t, userA, 1001);
+
+    await expect(
+      t.mutation(internal.sync.deleteAccountDataBatch, {
+        ownerTokenIdentifier: userA.tokenIdentifier,
+        tableName: "loggedSets",
+      }),
+    ).resolves.toEqual({
+      tableName: "loggedSets",
+      deletedCount: 1000,
+      hasMore: true,
+    });
+
+    const changes = await t
+      .withIdentity(userA)
+      .query(api.sync.fetchChanges, { cursors: zeroCursors });
+
+    expect(changes.exercises.map((record) => record.clientId)).toEqual([
+      "isolation-exercise",
+    ]);
+    expect(changes.loggedSets).toHaveLength(1);
+  });
+
+  test("deleteAccountData handles mixed tables in separate batches", async () => {
+    const t = testDb();
+    await seedMixedDeletionGraphForOwner(t, userA);
+
+    await expect(
+      t.withIdentity(userA).action(api.sync.deleteAccountData, {
+        cancellationToken: "device-a",
+      }),
+    ).resolves.toEqual({
+      status: "deleted",
+      deletedCounts: {
+        loggedSets: 1001,
+        loggedExercises: 0,
+        workoutSessions: 0,
+        exercises: 2,
+        userSettings: 0,
+      },
+    });
+
+    const changes = await t
+      .withIdentity(userA)
+      .query(api.sync.fetchChanges, { cursors: zeroCursors });
+
+    expect(changes.loggedSets).toEqual([]);
+    expect(changes.exercises).toEqual([]);
+  });
+
+  test("deleteAccountData deletes more than one batch of logged sets", async () => {
+    const t = testDb();
+    await seedLoggedSetsDirectlyForOwner(t, userA, 1001);
+
+    await expect(
+      t.withIdentity(userA).action(api.sync.deleteAccountData, {
+        cancellationToken: "device-a",
+      }),
+    ).resolves.toEqual({
+      status: "deleted",
+      deletedCounts: {
+        loggedSets: 1001,
+        loggedExercises: 0,
+        workoutSessions: 0,
+        exercises: 0,
+        userSettings: 0,
+      },
+    });
+
+    const changes = await t
+      .withIdentity(userA)
+      .query(api.sync.fetchChanges, { cursors: zeroCursors });
+
+    expect(changes.loggedSets).toEqual([]);
   });
 });
 

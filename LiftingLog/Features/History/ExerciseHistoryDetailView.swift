@@ -5,6 +5,14 @@ struct ExerciseHistoryDetailView: View {
     let summary: ExerciseHistorySummary
     @Environment(SyncScheduler.self) private var syncScheduler
     @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
+    @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
+
+    private var weightUnit: MeasurementUnit {
+        UserSettings.visibleSettingsRecords(
+            from: settingsRecords,
+            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
+        ).first?.weightUnit ?? .pounds
+    }
 
     private var sessionGroups: [ExerciseHistorySessionGroup] {
         ExerciseHistorySessionGroup.makeGroups(
@@ -34,7 +42,7 @@ struct ExerciseHistoryDetailView: View {
                 .accessibilityIdentifier("ExerciseHistoryCompletedSetsCard")
 
                 ForEach(sessionGroups) { group in
-                    ExerciseHistorySessionGroupCard(group: group)
+                    ExerciseHistorySessionGroupCard(group: group, weightUnit: weightUnit)
                 }
             }
             .padding(AppTheme.shellPadding)

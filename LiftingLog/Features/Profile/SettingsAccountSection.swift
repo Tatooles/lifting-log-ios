@@ -51,23 +51,6 @@ struct SettingsAccountSection: View {
             .accessibilityIdentifier("SettingsDeveloperDiagnosticsRow")
             #endif
 
-            NavigationLink {
-                DeleteAccountPlaceholderView()
-            } label: {
-                Label {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Delete Account")
-                            .foregroundStyle(.red)
-                        Text("Available before release.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                } icon: {
-                    Image(systemName: "person.crop.circle.badge.xmark")
-                        .foregroundStyle(.red)
-                }
-            }
-            .accessibilityIdentifier("SettingsDeleteAccountRow")
         } header: {
             Text("Account")
                 .accessibilityIdentifier("Account")
@@ -116,31 +99,5 @@ struct SettingsAccountSection: View {
         case .success:
             return AppTheme.success
         }
-    }
-}
-
-private struct DeleteAccountPlaceholderView: View {
-    var body: some View {
-        Form {
-            Section {
-                VStack(alignment: .leading, spacing: 10) {
-                    Image(systemName: "person.crop.circle.badge.xmark")
-                        .font(.system(size: 32, weight: .semibold))
-                        .foregroundStyle(.red)
-
-                    Text("Account deletion is not available yet.")
-                        .font(.headline)
-                        .accessibilityIdentifier("SettingsDeleteAccountPlaceholder")
-
-                    Text("This release still stores your workouts locally. Account deletion will be available before release after cloud data deletion is connected.")
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 6)
-            }
-        }
-        .scrollContentBackground(.hidden)
-        .background(AppTheme.subtleBackground.ignoresSafeArea())
-        .navigationTitle("Delete Account")
-        .navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -206,4 +206,21 @@ final class SyncPayloadMappingTests: XCTestCase {
         XCTAssertEqual(payload.updatedAt, 130)
         XCTAssertNil(payload.deletedAt)
     }
+
+    func testLoggedSetPayloadSendsCanonicalStoredPounds() throws {
+        let set = LoggedSet(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000004301")!,
+            orderIndex: 0,
+            weight: MeasurementUnit.kilograms.canonicalWeight(fromDisplayWeight: 100),
+            reps: 5,
+            placeholderWeight: MeasurementUnit.kilograms.canonicalWeight(fromDisplayWeight: 80),
+            placeholderReps: 5,
+            isCompleted: true
+        )
+
+        let payload = SyncPayloadMapper.loggedSetPayload(from: set)
+
+        XCTAssertEqual(payload.weight ?? 0, 220.462262185, accuracy: 0.000_001)
+        XCTAssertEqual(payload.placeholderWeight ?? 0, 176.369809748, accuracy: 0.000_001)
+    }
 }
