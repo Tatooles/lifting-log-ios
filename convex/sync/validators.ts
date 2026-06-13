@@ -77,9 +77,9 @@ export const loggedSetPayloadValidator = v.object({
   weight: nullableNumber,
   reps: nullableNumber,
   rpe: nullableNumber,
-  placeholderWeight: nullableNumber,
-  placeholderReps: nullableNumber,
-  placeholderRPE: nullableNumber,
+  placeholderWeight: v.optional(nullableNumber),
+  placeholderReps: v.optional(nullableNumber),
+  placeholderRPE: v.optional(nullableNumber),
   kindRaw: v.union(
     v.literal("working"),
     v.literal("warmup"),
