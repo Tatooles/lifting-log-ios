@@ -17,10 +17,10 @@
 These are the decisions baked into the task order. Do not reorder across phase boundaries.
 
 1. **Convex field removal is split front and back.** Convex rejects a schema push if any stored document still carries a field the schema no longer defines, AND the sync mutation rejects payloads with fields the validator no longer allows. So:
-   - **Phase 1 (first):** make the three `placeholder*` fields **optional** in `schema.ts` and `validators.ts`, deploy, then run a one-shot internal mutation that unsets them on every existing `loggedSets` document. The server now accepts payloads with OR without the fields, and no document carries them.
+   - **Phase 1 (first):** make the three `placeholder*` fields **optional** in `schema.ts` and `validators.ts`, deploy, then run a one-shot internal mutation that unsets them on every existing `loggedSets` document. This is a controlled dev-database migration, so the simple `.collect()` implementation is acceptable here. The server now accepts payloads with OR without the fields, and no document carries them.
    - **Phase 2 (iOS):** the client stops sending the fields. Safe because the validator still accepts payloads without them (optional).
-   - **Phase 5 (last):** remove the fields from `schema.ts` and `validators.ts` entirely and deploy. Safe now: no document carries them and no client sends them.
-   Chosen migration strategy: **non-destructive** (preserve all synced workout data). Do not wipe tables.
+   - **Phase 5 (last):** run the migration one final time to verify `cleared: 0`, then remove the fields from `schema.ts` and `validators.ts`, delete the temporary migration from `sync.ts`, and deploy. Safe now: no document carries them, no client sends them, and no temporary migration code remains.
+   Chosen migration strategy: **non-destructive** (preserve all synced workout data). Do not wipe tables. The migration mutation is temporary and must be deleted before the feature is considered done.
 
 2. **The SwiftData model-field removal is a pivot that breaks several files at once.** Deleting `placeholderWeight/Reps/RPE` from `LoggedSet` simultaneously breaks `SyncPayloads`, `ConvexSyncClient`, `SyncCoordinator`, `ActiveWorkoutEngine`, and `SetRowView`. Task 2.3 changes all of them in one commit so the target compiles. Tasks 2.1–2.2 are purely additive and land first so the pivot is smaller.
 
@@ -51,7 +51,7 @@ These are the decisions baked into the task order. Do not reorder across phase b
 **Modified files**
 - `convex/schema.ts` — `loggedSets` table: placeholder fields optional (P1) then removed (P5).
 - `convex/sync/validators.ts` — `loggedSetPayloadValidator`: placeholder optional (P1) then removed (P5).
-- `convex/sync.ts` — add `unsetLoggedSetPlaceholders` internal mutation (P1).
+- `convex/sync.ts` — add `unsetLoggedSetPlaceholders` internal mutation (P1), then delete it during the final schema-removal task before the final deploy (P5).
 - `convex/sync.test.ts` — `LoggedSetRecord` type + `loggedSetRecord()` fixture + two assertions: drop placeholder fields (P5).
 - `LiftingLog/Core/Models/LoggedSet.swift` — remove 3 stored props + init params/assignments (P2).
 - `LiftingLog/Core/Sync/SyncPayloads.swift` — `LoggedSetSyncPayload`, `LoggedSetSyncRecord`, `loggedSetPayload(from:)`: remove 3 fields (P2).
@@ -62,7 +62,7 @@ These are the decisions baked into the task order. Do not reorder across phase b
 - `LiftingLog/Features/Workout/ExerciseCardView.swift` — header columns + pass previous data + RPE-edit callback (P3).
 - `LiftingLog/Features/Workout/WorkoutSessionView.swift` — `WorkoutField` enum, RPE chip toolbar, badge wiring (P3/P4).
 - `LiftingLog/Features/Workout/WorkoutFocusNavigator.swift` — drop `.setRPE` from focus order (P4).
-- `LiftingLogTests/SyncPayloadMappingTests.swift`, `LiftingLogTests/ConvexSyncArgumentMapperTests.swift`, `LiftingLogTests/WorkoutFocusNavigatorTests.swift` — drop placeholder/RPE expectations (P2/P4).
+- `LiftingLogTests/ActiveWorkoutEngineTests.swift`, `LiftingLogTests/SettingsTests.swift`, `LiftingLogTests/SyncOutboxIntegrationTests.swift`, `LiftingLogTests/SyncCoordinatorTests.swift`, `LiftingLogTests/SyncPayloadMappingTests.swift`, `LiftingLogTests/ConvexSyncArgumentMapperTests.swift`, `LiftingLogTests/WorkoutFocusNavigatorTests.swift` — drop or rewrite placeholder/RPE expectations (P2/P4).
 - `LiftingLogUITests/LiftingLogUITests.swift` — delete placeholder-commit tests, rework RPE entry helpers (P4).
 
 ---
@@ -139,6 +139,8 @@ In `convex/sync.ts`, after the existing `clearAccountDeletion` export (ends ~lin
 ```ts
 // One-shot migration: strip the deprecated placeholder* fields from every
 // loggedSets document so the columns can be removed from the schema entirely.
+// This is intentionally simple because it is for the small dev deployment only;
+// do not keep this temporary mutation after the final schema drop.
 // Run with: npx convex run sync:unsetLoggedSetPlaceholders '{}'
 export const unsetLoggedSetPlaceholders = internalMutation({
   args: {},
@@ -487,6 +489,10 @@ This is one commit because deleting the model fields breaks every referencing fi
 - Modify: `LiftingLog/Features/Workout/SetRowView.swift`
 - Modify: `LiftingLogTests/SyncPayloadMappingTests.swift`
 - Modify: `LiftingLogTests/ConvexSyncArgumentMapperTests.swift`
+- Modify: `LiftingLogTests/ActiveWorkoutEngineTests.swift`
+- Modify: `LiftingLogTests/SettingsTests.swift`
+- Modify: `LiftingLogTests/SyncOutboxIntegrationTests.swift`
+- Modify: `LiftingLogTests/SyncCoordinatorTests.swift`
 
 - [ ] **Step 1: Remove fields from `LoggedSet`**
 
@@ -643,10 +649,22 @@ Phase 3 fully rewrites this view; this step only removes the now-broken `placeho
   ```
   (Leave the call site at line 59 for now; Phase 3 removes it.)
 
-- [ ] **Step 7: Update unit-test fixtures that reference placeholders**
+- [ ] **Step 7: Update unit-test fixtures and old placeholder-behavior tests**
 
 - `LiftingLogTests/SyncPayloadMappingTests.swift`: remove the `placeholderWeight/Reps/RPE` arguments where a `LoggedSet`/payload is constructed (lines ~175-177, ~216) and delete the three assertions at lines 197-199 (`XCTAssertEqual(payload.placeholder...)`). Read the surrounding test to keep it meaningful (it should still assert weight/reps/rpe map correctly).
 - `LiftingLogTests/ConvexSyncArgumentMapperTests.swift`: remove the `placeholderWeight/Reps/RPE` arguments at lines 120-122 and any assertion that reads them.
+- `LiftingLogTests/ActiveWorkoutEngineTests.swift`: rewrite old placeholder-semantics tests to the new behavior:
+  - Rename `testStartingFromPastCopiesStructureWithPlaceholderValuesAndBlankActualSetValues` to `testStartingFromPastCopiesStructureWithBlankActualSetValues`, and delete the three placeholder assertions. Keep the assertions that copied sets are incomplete, keep `kind`, and have blank `weight/reps/rpe`.
+  - Replace `testAddingSetCarriesPreviousValuesAsPlaceholdersAndStartsIncomplete` with an assertion that the new set copies only structure (`kind`) and starts with blank `weight/reps/rpe`.
+  - Delete `testAddingSetFromIncompleteClonedSetCarriesPlaceholderDefaultsForward`; that behavior no longer exists.
+  - Replace `testCompletingSetCommitsBlankWeightRepsAndRPEFromPlaceholders` with coverage for `fillSetFromPrevious` if not already covered by Task 2.2, or delete it if Task 2.2 has the coverage.
+  - Rewrite `testCompletingSetDoesNotOverwriteManualWeightRepsOrRPEWithPlaceholders` as `testCompletingSetPreservesManualWeightRepsAndRPE` without any placeholder setup.
+  - Rewrite `testUncheckingCompletedSetDoesNotApplyPlaceholders` as a plain uncheck test that verifies existing logged `weight/reps` remain and `completedAt` clears.
+  - In `testReorderingLoggedExercisesPreservesExerciseData`, remove the placeholder setup and assertions; keep the real set data assertions.
+- `LiftingLogTests/SettingsTests.swift`: remove placeholder-only setup/assertions from weight-unit tests. Settings changes no longer have any placeholder fields to preserve, so keep the canonical `weight`, `completedVolume`, `updatedAt`, and tombstone assertions.
+- `LiftingLogTests/SyncOutboxIntegrationTests.swift`: remove the `placeholderSet` fixture and assertions from `testSettingsWeightUnitChangeRecordsOnlySettingsUpdate`; keep the assertion that only the settings update is recorded.
+- `LiftingLogTests/SyncCoordinatorTests.swift`: remove the `placeholderWeight/Reps/RPE: nil` arguments from every `LoggedSetSyncRecord` fixture.
+- After editing these tests, run `rg -n "placeholderWeight|placeholderReps|placeholderRPE" LiftingLog LiftingLogTests LiftingLogUITests` and resolve every remaining Swift reference before building.
 
 - [ ] **Step 8: Build and run the full unit-test suite**
 
@@ -1262,7 +1280,11 @@ Add:
           setRPEViaChips(rpe, in: app)
   ```
   Note: `rpe` values passed by callers must be one of the chip values (`6,7,8,8.5,9,9.5,10`). Check call sites of `createCompletedWorkout` and adjust any non-chip RPE argument to a chip value.
-- `createCompletedBenchWorkout` calls `fillFirstBenchSet` then completes — it now records no RPE, which is fine (RPE is optional). If a downstream assertion expects `@ 8` in history for that flow, either add `setRPEViaChips("8", in: app)` after `fillFirstBenchSet` or update the expected string. Check `testExerciseHistorySummaryUsesAvailableContentWidth` and similar.
+- In `createCompletedBenchWorkout(in:title:)`, preserve the helper's existing semantic of logging `185 x 5 @ 8`: after `fillFirstBenchSet(in: app)` and before tapping `SetCompletionButton-0-0`, call:
+  ```swift
+          setRPEViaChips("8", in: app)
+  ```
+  This keeps downstream UI-test assertions such as `185 x 5 @ 8` and `83.91 x 5 @ 8` valid while still allowing `fillFirstBenchSet(in:)` itself to remain weight/reps-only.
 
 - [ ] **Step 5: Add a UI test for the Previous column**
 
@@ -1274,7 +1296,7 @@ Add a test verifying the Previous column appears on a cloned workout and fills o
         let app = makeApp()
         app.launch()
 
-        createCompletedBenchWorkout(in: app, title: "Prev Source") // logs 185 x 5, completed
+        createCompletedBenchWorkout(in: app, title: "Prev Source") // logs 185 x 5 @ 8, completed
 
         app.buttons["WorkoutTab"].tap()
         XCTAssertTrue(app.buttons["PastWorkoutButton-0"].waitForExistence(timeout: 3))
@@ -1282,7 +1304,9 @@ Add a test verifying the Previous column appears on a cloned workout and fills o
         XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
 
         // Cloned set starts empty (structure only); Previous shows last time.
-        XCTAssertEqual(app.textFields["SetWeightField-0-0"].value as? String, "")
+        // Empty XCUI text fields often expose the placeholder as their value, so accept either blank or the unit placeholder.
+        let initialWeightValue = app.textFields["SetWeightField-0-0"].value as? String
+        XCTAssertTrue(initialWeightValue == nil || initialWeightValue == "" || initialWeightValue == "LBS")
         let previous = app.buttons["SetPreviousValue-0-0"]
         XCTAssertTrue(previous.waitForExistence(timeout: 3))
         XCTAssertEqual(previous.label, "Previous: 185 × 5")
@@ -1317,39 +1341,51 @@ Safe now: every live `loggedSets` doc was migrated in Task 1.2, and the iOS clie
 
 **Files:**
 - Modify: `convex/schema.ts:118-120`
+- Modify: `convex/sync.ts` (delete temporary `unsetLoggedSetPlaceholders`)
 - Modify: `convex/sync/validators.ts:80-82`
 - Modify: `convex/sync.test.ts` (type at 211-213, fixture at 130-132, assertions at 339-341, 405-407, 1169-1171, 1214-1216)
 
-- [ ] **Step 1: Remove from schema**
+- [ ] **Step 1: Run the migration one final time while it still exists**
+
+Run: `npx convex run sync:unsetLoggedSetPlaceholders '{}'`
+Expected: prints `{ scanned: <n>, cleared: 0 }`. If `cleared` is not `0`, run it a second time and confirm the second result is `cleared: 0` before continuing.
+
+- [ ] **Step 2: Remove from schema**
 
 In `convex/schema.ts`, delete the three now-optional placeholder lines from the `loggedSets` table (118-120).
 
-- [ ] **Step 2: Remove from validator**
+- [ ] **Step 3: Remove from validator**
 
 In `convex/sync/validators.ts`, delete the three placeholder lines from `loggedSetPayloadValidator` (80-82).
 
-- [ ] **Step 3: Remove from tests**
+- [ ] **Step 4: Delete the temporary migration function and migration test**
+
+In `convex/sync.ts`, delete the entire `unsetLoggedSetPlaceholders` export added in Task 1.2. This mutation is temporary migration code and must not remain after the final schema drop.
+
+In `convex/sync.test.ts`, delete the `describe("unsetLoggedSetPlaceholders migration", ...)` block added in Task 1.2. Once the schema no longer declares the placeholder fields, that raw insert with extra fields is no longer valid and the migration has served its purpose.
+
+- [ ] **Step 5: Remove placeholder fields from remaining Convex tests**
 
 In `convex/sync.test.ts`:
 - Delete the three fields from the `LoggedSetRecord` type (211-213).
 - Delete the three fields from the `loggedSetRecord()` fixture default (130-132).
 - Delete the three `placeholder*: null` lines wherever a set record is built inline (339-341, 405-407).
-- Delete the three `placeholderWeight: 180` etc. lines at 1169-1171 and 1214-1216. Read those two tests; if they asserted placeholder round-tripping, remove those assertions (the migration test in Task 1.2 already covers removal). The migration test inserts placeholder fields via a raw `ctx.db.insert` with extra keys — once the schema no longer declares them, that insert will be rejected. **Delete the migration test added in Task 1.2** (it has served its purpose and can no longer compile against the trimmed schema), or guard it; simplest is to remove it now.
+- Delete the three `placeholderWeight: 180` etc. lines at 1169-1171 and 1214-1216. Read those two tests; if they asserted placeholder round-tripping, remove those assertions.
 
-- [ ] **Step 4: Typecheck and run Convex tests**
+- [ ] **Step 6: Typecheck and run Convex tests**
 
 Run: `pnpm run convex:typecheck && pnpm run convex:test`
 Expected: PASS, with no remaining `placeholder` references. Verify: `grep -rn placeholder convex` returns nothing.
 
-- [ ] **Step 5: Deploy the final schema**
+- [ ] **Step 7: Deploy the final schema**
 
 Run: `npx convex dev --once`
-Expected: schema push succeeds (no document carries the removed fields). If it fails complaining about existing documents, re-run `npx convex run sync:unsetLoggedSetPlaceholders '{}'` BEFORE this step — but that mutation was removed in Step 3, so if needed, temporarily restore it, run, then remove. (Should not be necessary if Task 1.2 Step 4 reported `cleared: 0` on its second run.)
+Expected: schema push succeeds (no document carries the removed fields). If it fails complaining about existing documents, stop and investigate the live data; do not reintroduce placeholder fields or leave the temporary migration in the final branch.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add convex/schema.ts convex/sync/validators.ts convex/sync.test.ts
+git add convex/schema.ts convex/sync.ts convex/sync/validators.ts convex/sync.test.ts
 git commit -m "Remove placeholder fields from Convex schema and validators (migration step 3, #61)"
 ```
 
