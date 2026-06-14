@@ -84,13 +84,11 @@ struct SetRowView: View {
     }
 
     private var previousText: String {
-        guard let previous,
-              let weight = weightUnit.displayWeight(fromCanonicalPounds: previous.weight),
-              let reps = previous.reps else {
+        guard let previous else {
             return "—"
         }
 
-        return "\(WorkoutFormatters.number(weight)) × \(WorkoutFormatters.number(Double(reps)))"
+        return previous.displayText(weightUnit: weightUnit)
     }
 
     private var repsField: some View {

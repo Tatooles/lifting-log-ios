@@ -89,6 +89,12 @@ final class PreviousSetPerformanceTests: XCTestCase {
         )
     }
 
+    func testDisplayTextIncludesRepsWhenWeightIsMissing() {
+        let previous = PreviousSetPerformance(weight: nil, reps: 8)
+
+        XCTAssertEqual(previous.displayText(weightUnit: .pounds), "- × 8")
+    }
+
     private func insertCompletedSession(
         startedAt: Date,
         exercise: Exercise,
