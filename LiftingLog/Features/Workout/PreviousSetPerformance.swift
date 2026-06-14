@@ -41,6 +41,15 @@ struct PreviousSetPerformance: Equatable {
         ownerTokenIdentifier: String?,
         sourceSessionID: UUID? = nil
     ) -> [UUID: [PreviousSetPerformance]] {
+        if let sourceSessionID {
+            return lastCompletedSetsByExerciseIDFromSourceSession(
+                for: loggedExercises,
+                in: sessions,
+                ownerTokenIdentifier: ownerTokenIdentifier,
+                sourceSessionID: sourceSessionID
+            )
+        }
+
         let routeIDByLoggedExerciseID = Dictionary(
             uniqueKeysWithValues: loggedExercises.map { loggedExercise in
                 (loggedExercise.id, ExerciseHistoryRoute(loggedExercise: loggedExercise).id)
@@ -52,8 +61,7 @@ struct PreviousSetPerformance: Equatable {
         let previousSetsByRouteID = lastCompletedSetsByRouteID(
             matching: requestedRouteIDs,
             in: sessions,
-            ownerTokenIdentifier: ownerTokenIdentifier,
-            sourceSessionID: sourceSessionID
+            ownerTokenIdentifier: ownerTokenIdentifier
         )
 
         return Dictionary(
@@ -63,19 +71,49 @@ struct PreviousSetPerformance: Equatable {
         )
     }
 
+    private static func lastCompletedSetsByExerciseIDFromSourceSession(
+        for loggedExercises: [LoggedExercise],
+        in sessions: [WorkoutSession],
+        ownerTokenIdentifier: String?,
+        sourceSessionID: UUID
+    ) -> [UUID: [PreviousSetPerformance]] {
+        guard let sourceSession = WorkoutSession.visibleCompletedSessions(
+            from: sessions,
+            ownerTokenIdentifier: ownerTokenIdentifier
+        ).first(where: { $0.id == sourceSessionID }) else {
+            return Dictionary(uniqueKeysWithValues: loggedExercises.map { ($0.id, []) })
+        }
+
+        let sourceEntriesByRouteID = Dictionary(grouping: sourceSession.sortedLoggedExercises) { loggedExercise in
+            ExerciseHistoryRoute(loggedExercise: loggedExercise).id
+        }
+        var consumedSourceEntryCountByRouteID: [String: Int] = [:]
+
+        return Dictionary(
+            uniqueKeysWithValues: loggedExercises.map { loggedExercise in
+                let routeID = ExerciseHistoryRoute(loggedExercise: loggedExercise).id
+                let sourceIndex = consumedSourceEntryCountByRouteID[routeID, default: 0]
+                consumedSourceEntryCountByRouteID[routeID] = sourceIndex + 1
+
+                let sourceEntries = sourceEntriesByRouteID[routeID] ?? []
+                let sourceLoggedExercise = sourceIndex < sourceEntries.count ? sourceEntries[sourceIndex] : nil
+                return (
+                    loggedExercise.id,
+                    sourceLoggedExercise.map { completedSetPerformances(for: $0) } ?? []
+                )
+            }
+        )
+    }
+
     private static func lastCompletedSetsByRouteID(
         matching routeIDs: Set<String>,
         in sessions: [WorkoutSession],
-        ownerTokenIdentifier: String?,
-        sourceSessionID: UUID?
+        ownerTokenIdentifier: String?
     ) -> [String: [PreviousSetPerformance]] {
         let sortedCompletedSessions = WorkoutSession.visibleCompletedSessions(
             from: sessions,
             ownerTokenIdentifier: ownerTokenIdentifier
         )
-        .filter { session in
-            sourceSessionID.map { session.id == $0 } ?? true
-        }
         .sorted { lhs, rhs in
             if lhs.startedAt == rhs.startedAt {
                 return lhs.title < rhs.title
@@ -93,9 +131,7 @@ struct PreviousSetPerformance: Equatable {
                 let completedSets = loggedExercise.sortedSets.filter(\.isCompleted)
                 guard !completedSets.isEmpty else { continue }
 
-                result[routeID] = completedSets.map { set in
-                    PreviousSetPerformance(weight: set.weight, reps: set.reps)
-                }
+                result[routeID] = completedSets.map { makePerformance(from: $0) }
             }
 
             if result.count == routeIDs.count {
@@ -104,5 +140,15 @@ struct PreviousSetPerformance: Equatable {
         }
 
         return result
+    }
+
+    private static func completedSetPerformances(for loggedExercise: LoggedExercise) -> [PreviousSetPerformance] {
+        loggedExercise.sortedSets
+            .filter(\.isCompleted)
+            .map { makePerformance(from: $0) }
+    }
+
+    private static func makePerformance(from set: LoggedSet) -> PreviousSetPerformance {
+        PreviousSetPerformance(weight: set.weight, reps: set.reps)
     }
 }
