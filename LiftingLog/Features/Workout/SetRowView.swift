@@ -12,6 +12,7 @@ struct SetRowView: View {
     let previous: PreviousSetPerformance?
     let onEditRPE: (LoggedSet) -> Void
     @State private var weightInputText = WorkoutNumberInputText()
+    @State private var completionEmptyWriteSuppressor = CompletionEmptyWriteSuppressor()
 
     var body: some View {
         SwipeToDeleteRow(
@@ -160,6 +161,11 @@ struct SetRowView: View {
         Binding(
             get: { weightInputText.displayText(for: weightUnit.displayWeight(fromCanonicalPounds: set.weight)) },
             set: { value in
+                if shouldSuppressCompletionEmptyWrite(value, field: .setWeight(set.id)) {
+                    weightInputText.endEditing()
+                    return
+                }
+
                 weightInputText.updateDraft(value)
                 let displayWeight = WorkoutFormatters.parseNumber(value)
                 let canonicalWeight = weightUnit.canonicalWeight(fromDisplayWeight: displayWeight)
@@ -172,12 +178,17 @@ struct SetRowView: View {
         Binding(
             get: { set.reps.map(String.init) ?? "" },
             set: { value in
+                if shouldSuppressCompletionEmptyWrite(value, field: .setReps(set.id)) {
+                    return
+                }
+
                 try? engine.updateSet(set, weight: set.weight, reps: Int(value), rpe: set.rpe, context: modelContext)
             }
         )
     }
 
     private func completeButtonTapped() {
+        suppressNextCompletionEmptyWriteIfNeeded()
         clearFocusedFieldForThisSet()
         if SetCompletionPreviousFillPolicy.shouldFillBeforeCompletion(
             isCompleted: set.isCompleted,
@@ -202,6 +213,30 @@ struct SetRowView: View {
             || focusedField.wrappedValue == .setReps(set.id) {
             focusedField.wrappedValue = nil
         }
+    }
+
+    private func suppressNextCompletionEmptyWriteIfNeeded() {
+        guard !set.isCompleted, let previous else { return }
+
+        let fieldToSuppress: WorkoutField?
+        if focusedField.wrappedValue == .setWeight(set.id), set.weight == nil, previous.weight != nil {
+            fieldToSuppress = .setWeight(set.id)
+        } else if focusedField.wrappedValue == .setReps(set.id), set.reps == nil, previous.reps != nil {
+            fieldToSuppress = .setReps(set.id)
+        } else {
+            fieldToSuppress = nil
+        }
+
+        guard let fieldToSuppress else { return }
+        completionEmptyWriteSuppressor.suppress(fieldToSuppress)
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(500))
+            completionEmptyWriteSuppressor.expire(fieldToSuppress)
+        }
+    }
+
+    private func shouldSuppressCompletionEmptyWrite(_ value: String, field: WorkoutField) -> Bool {
+        completionEmptyWriteSuppressor.shouldSuppress(value: value, field: field)
     }
 }
 
@@ -229,5 +264,25 @@ struct WorkoutNumberInputText {
 
     func displayText(for value: Double?) -> String {
         draft ?? value.map(WorkoutFormatters.number) ?? ""
+    }
+}
+
+struct CompletionEmptyWriteSuppressor {
+    private var pendingField: WorkoutField?
+
+    mutating func suppress(_ field: WorkoutField) {
+        pendingField = field
+    }
+
+    mutating func expire(_ field: WorkoutField) {
+        if pendingField == field {
+            pendingField = nil
+        }
+    }
+
+    mutating func shouldSuppress(value: String, field: WorkoutField) -> Bool {
+        guard value.isEmpty, pendingField == field else { return false }
+        pendingField = nil
+        return true
     }
 }

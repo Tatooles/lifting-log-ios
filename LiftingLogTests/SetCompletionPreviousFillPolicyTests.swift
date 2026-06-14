@@ -33,4 +33,26 @@ final class SetCompletionPreviousFillPolicyTests: XCTestCase {
             previous: PreviousSetPerformance(weight: 185, reps: 5)
         ))
     }
+
+    func testCompletionEmptyWriteSuppressorConsumesOnlyMatchingEmptyWrite() {
+        let setID = UUID()
+        var suppressor = CompletionEmptyWriteSuppressor()
+
+        suppressor.suppress(.setWeight(setID))
+
+        XCTAssertFalse(suppressor.shouldSuppress(value: "185", field: .setWeight(setID)))
+        XCTAssertFalse(suppressor.shouldSuppress(value: "", field: .setReps(setID)))
+        XCTAssertTrue(suppressor.shouldSuppress(value: "", field: .setWeight(setID)))
+        XCTAssertFalse(suppressor.shouldSuppress(value: "", field: .setWeight(setID)))
+    }
+
+    func testCompletionEmptyWriteSuppressorExpiresMatchingField() {
+        let setID = UUID()
+        var suppressor = CompletionEmptyWriteSuppressor()
+
+        suppressor.suppress(.setWeight(setID))
+        suppressor.expire(.setWeight(setID))
+
+        XCTAssertFalse(suppressor.shouldSuppress(value: "", field: .setWeight(setID)))
+    }
 }
