@@ -21,14 +21,11 @@ final class WorkoutFocusNavigatorTests: XCTestCase {
             .workoutTitle,
             .setWeight(firstSet.id),
             .setReps(firstSet.id),
-            .setRPE(firstSet.id),
             .setWeight(secondSet.id),
             .setReps(secondSet.id),
-            .setRPE(secondSet.id),
             .exerciseNotes(firstExercise.id),
             .setWeight(thirdSet.id),
             .setReps(thirdSet.id),
-            .setRPE(thirdSet.id),
             .exerciseNotes(secondExercise.id),
             .workoutNotes
         ]
@@ -44,19 +41,18 @@ final class WorkoutFocusNavigatorTests: XCTestCase {
             .workoutTitle,
             .setWeight(firstSetID),
             .setReps(firstSetID),
-            .setRPE(firstSetID),
             .exerciseNotes(firstExerciseID),
             .setWeight(secondSetID),
             .workoutNotes
         ]
 
         XCTAssertEqual(
-            WorkoutFocusNavigator.adjacentField(from: .setRPE(firstSetID), in: order, offset: 1),
+            WorkoutFocusNavigator.adjacentField(from: .setReps(firstSetID), in: order, offset: 1),
             .exerciseNotes(firstExerciseID)
         )
         XCTAssertEqual(
             WorkoutFocusNavigator.adjacentField(from: .exerciseNotes(firstExerciseID), in: order, offset: -1),
-            .setRPE(firstSetID)
+            .setReps(firstSetID)
         )
         XCTAssertEqual(
             WorkoutFocusNavigator.adjacentField(from: .exerciseNotes(firstExerciseID), in: order, offset: 1),
@@ -87,7 +83,6 @@ final class WorkoutFocusNavigatorTests: XCTestCase {
             .workoutTitle,
             .setWeight(secondSet.id),
             .setReps(secondSet.id),
-            .setRPE(secondSet.id),
             .exerciseNotes(secondExercise.id),
             .workoutNotes
         ]
@@ -102,7 +97,6 @@ final class WorkoutFocusNavigatorTests: XCTestCase {
             .workoutTitle,
             .setWeight(firstSetID),
             .setReps(firstSetID),
-            .setRPE(firstSetID),
             .setWeight(secondSetID),
             .workoutNotes
         ]
@@ -113,7 +107,7 @@ final class WorkoutFocusNavigatorTests: XCTestCase {
         )
         XCTAssertEqual(
             WorkoutFocusNavigator.adjacentField(from: .setReps(firstSetID), in: order, offset: 1),
-            .setRPE(firstSetID)
+            .setWeight(secondSetID)
         )
         XCTAssertNil(WorkoutFocusNavigator.adjacentField(from: .workoutTitle, in: order, offset: -1))
         XCTAssertNil(WorkoutFocusNavigator.adjacentField(from: .workoutNotes, in: order, offset: 1))

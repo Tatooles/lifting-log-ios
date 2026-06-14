@@ -9,9 +9,9 @@ struct SetRowView: View {
     @Bindable var engine: ActiveWorkoutEngine
     var focusedField: FocusState<WorkoutField?>.Binding
     let weightUnit: MeasurementUnit
+    let previous: PreviousSetPerformance?
+    let onEditRPE: (LoggedSet) -> Void
     @State private var weightInputText = WorkoutNumberInputText()
-    @State private var rpeInputText = WorkoutNumberInputText()
-    @State private var suppressedCompletionClearField: WorkoutField?
 
     var body: some View {
         SwipeToDeleteRow(
@@ -31,36 +31,20 @@ struct SetRowView: View {
                 .foregroundStyle(AppTheme.textTertiary)
                 .frame(width: 18)
 
+            previousColumn
+
             numericField(
-                placeholder: weightPlaceholder,
+                placeholder: weightUnit.fieldPlaceholder,
                 text: weightBinding,
                 keyboard: .decimalPad,
                 focusTarget: .setWeight(set.id),
                 accessibilityIdentifier: "SetWeightField-\(exerciseIndex)-\(index)"
             )
 
-            numericField(
-                placeholder: repsPlaceholder,
-                text: repsBinding,
-                keyboard: .numberPad,
-                focusTarget: .setReps(set.id),
-                accessibilityIdentifier: "SetRepsField-\(exerciseIndex)-\(index)"
-            )
-
-            numericField(
-                placeholder: rpePlaceholder,
-                text: rpeBinding,
-                keyboard: .decimalPad,
-                focusTarget: .setRPE(set.id),
-                accessibilityIdentifier: "SetRPEField-\(exerciseIndex)-\(index)"
-            )
+            repsField
 
             Button {
-                suppressNextCompletionClearIfNeeded()
-                clearFocusedFieldForThisSet()
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    try? engine.toggleSetCompletion(set, context: modelContext)
-                }
+                completeButtonTapped()
             } label: {
                 Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
                     .font(.title2)
@@ -77,9 +61,68 @@ struct SetRowView: View {
             if previousField == .setWeight(set.id), newField != .setWeight(set.id) {
                 weightInputText.endEditing()
             }
-            if previousField == .setRPE(set.id), newField != .setRPE(set.id) {
-                rpeInputText.endEditing()
+        }
+    }
+
+    private var previousColumn: some View {
+        Button {
+            guard let previous, !set.isCompleted else { return }
+            fillFromPrevious(previous)
+        } label: {
+            Text(previousText)
+                .font(.footnote.weight(.medium).monospacedDigit())
+                .foregroundStyle(AppTheme.textTertiary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(previous == nil || set.isCompleted)
+        .accessibilityIdentifier("SetPreviousValue-\(exerciseIndex)-\(index)")
+        .accessibilityLabel(previous == nil ? "No previous set" : "Previous: \(previousText)")
+    }
+
+    private var previousText: String {
+        guard let previous,
+              let weight = weightUnit.displayWeight(fromCanonicalPounds: previous.weight),
+              let reps = previous.reps else {
+            return "—"
+        }
+
+        return "\(WorkoutFormatters.number(weight)) × \(WorkoutFormatters.number(Double(reps)))"
+    }
+
+    private var repsField: some View {
+        numericField(
+            placeholder: "REPS",
+            text: repsBinding,
+            keyboard: .numberPad,
+            focusTarget: .setReps(set.id),
+            accessibilityIdentifier: "SetRepsField-\(exerciseIndex)-\(index)"
+        )
+        .overlay(alignment: .topTrailing) {
+            rpeBadge
+        }
+    }
+
+    @ViewBuilder
+    private var rpeBadge: some View {
+        if let rpe = set.rpe {
+            Button {
+                onEditRPE(set)
+            } label: {
+                Text("@\(WorkoutFormatters.number(rpe))")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(AppTheme.accentBright)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(AppTheme.accentMuted, in: Capsule())
+                    .offset(x: -4, y: 4)
             }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("SetRPEBadge-\(exerciseIndex)-\(index)")
+            .accessibilityLabel("RPE \(WorkoutFormatters.number(rpe)), tap to edit")
         }
     }
 
@@ -119,21 +162,12 @@ struct SetRowView: View {
         Binding(
             get: { weightInputText.displayText(for: weightUnit.displayWeight(fromCanonicalPounds: set.weight)) },
             set: { value in
-                if shouldSuppressDecimalClear(value, field: .setWeight(set.id)) {
-                    weightInputText.endEditing()
-                    return
-                }
-
                 weightInputText.updateDraft(value)
                 let displayWeight = WorkoutFormatters.parseNumber(value)
                 let canonicalWeight = weightUnit.canonicalWeight(fromDisplayWeight: displayWeight)
                 try? engine.updateSet(set, weight: canonicalWeight, reps: set.reps, rpe: set.rpe, context: modelContext)
             }
         )
-    }
-
-    private var weightPlaceholder: String {
-        weightUnit.fieldPlaceholder
     }
 
     private var repsBinding: Binding<String> {
@@ -145,43 +179,26 @@ struct SetRowView: View {
         )
     }
 
-    private var repsPlaceholder: String {
-        "REPS"
+    private func completeButtonTapped() {
+        clearFocusedFieldForThisSet()
+        if !set.isCompleted, set.weight == nil, set.reps == nil, let previous {
+            fillFromPrevious(previous)
+        }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            try? engine.toggleSetCompletion(set, context: modelContext)
+        }
     }
 
-    private var rpeBinding: Binding<String> {
-        Binding(
-            get: { rpeInputText.displayText(for: set.rpe) },
-            set: { value in
-                if shouldSuppressDecimalClear(value, field: .setRPE(set.id)) {
-                    rpeInputText.endEditing()
-                    return
-                }
-
-                rpeInputText.updateDraft(value)
-                try? engine.updateSet(set, weight: set.weight, reps: set.reps, rpe: WorkoutFormatters.parseNumber(value), context: modelContext)
-            }
-        )
-    }
-
-    private var rpePlaceholder: String {
-        "RPE"
+    private func fillFromPrevious(_ previous: PreviousSetPerformance) {
+        weightInputText.endEditing()
+        try? engine.fillSetFromPrevious(set, previous: previous, context: modelContext)
     }
 
     private func clearFocusedFieldForThisSet() {
         if focusedField.wrappedValue == .setWeight(set.id)
-            || focusedField.wrappedValue == .setReps(set.id)
-            || focusedField.wrappedValue == .setRPE(set.id) {
+            || focusedField.wrappedValue == .setReps(set.id) {
             focusedField.wrappedValue = nil
         }
-    }
-
-    private func suppressNextCompletionClearIfNeeded() {}
-
-    private func shouldSuppressDecimalClear(_ value: String, field: WorkoutField) -> Bool {
-        guard value.isEmpty, suppressedCompletionClearField == field else { return false }
-        suppressedCompletionClearField = nil
-        return true
     }
 }
 

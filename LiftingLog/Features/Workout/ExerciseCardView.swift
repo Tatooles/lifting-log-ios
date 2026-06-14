@@ -9,9 +9,31 @@ struct ExerciseCardView: View {
     @Bindable var engine: ActiveWorkoutEngine
     @Binding var isCollapsed: Bool
     var focusedField: FocusState<WorkoutField?>.Binding
+    let previousSets: [PreviousSetPerformance]
     let viewHistory: () -> Void
+    let onEditRPE: (LoggedSet) -> Void
     @State private var showsRemoveConfirmation = false
     @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
+
+    init(
+        loggedExercise: LoggedExercise,
+        exerciseIndex: Int,
+        engine: ActiveWorkoutEngine,
+        isCollapsed: Binding<Bool>,
+        focusedField: FocusState<WorkoutField?>.Binding,
+        previousSets: [PreviousSetPerformance],
+        viewHistory: @escaping () -> Void,
+        onEditRPE: @escaping (LoggedSet) -> Void
+    ) {
+        self.loggedExercise = loggedExercise
+        self.exerciseIndex = exerciseIndex
+        self.engine = engine
+        self._isCollapsed = isCollapsed
+        self.focusedField = focusedField
+        self.previousSets = previousSets
+        self.viewHistory = viewHistory
+        self.onEditRPE = onEditRPE
+    }
 
     private var weightUnit: MeasurementUnit {
         UserSettings.visibleSettingsRecords(
@@ -105,12 +127,13 @@ struct ExerciseCardView: View {
                 }
 
                 if !isCollapsed {
+                    let previousSetsForRows = previousSets
                     VStack(spacing: 14) {
                         HStack(spacing: 10) {
                             Color.clear.frame(width: 18)
+                            columnHeader("PREVIOUS")
                             columnHeader(weightUnit.fieldLabel)
                             columnHeader("REPS")
-                            columnHeader("RPE")
                             Color.clear.frame(width: 44)
                         }
                         .padding(.horizontal, 16)
@@ -123,7 +146,9 @@ struct ExerciseCardView: View {
                                     index: index,
                                     engine: engine,
                                     focusedField: focusedField,
-                                    weightUnit: weightUnit
+                                    weightUnit: weightUnit,
+                                    previous: index < previousSetsForRows.count ? previousSetsForRows[index] : nil,
+                                    onEditRPE: onEditRPE
                                 )
                                     .padding(.horizontal, 16)
                             }

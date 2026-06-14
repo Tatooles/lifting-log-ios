@@ -13,7 +13,6 @@ enum WorkoutFocusNavigator {
             for set in loggedExercise.sortedSets {
                 fields.append(.setWeight(set.id))
                 fields.append(.setReps(set.id))
-                fields.append(.setRPE(set.id))
             }
             fields.append(.exerciseNotes(loggedExercise.id))
         }
