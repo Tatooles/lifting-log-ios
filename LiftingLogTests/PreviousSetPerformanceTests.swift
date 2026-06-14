@@ -340,6 +340,61 @@ final class PreviousSetPerformanceTests: XCTestCase {
         ])
     }
 
+    func testPastWorkoutLookupPreservesIncompleteSourceSetPositions() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(
+            name: "Back Squat",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscleGroup: .quads
+        )
+        context.insert(exercise)
+
+        let selectedSource = WorkoutSession(
+            title: "Selected Past Workout",
+            startedAt: Date(timeIntervalSince1970: 100),
+            status: .completed,
+            source: .blank
+        )
+        let sourceSquat = LoggedExercise(orderIndex: 0, exercise: exercise)
+        sourceSquat.sets.append(
+            LoggedSet(orderIndex: 0, isCompleted: false)
+        )
+        sourceSquat.sets.append(
+            LoggedSet(orderIndex: 1, weight: 225, reps: 5, isCompleted: true, completedAt: selectedSource.startedAt)
+        )
+        selectedSource.loggedExercises.append(sourceSquat)
+        context.insert(selectedSource)
+        context.insert(sourceSquat)
+
+        let active = WorkoutSession(
+            title: "Today",
+            startedAt: Date(timeIntervalSince1970: 200),
+            status: .active,
+            source: .pastWorkout,
+            sourceSessionID: selectedSource.id
+        )
+        let activeSquat = LoggedExercise(orderIndex: 0, exercise: exercise)
+        active.loggedExercises.append(activeSquat)
+        context.insert(active)
+        context.insert(activeSquat)
+        try context.save()
+
+        let sessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let lookup = PreviousSetPerformance.lastCompletedSetsByExerciseID(
+            for: active.sortedLoggedExercises,
+            in: sessions,
+            ownerTokenIdentifier: nil,
+            sourceSessionID: active.sourceSessionID
+        )
+
+        XCTAssertEqual(lookup[activeSquat.id], [
+            PreviousSetPerformance(weight: nil, reps: nil),
+            PreviousSetPerformance(weight: 225, reps: 5),
+        ])
+    }
+
     func testDisplayTextIncludesRepsWhenWeightIsMissing() {
         let previous = PreviousSetPerformance(weight: nil, reps: 8)
 

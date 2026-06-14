@@ -99,7 +99,7 @@ struct PreviousSetPerformance: Equatable {
                 let sourceLoggedExercise = sourceIndex < sourceEntries.count ? sourceEntries[sourceIndex] : nil
                 return (
                     loggedExercise.id,
-                    sourceLoggedExercise.map { completedSetPerformances(for: $0) } ?? []
+                    sourceLoggedExercise.map { setPerformances(for: $0) } ?? []
                 )
             }
         )
@@ -142,9 +142,8 @@ struct PreviousSetPerformance: Equatable {
         return result
     }
 
-    private static func completedSetPerformances(for loggedExercise: LoggedExercise) -> [PreviousSetPerformance] {
+    private static func setPerformances(for loggedExercise: LoggedExercise) -> [PreviousSetPerformance] {
         loggedExercise.sortedSets
-            .filter(\.isCompleted)
             .map { makePerformance(from: $0) }
     }
 
