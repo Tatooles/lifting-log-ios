@@ -127,9 +127,6 @@ function loggedSetRecord(overrides: Partial<LoggedSetRecord> = {}): LoggedSetRec
     weight: 135,
     reps: 10,
     rpe: 8,
-    placeholderWeight: null,
-    placeholderReps: null,
-    placeholderRPE: null,
     kindRaw: "working",
     isCompleted: true,
     completedAt: 2,
@@ -208,9 +205,6 @@ type LoggedSetRecord = {
   weight: number | null;
   reps: number | null;
   rpe: number | null;
-  placeholderWeight: number | null;
-  placeholderReps: number | null;
-  placeholderRPE: number | null;
   kindRaw: "working" | "warmup" | "drop" | "failure";
   isCompleted: boolean;
   completedAt: number | null;
@@ -336,9 +330,6 @@ describe("account data deletion", () => {
           weight: 135,
           reps: 10,
           rpe: 8,
-          placeholderWeight: null,
-          placeholderReps: null,
-          placeholderRPE: null,
           kindRaw: "working",
           isCompleted: true,
           completedAt: 2,
@@ -402,9 +393,6 @@ describe("account data deletion", () => {
           weight: 135,
           reps: 10,
           rpe: 8,
-          placeholderWeight: null,
-          placeholderReps: null,
-          placeholderRPE: null,
           kindRaw: "working",
           isCompleted: true,
           completedAt: 2,
@@ -743,48 +731,6 @@ describe("account data deletion", () => {
 });
 
 describe("sync conflict behavior", () => {
-  describe("logged set placeholder migration", () => {
-    test("removes placeholder fields while preserving logged set values", async () => {
-      const t = testDb();
-      const loggedSetId = await t.run(async (ctx) => {
-        return await ctx.db.insert("loggedSets", {
-          ownerTokenIdentifier: userA.tokenIdentifier,
-          clientId: "placeholder-logged-set",
-          loggedExerciseClientId: "logged-exercise-1",
-          orderIndex: 0,
-          weight: 185,
-          reps: 5,
-          rpe: 8.5,
-          placeholderWeight: 180,
-          placeholderReps: 5,
-          placeholderRPE: 8,
-          kindRaw: "working",
-          isCompleted: true,
-          completedAt: 2,
-          notes: "",
-          healthLinkID: null,
-          createdAt: 1,
-          updatedAt: 2,
-          deletedAt: null,
-          serverUpdatedAt: 3,
-        });
-      });
-
-      await expect(
-        t.mutation(internal.sync.unsetLoggedSetPlaceholders, {}),
-      ).resolves.toEqual({ scanned: 1, cleared: 1 });
-
-      const loggedSet = await t.run(async (ctx) => {
-        return await ctx.db.get(loggedSetId);
-      });
-
-      expect(loggedSet?.placeholderWeight).toBeUndefined();
-      expect(loggedSet?.placeholderReps).toBeUndefined();
-      expect(loggedSet?.placeholderRPE).toBeUndefined();
-      expect(loggedSet?.weight).toBe(185);
-    });
-  });
-
   test("legacy stored exercise docs without muscle group are normalized in changes", async () => {
     const t = testDb();
 
@@ -1208,9 +1154,6 @@ describe("sync change cursors", () => {
         weight: 185,
         reps: 5,
         rpe: 8.5,
-        placeholderWeight: 180,
-        placeholderReps: 5,
-        placeholderRPE: 8,
         completedAt: 2,
         notes: "Clean reps",
         updatedAt: 5,
@@ -1253,9 +1196,6 @@ describe("sync change cursors", () => {
       weight: 185,
       reps: 5,
       rpe: 8.5,
-      placeholderWeight: 180,
-      placeholderReps: 5,
-      placeholderRPE: 8,
       kindRaw: "working",
       isCompleted: true,
       completedAt: 2,

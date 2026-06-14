@@ -1077,35 +1077,6 @@ export const tombstone = mutation({
   },
 });
 
-export const unsetLoggedSetPlaceholders = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    // One-shot migration for small dev deployments only; simple .collect()
-    // is intentional here. Run with:
-    // npx convex run sync:unsetLoggedSetPlaceholders
-    // Delete this mutation after the final schema drop removes these fields.
-    const loggedSets = await ctx.db.query("loggedSets").collect();
-    let cleared = 0;
-
-    for (const loggedSet of loggedSets) {
-      if (
-        loggedSet.placeholderWeight !== undefined ||
-        loggedSet.placeholderReps !== undefined ||
-        loggedSet.placeholderRPE !== undefined
-      ) {
-        await ctx.db.patch(loggedSet._id, {
-          placeholderWeight: undefined,
-          placeholderReps: undefined,
-          placeholderRPE: undefined,
-        });
-        cleared += 1;
-      }
-    }
-
-    return { scanned: loggedSets.length, cleared };
-  },
-});
-
 export const startAccountDeletion = internalMutation({
   args: {
     ownerTokenIdentifier: v.string(),
