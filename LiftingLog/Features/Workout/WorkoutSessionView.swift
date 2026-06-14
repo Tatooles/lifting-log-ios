@@ -316,7 +316,8 @@ struct WorkoutSessionView: View {
         PreviousSetPerformance.lastCompletedSetsByExerciseID(
             for: session.sortedLoggedExercises,
             in: sessions,
-            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
+            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier,
+            sourceSessionID: session.source == .pastWorkout ? session.sourceSessionID : nil
         )
     }
 

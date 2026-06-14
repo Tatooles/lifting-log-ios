@@ -346,6 +346,10 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertEqual(set.completedAt, Date(timeIntervalSince1970: 300))
     }
 
+    func testRPEChipsIncludeHalfStepsFromSixThroughTen() {
+        XCTAssertEqual(RPEChipRow.values, [6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10])
+    }
+
     func testUncheckingCompletedSetClearsCompletedAtAndPreservesValues() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct RPEChipRow: View {
-    static let values: [Double] = [6, 7, 8, 8.5, 9, 9.5, 10]
+    static let values: [Double] = [6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10]
     let selected: Double?
     let onSelect: (Double?) -> Void
 

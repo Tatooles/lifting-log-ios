@@ -24,19 +24,22 @@ struct PreviousSetPerformance: Equatable {
     static func lastCompletedSets(
         for loggedExercise: LoggedExercise,
         in sessions: [WorkoutSession],
-        ownerTokenIdentifier: String?
+        ownerTokenIdentifier: String?,
+        sourceSessionID: UUID? = nil
     ) -> [PreviousSetPerformance] {
         lastCompletedSetsByExerciseID(
             for: [loggedExercise],
             in: sessions,
-            ownerTokenIdentifier: ownerTokenIdentifier
+            ownerTokenIdentifier: ownerTokenIdentifier,
+            sourceSessionID: sourceSessionID
         )[loggedExercise.id] ?? []
     }
 
     static func lastCompletedSetsByExerciseID(
         for loggedExercises: [LoggedExercise],
         in sessions: [WorkoutSession],
-        ownerTokenIdentifier: String?
+        ownerTokenIdentifier: String?,
+        sourceSessionID: UUID? = nil
     ) -> [UUID: [PreviousSetPerformance]] {
         let routeIDByLoggedExerciseID = Dictionary(
             uniqueKeysWithValues: loggedExercises.map { loggedExercise in
@@ -49,7 +52,8 @@ struct PreviousSetPerformance: Equatable {
         let previousSetsByRouteID = lastCompletedSetsByRouteID(
             matching: requestedRouteIDs,
             in: sessions,
-            ownerTokenIdentifier: ownerTokenIdentifier
+            ownerTokenIdentifier: ownerTokenIdentifier,
+            sourceSessionID: sourceSessionID
         )
 
         return Dictionary(
@@ -62,12 +66,16 @@ struct PreviousSetPerformance: Equatable {
     private static func lastCompletedSetsByRouteID(
         matching routeIDs: Set<String>,
         in sessions: [WorkoutSession],
-        ownerTokenIdentifier: String?
+        ownerTokenIdentifier: String?,
+        sourceSessionID: UUID?
     ) -> [String: [PreviousSetPerformance]] {
         let sortedCompletedSessions = WorkoutSession.visibleCompletedSessions(
             from: sessions,
             ownerTokenIdentifier: ownerTokenIdentifier
         )
+        .filter { session in
+            sourceSessionID.map { session.id == $0 } ?? true
+        }
         .sorted { lhs, rhs in
             if lhs.startedAt == rhs.startedAt {
                 return lhs.title < rhs.title
