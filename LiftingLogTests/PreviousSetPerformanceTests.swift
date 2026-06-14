@@ -143,6 +143,77 @@ final class PreviousSetPerformanceTests: XCTestCase {
         ])
     }
 
+    func testBatchLookupUsesSinglePreviousEntryPerActiveExercise() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let bench = Exercise(
+            name: "Bench Press",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscleGroup: .chest
+        )
+        let squat = Exercise(
+            name: "Back Squat",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscleGroup: .quads
+        )
+        context.insert(bench)
+        context.insert(squat)
+
+        let previousSession = WorkoutSession(
+            title: "Past",
+            startedAt: Date(timeIntervalSince1970: 100),
+            status: .completed,
+            source: .blank
+        )
+        let firstBench = LoggedExercise(orderIndex: 0, exercise: bench)
+        firstBench.sets.append(
+            LoggedSet(orderIndex: 0, weight: 185, reps: 5, isCompleted: true, completedAt: previousSession.startedAt)
+        )
+        let secondBench = LoggedExercise(orderIndex: 1, exercise: bench)
+        secondBench.sets.append(
+            LoggedSet(orderIndex: 0, weight: 195, reps: 3, isCompleted: true, completedAt: previousSession.startedAt)
+        )
+        let previousSquat = LoggedExercise(orderIndex: 2, exercise: squat)
+        previousSquat.sets.append(
+            LoggedSet(orderIndex: 0, weight: 225, reps: 8, isCompleted: true, completedAt: previousSession.startedAt)
+        )
+        previousSession.loggedExercises.append(contentsOf: [firstBench, secondBench, previousSquat])
+        context.insert(previousSession)
+        context.insert(firstBench)
+        context.insert(secondBench)
+        context.insert(previousSquat)
+
+        let active = WorkoutSession(
+            title: "Today",
+            startedAt: Date(timeIntervalSince1970: 200),
+            status: .active,
+            source: .blank
+        )
+        let activeBench = LoggedExercise(orderIndex: 0, exercise: bench)
+        let activeSquat = LoggedExercise(orderIndex: 1, exercise: squat)
+        active.loggedExercises.append(contentsOf: [activeBench, activeSquat])
+        context.insert(active)
+        context.insert(activeBench)
+        context.insert(activeSquat)
+        try context.save()
+
+        let sessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let lookup = PreviousSetPerformance.lastCompletedSetsByExerciseID(
+            for: active.sortedLoggedExercises,
+            in: sessions,
+            ownerTokenIdentifier: nil
+        )
+
+        XCTAssertEqual(lookup[activeBench.id], [
+            PreviousSetPerformance(weight: 185, reps: 5),
+        ])
+        XCTAssertEqual(lookup[activeSquat.id], [
+            PreviousSetPerformance(weight: 225, reps: 8),
+        ])
+    }
+
     func testDisplayTextIncludesRepsWhenWeightIsMissing() {
         let previous = PreviousSetPerformance(weight: nil, reps: 8)
 

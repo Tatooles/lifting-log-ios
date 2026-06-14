@@ -313,17 +313,10 @@ struct WorkoutSessionView: View {
     }
 
     private var previousSetsByExerciseID: [UUID: [PreviousSetPerformance]] {
-        Dictionary(
-            uniqueKeysWithValues: session.sortedLoggedExercises.map { loggedExercise in
-                (
-                    loggedExercise.id,
-                    PreviousSetPerformance.lastCompletedSets(
-                        for: loggedExercise,
-                        in: sessions,
-                        ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
-                    )
-                )
-            }
+        PreviousSetPerformance.lastCompletedSetsByExerciseID(
+            for: session.sortedLoggedExercises,
+            in: sessions,
+            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
         )
     }
 
