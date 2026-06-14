@@ -41,7 +41,7 @@ struct PreviousSetPerformance: Equatable {
             return []
         }
 
-        return group.setEntries.map { setEntry in
+        return (group.loggedExerciseEntries.first?.setEntries ?? []).map { setEntry in
             PreviousSetPerformance(weight: setEntry.set.weight, reps: setEntry.set.reps)
         }
     }

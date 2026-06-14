@@ -89,6 +89,60 @@ final class PreviousSetPerformanceTests: XCTestCase {
         )
     }
 
+    func testUsesOnlyFirstMatchingLoggedExerciseFromPreviousSession() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(
+            name: "Bench Press",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscleGroup: .chest
+        )
+        context.insert(exercise)
+
+        let previousSession = WorkoutSession(
+            title: "Duplicate Bench",
+            startedAt: Date(timeIntervalSince1970: 100),
+            status: .completed,
+            source: .blank
+        )
+        let firstPrevious = LoggedExercise(orderIndex: 0, exercise: exercise)
+        firstPrevious.sets.append(
+            LoggedSet(orderIndex: 0, weight: 185, reps: 5, isCompleted: true, completedAt: previousSession.startedAt)
+        )
+        let secondPrevious = LoggedExercise(orderIndex: 1, exercise: exercise)
+        secondPrevious.sets.append(
+            LoggedSet(orderIndex: 0, weight: 195, reps: 3, isCompleted: true, completedAt: previousSession.startedAt)
+        )
+        previousSession.loggedExercises.append(contentsOf: [firstPrevious, secondPrevious])
+        context.insert(previousSession)
+        context.insert(firstPrevious)
+        context.insert(secondPrevious)
+
+        let active = WorkoutSession(
+            title: "Today",
+            startedAt: Date(timeIntervalSince1970: 200),
+            status: .active,
+            source: .blank
+        )
+        let activeLogged = LoggedExercise(orderIndex: 0, exercise: exercise)
+        active.loggedExercises.append(activeLogged)
+        context.insert(active)
+        context.insert(activeLogged)
+        try context.save()
+
+        let sessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let previous = PreviousSetPerformance.lastCompletedSets(
+            for: activeLogged,
+            in: sessions,
+            ownerTokenIdentifier: nil
+        )
+
+        XCTAssertEqual(previous, [
+            PreviousSetPerformance(weight: 185, reps: 5),
+        ])
+    }
+
     func testDisplayTextIncludesRepsWhenWeightIsMissing() {
         let previous = PreviousSetPerformance(weight: nil, reps: 8)
 
