@@ -69,9 +69,6 @@ struct LoggedSetSyncPayload: Codable, Equatable {
     let weight: Double?
     let reps: Int?
     let rpe: Double?
-    let placeholderWeight: Double?
-    let placeholderReps: Int?
-    let placeholderRPE: Double?
     let kindRaw: String
     let isCompleted: Bool
     let completedAt: Double?
@@ -158,9 +155,6 @@ enum SyncPayloadMapper {
             weight: set.weight,
             reps: set.reps,
             rpe: set.rpe,
-            placeholderWeight: set.placeholderWeight,
-            placeholderReps: set.placeholderReps,
-            placeholderRPE: set.placeholderRPE,
             kindRaw: set.kindRaw,
             isCompleted: set.isCompleted,
             completedAt: set.completedAt?.timeIntervalSince1970,
@@ -260,9 +254,6 @@ struct LoggedSetSyncRecord: Codable, Equatable {
     let weight: Double?
     let reps: Int?
     let rpe: Double?
-    let placeholderWeight: Double?
-    let placeholderReps: Int?
-    let placeholderRPE: Double?
     let kindRaw: String
     let isCompleted: Bool
     let completedAt: Double?

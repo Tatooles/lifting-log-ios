@@ -97,7 +97,6 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         let service = SettingsMutationService()
         let settings = UserSettings(weightUnit: .pounds)
         let completedUpdatedAt = Date(timeIntervalSince1970: 40)
-        let placeholderUpdatedAt = Date(timeIntervalSince1970: 45)
         let completedSet = LoggedSet(
             orderIndex: 0,
             weight: 225,
@@ -105,15 +104,8 @@ final class SyncOutboxIntegrationTests: XCTestCase {
             isCompleted: true,
             updatedAt: completedUpdatedAt
         )
-        let placeholderSet = LoggedSet(
-            orderIndex: 1,
-            placeholderWeight: 135,
-            placeholderReps: 8,
-            updatedAt: placeholderUpdatedAt
-        )
         context.insert(settings)
         context.insert(completedSet)
-        context.insert(placeholderSet)
         try context.save()
 
         try service.updateWeightUnit(
@@ -126,8 +118,6 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         XCTAssertEqual(settings.weightUnit, .kilograms)
         XCTAssertEqual(completedSet.weight, 225)
         XCTAssertEqual(completedSet.updatedAt, completedUpdatedAt)
-        XCTAssertEqual(placeholderSet.placeholderWeight, 135)
-        XCTAssertEqual(placeholderSet.updatedAt, placeholderUpdatedAt)
 
         let entries = try fetchEntries(context)
         XCTAssertEqual(entries.count, 1)

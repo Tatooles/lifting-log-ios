@@ -1197,9 +1197,6 @@ final class SyncCoordinator {
                     weight: record.weight,
                     reps: record.reps,
                     rpe: record.rpe,
-                    placeholderWeight: record.placeholderWeight,
-                    placeholderReps: record.placeholderReps,
-                    placeholderRPE: record.placeholderRPE,
                     kind: SetKind(rawValue: record.kindRaw) ?? .working,
                     isCompleted: record.isCompleted,
                     completedAt: record.completedAt.map(Date.init(timeIntervalSince1970:)),
@@ -1223,9 +1220,6 @@ final class SyncCoordinator {
         set.weight = record.weight
         set.reps = record.reps
         set.rpe = record.rpe
-        set.placeholderWeight = record.placeholderWeight
-        set.placeholderReps = record.placeholderReps
-        set.placeholderRPE = record.placeholderRPE
         set.kindRaw = record.kindRaw
         set.isCompleted = record.isCompleted
         set.completedAt = record.completedAt.map(Date.init(timeIntervalSince1970:))

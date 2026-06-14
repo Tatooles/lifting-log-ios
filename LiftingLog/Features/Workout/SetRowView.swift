@@ -133,8 +133,7 @@ struct SetRowView: View {
     }
 
     private var weightPlaceholder: String {
-        return weightUnit.displayWeight(fromCanonicalPounds: set.placeholderWeight).map(WorkoutFormatters.number)
-            ?? weightUnit.fieldPlaceholder
+        weightUnit.fieldPlaceholder
     }
 
     private var repsBinding: Binding<String> {
@@ -147,7 +146,7 @@ struct SetRowView: View {
     }
 
     private var repsPlaceholder: String {
-        return set.placeholderReps.map(String.init) ?? "REPS"
+        "REPS"
     }
 
     private var rpeBinding: Binding<String> {
@@ -166,7 +165,7 @@ struct SetRowView: View {
     }
 
     private var rpePlaceholder: String {
-        return set.placeholderRPE.map(WorkoutFormatters.number) ?? "RPE"
+        "RPE"
     }
 
     private func clearFocusedFieldForThisSet() {
@@ -177,25 +176,7 @@ struct SetRowView: View {
         }
     }
 
-    private func suppressNextCompletionClearIfNeeded() {
-        let fieldToSuppress: WorkoutField?
-        if focusedField.wrappedValue == .setWeight(set.id), !set.isCompleted, set.weight == nil, set.placeholderWeight != nil {
-            fieldToSuppress = .setWeight(set.id)
-        } else if focusedField.wrappedValue == .setRPE(set.id), !set.isCompleted, set.rpe == nil, set.placeholderRPE != nil {
-            fieldToSuppress = .setRPE(set.id)
-        } else {
-            fieldToSuppress = nil
-        }
-
-        guard let fieldToSuppress else { return }
-        suppressedCompletionClearField = fieldToSuppress
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(500))
-            if suppressedCompletionClearField == fieldToSuppress {
-                suppressedCompletionClearField = nil
-            }
-        }
-    }
+    private func suppressNextCompletionClearIfNeeded() {}
 
     private func shouldSuppressDecimalClear(_ value: String, field: WorkoutField) -> Bool {
         guard value.isEmpty, suppressedCompletionClearField == field else { return false }

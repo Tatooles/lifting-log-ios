@@ -106,9 +106,6 @@ final class ActiveWorkoutEngine {
             for pastSet in pastLoggedExercise.sortedSets {
                 let set = LoggedSet(
                     orderIndex: pastSet.orderIndex,
-                    placeholderWeight: pastSet.weight,
-                    placeholderReps: pastSet.reps,
-                    placeholderRPE: pastSet.rpe,
                     kind: pastSet.kind,
                     isCompleted: false,
                     createdAt: now,
@@ -195,9 +192,6 @@ final class ActiveWorkoutEngine {
         let previous = sortedSets.last
         let set = LoggedSet(
             orderIndex: (sortedSets.map(\.orderIndex).max() ?? -1) + 1,
-            placeholderWeight: previous?.weight ?? previous?.placeholderWeight,
-            placeholderReps: previous?.reps ?? previous?.placeholderReps,
-            placeholderRPE: previous?.rpe ?? previous?.placeholderRPE,
             kind: previous?.kind ?? .working,
             isCompleted: false
         )
@@ -247,11 +241,6 @@ final class ActiveWorkoutEngine {
     }
 
     func toggleSetCompletion(_ set: LoggedSet, context: ModelContext, now: Date = .now) throws {
-        let willComplete = !set.isCompleted
-        if willComplete {
-            applyPlaceholderValuesIfNeeded(to: set)
-        }
-
         set.isCompleted.toggle()
         set.completedAt = set.isCompleted ? now : nil
         set.touch(now: now)
@@ -380,20 +369,6 @@ final class ActiveWorkoutEngine {
         for (index, set) in loggedExercise.sortedSets.enumerated() where set.orderIndex != index {
             set.orderIndex = index
             set.touch(now: now)
-        }
-    }
-
-    private func applyPlaceholderValuesIfNeeded(to set: LoggedSet) {
-        if set.weight == nil, let placeholderWeight = set.placeholderWeight {
-            set.weight = placeholderWeight
-        }
-
-        if set.reps == nil, let placeholderReps = set.placeholderReps {
-            set.reps = placeholderReps
-        }
-
-        if set.rpe == nil, let placeholderRPE = set.placeholderRPE {
-            set.rpe = placeholderRPE
         }
     }
 
