@@ -179,7 +179,12 @@ struct SetRowView: View {
 
     private func completeButtonTapped() {
         clearFocusedFieldForThisSet()
-        if !set.isCompleted, set.weight == nil, set.reps == nil, let previous {
+        if SetCompletionPreviousFillPolicy.shouldFillBeforeCompletion(
+            isCompleted: set.isCompleted,
+            weight: set.weight,
+            reps: set.reps,
+            previous: previous
+        ), let previous {
             fillFromPrevious(previous)
         }
         withAnimation(.easeInOut(duration: 0.2)) {
@@ -197,6 +202,17 @@ struct SetRowView: View {
             || focusedField.wrappedValue == .setReps(set.id) {
             focusedField.wrappedValue = nil
         }
+    }
+}
+
+enum SetCompletionPreviousFillPolicy {
+    static func shouldFillBeforeCompletion(
+        isCompleted: Bool,
+        weight: Double?,
+        reps: Int?,
+        previous: PreviousSetPerformance?
+    ) -> Bool {
+        !isCompleted && (weight == nil || reps == nil) && previous != nil
     }
 }
 
