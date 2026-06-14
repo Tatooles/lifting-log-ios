@@ -94,6 +94,7 @@ export default defineSchema({
     hasSnapshotMetadata: v.optional(v.boolean()),
     notes: v.string(),
     referenceNotes: nullableString,
+    sourceLoggedExerciseID: v.optional(nullableString),
   })
     .index("by_ownerTokenIdentifier_and_clientId", [
       "ownerTokenIdentifier",

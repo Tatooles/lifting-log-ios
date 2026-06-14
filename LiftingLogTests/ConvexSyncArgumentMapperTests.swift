@@ -97,13 +97,15 @@ final class ConvexSyncArgumentMapperTests: XCTestCase {
             exerciseSnapshotPrimaryMuscleGroupRaw: "chest",
             hasSnapshotMetadata: true,
             notes: "",
-            referenceNotes: nil
+            referenceNotes: nil,
+            sourceLoggedExerciseID: "source-logged-exercise-1"
         )
 
         let record = ConvexSyncArgumentMapper.loggedExerciseRecord(payload)
 
         XCTAssertEqual(try XCTUnwrap(record["orderIndex"] as? Double), 7)
         XCTAssertEqual(try XCTUnwrap(record["sessionClientId"] as? String), "session-1")
+        XCTAssertEqual(try XCTUnwrap(record["sourceLoggedExerciseID"] as? String), "source-logged-exercise-1")
     }
 
     func testLoggedSetArgsEncodeNullableAndIntegerFields() throws {

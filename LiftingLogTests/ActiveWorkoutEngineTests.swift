@@ -85,6 +85,7 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertEqual(copiedExercise.exerciseSnapshotEquipmentRaw, "smithMachine")
         XCTAssertEqual(copiedExercise.exerciseSnapshotPrimaryMuscleGroupRaw, "glutes")
         XCTAssertEqual(copiedExercise.notes, "")
+        XCTAssertEqual(copiedExercise.sourceLoggedExerciseID, loggedExercise.id)
 
         let copiedSets = copiedExercise.sortedSets
         XCTAssertEqual(copiedSets.map(\.isCompleted), [false, false])

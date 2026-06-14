@@ -68,6 +68,7 @@ export const loggedExercisePayloadValidator = v.object({
   hasSnapshotMetadata: v.optional(v.boolean()),
   notes: v.string(),
   referenceNotes: nullableString,
+  sourceLoggedExerciseID: v.optional(nullableString),
 });
 
 export const loggedSetPayloadValidator = v.object({

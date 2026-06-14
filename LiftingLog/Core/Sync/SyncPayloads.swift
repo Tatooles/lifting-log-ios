@@ -57,6 +57,7 @@ struct LoggedExerciseSyncPayload: Codable, Equatable {
     let hasSnapshotMetadata: Bool
     let notes: String
     let referenceNotes: String?
+    let sourceLoggedExerciseID: String?
 }
 
 struct LoggedSetSyncPayload: Codable, Equatable {
@@ -140,7 +141,8 @@ enum SyncPayloadMapper {
             exerciseSnapshotPrimaryMuscleGroupRaw: loggedExercise.effectiveSnapshotPrimaryMuscleGroupRaw,
             hasSnapshotMetadata: loggedExercise.hasSnapshotMetadata,
             notes: loggedExercise.notes,
-            referenceNotes: loggedExercise.referenceNotes
+            referenceNotes: loggedExercise.referenceNotes,
+            sourceLoggedExerciseID: loggedExercise.sourceLoggedExerciseID?.uuidString.lowercased()
         )
     }
 
@@ -241,6 +243,7 @@ struct LoggedExerciseSyncRecord: Codable, Equatable {
     let hasSnapshotMetadata: Bool
     let notes: String
     let referenceNotes: String?
+    let sourceLoggedExerciseID: String?
 }
 
 struct LoggedSetSyncRecord: Codable, Equatable {

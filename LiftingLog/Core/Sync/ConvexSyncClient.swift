@@ -175,6 +175,7 @@ enum ConvexSyncArgumentMapper {
             "hasSnapshotMetadata": record.hasSnapshotMetadata,
             "notes": record.notes,
             "referenceNotes": record.referenceNotes,
+            "sourceLoggedExerciseID": record.sourceLoggedExerciseID,
         ]
     }
 

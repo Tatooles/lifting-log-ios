@@ -95,6 +95,7 @@ final class ActiveWorkoutEngine {
                 exerciseSnapshotEquipmentRaw: resolvedEquipmentRaw,
                 exerciseSnapshotPrimaryMuscleGroupRaw: resolvedPrimaryMuscleGroupRaw,
                 referenceNotes: pastLoggedExercise.notes,
+                sourceLoggedExerciseID: pastLoggedExercise.id,
                 createdAt: now,
                 updatedAt: now
             )

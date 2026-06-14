@@ -917,7 +917,8 @@ final class SyncCoordinatorTests: XCTestCase {
                         exerciseSnapshotPrimaryMuscleGroupRaw: "chest",
                         hasSnapshotMetadata: true,
                         notes: "Paused",
-                        referenceNotes: nil
+                        referenceNotes: nil,
+                        sourceLoggedExerciseID: nil
                     )
                 ],
                 loggedSets: [
@@ -1163,7 +1164,8 @@ final class SyncCoordinatorTests: XCTestCase {
                         exerciseSnapshotPrimaryMuscleGroupRaw: "chest",
                         hasSnapshotMetadata: true,
                         notes: "",
-                        referenceNotes: nil
+                        referenceNotes: nil,
+                        sourceLoggedExerciseID: nil
                     )
                 ],
                 loggedSets: [],
@@ -1216,7 +1218,8 @@ final class SyncCoordinatorTests: XCTestCase {
                         exerciseSnapshotPrimaryMuscleGroupRaw: "chest",
                         hasSnapshotMetadata: true,
                         notes: "",
-                        referenceNotes: nil
+                        referenceNotes: nil,
+                        sourceLoggedExerciseID: nil
                     )
                 ],
                 loggedSets: [],
@@ -1306,7 +1309,8 @@ final class SyncCoordinatorTests: XCTestCase {
                         exerciseSnapshotPrimaryMuscleGroupRaw: "chest",
                         hasSnapshotMetadata: true,
                         notes: "",
-                        referenceNotes: nil
+                        referenceNotes: nil,
+                        sourceLoggedExerciseID: nil
                     )
                 ],
                 loggedSets: [],
@@ -1356,7 +1360,8 @@ final class SyncCoordinatorTests: XCTestCase {
                         exerciseSnapshotPrimaryMuscleGroupRaw: "other",
                         hasSnapshotMetadata: false,
                         notes: "",
-                        referenceNotes: nil
+                        referenceNotes: nil,
+                        sourceLoggedExerciseID: nil
                     )
                 ],
                 loggedSets: [],
@@ -1400,7 +1405,8 @@ final class SyncCoordinatorTests: XCTestCase {
                         exerciseSnapshotPrimaryMuscleGroupRaw: "back",
                         hasSnapshotMetadata: true,
                         notes: "",
-                        referenceNotes: nil
+                        referenceNotes: nil,
+                        sourceLoggedExerciseID: nil
                     )
                 ],
                 loggedSets: [],
@@ -1494,7 +1500,8 @@ final class SyncCoordinatorTests: XCTestCase {
                         exerciseSnapshotPrimaryMuscleGroupRaw: "legs",
                         hasSnapshotMetadata: true,
                         notes: "",
-                        referenceNotes: nil
+                        referenceNotes: nil,
+                        sourceLoggedExerciseID: nil
                     )
                 ],
                 loggedSets: [

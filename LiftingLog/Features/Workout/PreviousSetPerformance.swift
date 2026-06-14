@@ -87,10 +87,21 @@ struct PreviousSetPerformance: Equatable {
         let sourceEntriesByRouteID = Dictionary(grouping: sourceSession.sortedLoggedExercises) { loggedExercise in
             ExerciseHistoryRoute(loggedExercise: loggedExercise).id
         }
+        let sourceEntriesByID = Dictionary(
+            uniqueKeysWithValues: sourceSession.sortedLoggedExercises.map { ($0.id, $0) }
+        )
         var consumedSourceEntryCountByRouteID: [String: Int] = [:]
 
         return Dictionary(
             uniqueKeysWithValues: loggedExercises.map { loggedExercise in
+                if let sourceLoggedExerciseID = loggedExercise.sourceLoggedExerciseID,
+                   let sourceLoggedExercise = sourceEntriesByID[sourceLoggedExerciseID] {
+                    return (
+                        loggedExercise.id,
+                        setPerformances(for: sourceLoggedExercise)
+                    )
+                }
+
                 let routeID = ExerciseHistoryRoute(loggedExercise: loggedExercise).id
                 let sourceIndex = consumedSourceEntryCountByRouteID[routeID, default: 0]
                 consumedSourceEntryCountByRouteID[routeID] = sourceIndex + 1

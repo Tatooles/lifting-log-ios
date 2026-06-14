@@ -90,6 +90,7 @@ function loggedExerciseRecord(
     hasSnapshotMetadata: true,
     notes: "",
     referenceNotes: null,
+    sourceLoggedExerciseID: null,
     createdAt: 1,
     updatedAt: 2,
     deletedAt: null,
@@ -193,6 +194,7 @@ type LoggedExerciseRecord = {
   hasSnapshotMetadata: boolean;
   notes: string;
   referenceNotes: string | null;
+  sourceLoggedExerciseID: string | null;
   createdAt: number;
   updatedAt: number;
   deletedAt: number | null;
@@ -1146,6 +1148,7 @@ describe("sync change cursors", () => {
       record: loggedExerciseRecord({
         notes: "Smooth",
         referenceNotes: "Add five pounds",
+        sourceLoggedExerciseID: "source-logged-exercise-1",
         updatedAt: 4,
       }),
     });
@@ -1188,6 +1191,7 @@ describe("sync change cursors", () => {
       hasSnapshotMetadata: true,
       notes: "Smooth",
       referenceNotes: "Add five pounds",
+      sourceLoggedExerciseID: "source-logged-exercise-1",
     });
     expect(changes.loggedSets[0]).toMatchObject({
       clientId: "logged-set-1",
