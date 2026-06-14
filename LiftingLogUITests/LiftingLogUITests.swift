@@ -285,6 +285,12 @@ final class LiftingLogUITests: XCTestCase {
 
         XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
         XCTAssertEqual(app.textFields["WorkoutTitle"].value as? String, "Past Push")
+        let previousValue = app.buttons["SetPreviousValue-0-0"]
+        XCTAssertTrue(previousValue.waitForExistence(timeout: 3))
+        XCTAssertEqual(previousValue.label, "Previous: 185 × 5")
+        XCTAssertEqual(app.textFields["SetWeightField-0-0"].value as? String, "LBS")
+        XCTAssertEqual(app.textFields["SetRepsField-0-0"].value as? String, "REPS")
+        previousValue.tap()
         XCTAssertEqual(app.textFields["SetWeightField-0-0"].value as? String, "185")
         XCTAssertEqual(app.textFields["SetRepsField-0-0"].value as? String, "5")
         XCTAssertTrue(app.buttons["SetCompletionButton-0-0"].exists)
