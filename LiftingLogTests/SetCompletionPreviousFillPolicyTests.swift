@@ -34,25 +34,19 @@ final class SetCompletionPreviousFillPolicyTests: XCTestCase {
         ))
     }
 
-    func testCompletionEmptyWriteSuppressorConsumesOnlyMatchingEmptyWrite() {
-        let setID = UUID()
-        var suppressor = CompletionEmptyWriteSuppressor()
-
-        suppressor.suppress(.setWeight(setID))
-
-        XCTAssertFalse(suppressor.shouldSuppress(value: "185", field: .setWeight(setID)))
-        XCTAssertFalse(suppressor.shouldSuppress(value: "", field: .setReps(setID)))
-        XCTAssertTrue(suppressor.shouldSuppress(value: "", field: .setWeight(setID)))
-        XCTAssertFalse(suppressor.shouldSuppress(value: "", field: .setWeight(setID)))
+    func testIgnoresEmptyWriteWhenFieldIsNotFocused() {
+        // A spurious commit-on-resign (e.g. after auto-filling from Previous on
+        // completion) arrives while the field is no longer focused and must be dropped.
+        XCTAssertTrue(CompletionEmptyWriteGuard.shouldIgnoreEmptyWrite(value: "", isFieldFocused: false))
     }
 
-    func testCompletionEmptyWriteSuppressorExpiresMatchingField() {
-        let setID = UUID()
-        var suppressor = CompletionEmptyWriteSuppressor()
+    func testHonorsEmptyWriteWhileFieldIsFocused() {
+        // The user actively clearing a focused field is a legitimate edit.
+        XCTAssertFalse(CompletionEmptyWriteGuard.shouldIgnoreEmptyWrite(value: "", isFieldFocused: true))
+    }
 
-        suppressor.suppress(.setWeight(setID))
-        suppressor.expire(.setWeight(setID))
-
-        XCTAssertFalse(suppressor.shouldSuppress(value: "", field: .setWeight(setID)))
+    func testHonorsNonEmptyWriteRegardlessOfFocus() {
+        XCTAssertFalse(CompletionEmptyWriteGuard.shouldIgnoreEmptyWrite(value: "185", isFieldFocused: false))
+        XCTAssertFalse(CompletionEmptyWriteGuard.shouldIgnoreEmptyWrite(value: "185", isFieldFocused: true))
     }
 }
