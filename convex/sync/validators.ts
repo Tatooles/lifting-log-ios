@@ -88,4 +88,5 @@ export const loggedSetPayloadValidator = v.object({
   completedAt: nullableNumber,
   notes: v.string(),
   healthLinkID: nullableString,
+  sourceLoggedSetID: v.optional(nullableString),
 });

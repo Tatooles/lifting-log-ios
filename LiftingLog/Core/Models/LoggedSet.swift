@@ -16,6 +16,7 @@ final class LoggedSet: Identifiable {
     var updatedAt: Date
     var deletedAt: Date?
     var healthLinkID: UUID?
+    var sourceLoggedSetID: UUID?
     var loggedExercise: LoggedExercise?
 
     init(
@@ -31,7 +32,8 @@ final class LoggedSet: Identifiable {
         createdAt: Date = .now,
         updatedAt: Date = .now,
         deletedAt: Date? = nil,
-        healthLinkID: UUID? = nil
+        healthLinkID: UUID? = nil,
+        sourceLoggedSetID: UUID? = nil
     ) {
         self.id = id
         self.orderIndex = orderIndex
@@ -46,6 +48,7 @@ final class LoggedSet: Identifiable {
         self.updatedAt = updatedAt
         self.deletedAt = deletedAt
         self.healthLinkID = healthLinkID
+        self.sourceLoggedSetID = sourceLoggedSetID
     }
 
     var kind: SetKind {

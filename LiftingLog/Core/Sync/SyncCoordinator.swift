@@ -1206,7 +1206,8 @@ final class SyncCoordinator {
                     createdAt: Date(timeIntervalSince1970: record.createdAt),
                     updatedAt: incomingUpdatedAt,
                     deletedAt: incomingDeletedAt,
-                    healthLinkID: record.healthLinkID.flatMap(UUID.init(uuidString:))
+                    healthLinkID: record.healthLinkID.flatMap(UUID.init(uuidString:)),
+                    sourceLoggedSetID: record.sourceLoggedSetID.flatMap(UUID.init(uuidString:))
                 )
                 set.loggedExercise = loggedExercise
                 loggedExercise.sets.append(set)
@@ -1230,6 +1231,7 @@ final class SyncCoordinator {
         set.updatedAt = Date(timeIntervalSince1970: record.updatedAt)
         set.deletedAt = record.deletedAt.map(Date.init(timeIntervalSince1970:))
         set.healthLinkID = record.healthLinkID.flatMap(UUID.init(uuidString:))
+        set.sourceLoggedSetID = record.sourceLoggedSetID.flatMap(UUID.init(uuidString:))
         set.loggedExercise = loggedExercise
         if !loggedExercise.sets.contains(where: { $0.id == set.id }) {
             loggedExercise.sets.append(set)

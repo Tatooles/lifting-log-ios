@@ -110,7 +110,8 @@ final class ActiveWorkoutEngine {
                     kind: pastSet.kind,
                     isCompleted: false,
                     createdAt: now,
-                    updatedAt: now
+                    updatedAt: now,
+                    sourceLoggedSetID: pastSet.id
                 )
                 set.loggedExercise = loggedExercise
                 context.insert(set)

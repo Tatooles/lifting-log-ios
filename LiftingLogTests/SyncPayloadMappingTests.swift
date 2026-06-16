@@ -165,6 +165,7 @@ final class SyncPayloadMappingTests: XCTestCase {
         let loggedExerciseID = UUID(uuidString: "00000000-0000-0000-0000-000000004201")!
         let setID = UUID(uuidString: "00000000-0000-0000-0000-000000004202")!
         let healthID = UUID(uuidString: "00000000-0000-0000-0000-000000004203")!
+        let sourceSetID = UUID(uuidString: "00000000-0000-0000-0000-000000004204")!
         let loggedExercise = LoggedExercise(id: loggedExerciseID, orderIndex: 0)
         let set = LoggedSet(
             id: setID,
@@ -179,7 +180,8 @@ final class SyncPayloadMappingTests: XCTestCase {
             createdAt: Date(timeIntervalSince1970: 100),
             updatedAt: Date(timeIntervalSince1970: 130),
             deletedAt: nil,
-            healthLinkID: healthID
+            healthLinkID: healthID,
+            sourceLoggedSetID: sourceSetID
         )
         set.loggedExercise = loggedExercise
 
@@ -196,6 +198,7 @@ final class SyncPayloadMappingTests: XCTestCase {
         XCTAssertEqual(payload.completedAt, 125)
         XCTAssertEqual(payload.notes, "Solid")
         XCTAssertEqual(payload.healthLinkID, healthID.uuidString.lowercased())
+        XCTAssertEqual(payload.sourceLoggedSetID, sourceSetID.uuidString.lowercased())
         XCTAssertEqual(payload.createdAt, 100)
         XCTAssertEqual(payload.updatedAt, 130)
         XCTAssertNil(payload.deletedAt)

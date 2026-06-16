@@ -123,7 +123,8 @@ final class ConvexSyncArgumentMapperTests: XCTestCase {
             isCompleted: true,
             completedAt: 3,
             notes: "",
-            healthLinkID: nil
+            healthLinkID: nil,
+            sourceLoggedSetID: "source-logged-set-1"
         )
 
         let record = ConvexSyncArgumentMapper.loggedSetRecord(payload)
@@ -132,5 +133,6 @@ final class ConvexSyncArgumentMapperTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(record["reps"] as? Double), 5)
         XCTAssertNil(record["rpe"]!)
         XCTAssertNil(record["healthLinkID"]!)
+        XCTAssertEqual(try XCTUnwrap(record["sourceLoggedSetID"] as? String), "source-logged-set-1")
     }
 }

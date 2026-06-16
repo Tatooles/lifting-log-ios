@@ -400,6 +400,75 @@ final class PreviousSetPerformanceTests: XCTestCase {
         ])
     }
 
+    func testPastWorkoutLookupKeepsSourceSetValuesAfterEarlierSetDeleted() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(
+            name: "Bench Press",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscleGroup: .chest
+        )
+        context.insert(exercise)
+
+        let selectedSource = WorkoutSession(
+            title: "Selected Past Workout",
+            startedAt: Date(timeIntervalSince1970: 100),
+            status: .completed,
+            source: .blank
+        )
+        let sourceLogged = LoggedExercise(orderIndex: 0, exercise: exercise)
+        let firstSourceSet = LoggedSet(
+            orderIndex: 0, weight: 100, reps: 5, isCompleted: true, completedAt: selectedSource.startedAt
+        )
+        let secondSourceSet = LoggedSet(
+            orderIndex: 1, weight: 110, reps: 3, isCompleted: true, completedAt: selectedSource.startedAt
+        )
+        let thirdSourceSet = LoggedSet(
+            orderIndex: 2, weight: 120, reps: 1, isCompleted: true, completedAt: selectedSource.startedAt
+        )
+        sourceLogged.sets.append(contentsOf: [firstSourceSet, secondSourceSet, thirdSourceSet])
+        selectedSource.loggedExercises.append(sourceLogged)
+        context.insert(selectedSource)
+        context.insert(sourceLogged)
+
+        let active = WorkoutSession(
+            title: "Today",
+            startedAt: Date(timeIntervalSince1970: 200),
+            status: .active,
+            source: .pastWorkout,
+            sourceSessionID: selectedSource.id
+        )
+        let activeLogged = LoggedExercise(
+            orderIndex: 0,
+            exercise: exercise,
+            sourceLoggedExerciseID: sourceLogged.id
+        )
+        // Simulate deleting the first cloned set: only the second and third source
+        // sets remain, reindexed to active rows 0 and 1. Each keeps its stable
+        // sourceLoggedSetID link, so the previous values must not shift up.
+        let secondActiveSet = LoggedSet(orderIndex: 0, sourceLoggedSetID: secondSourceSet.id)
+        let thirdActiveSet = LoggedSet(orderIndex: 1, sourceLoggedSetID: thirdSourceSet.id)
+        activeLogged.sets.append(contentsOf: [secondActiveSet, thirdActiveSet])
+        active.loggedExercises.append(activeLogged)
+        context.insert(active)
+        context.insert(activeLogged)
+        try context.save()
+
+        let sessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let lookup = PreviousSetPerformance.lastCompletedSetsByExerciseID(
+            for: active.sortedLoggedExercises,
+            in: sessions,
+            ownerTokenIdentifier: nil,
+            sourceSessionID: active.sourceSessionID
+        )
+
+        XCTAssertEqual(lookup[activeLogged.id], [
+            PreviousSetPerformance(weight: 110, reps: 3),
+            PreviousSetPerformance(weight: 120, reps: 1),
+        ])
+    }
+
     func testPastWorkoutLookupUsesStableSourceExerciseIDsForAllClonedDuplicates() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

@@ -937,7 +937,8 @@ final class SyncCoordinatorTests: XCTestCase {
                         isCompleted: true,
                         completedAt: 190,
                         notes: "",
-                        healthLinkID: nil
+                        healthLinkID: nil,
+                        sourceLoggedSetID: nil
                     )
                 ],
                 cursors: SyncChangeCursors(
@@ -1095,7 +1096,8 @@ final class SyncCoordinatorTests: XCTestCase {
                         isCompleted: true,
                         completedAt: nil,
                         notes: "",
-                        healthLinkID: nil
+                        healthLinkID: nil,
+                        sourceLoggedSetID: nil
                     )
                 ],
                 cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 0, loggedExercises: 0, loggedSets: 50),
@@ -1457,7 +1459,8 @@ final class SyncCoordinatorTests: XCTestCase {
                         isCompleted: false,
                         completedAt: nil,
                         notes: "",
-                        healthLinkID: nil
+                        healthLinkID: nil,
+                        sourceLoggedSetID: nil
                     )
                 ],
                 cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 0, loggedExercises: 0, loggedSets: 60),
@@ -1520,7 +1523,8 @@ final class SyncCoordinatorTests: XCTestCase {
                         isCompleted: true,
                         completedAt: nil,
                         notes: "",
-                        healthLinkID: nil
+                        healthLinkID: nil,
+                        sourceLoggedSetID: nil
                     )
                 ],
                 cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 70, loggedExercises: 80, loggedSets: 90),
@@ -1566,7 +1570,8 @@ final class SyncCoordinatorTests: XCTestCase {
                         isCompleted: true,
                         completedAt: nil,
                         notes: "",
-                        healthLinkID: nil
+                        healthLinkID: nil,
+                        sourceLoggedSetID: nil
                     )
                 ],
                 cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 0, loggedExercises: 0, loggedSets: 50),

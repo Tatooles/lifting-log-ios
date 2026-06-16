@@ -98,7 +98,7 @@ struct PreviousSetPerformance: Equatable {
                    let sourceLoggedExercise = sourceEntriesByID[sourceLoggedExerciseID] {
                     return (
                         loggedExercise.id,
-                        setPerformances(for: sourceLoggedExercise)
+                        sourceSetPerformances(for: loggedExercise, in: sourceLoggedExercise)
                     )
                 }
 
@@ -110,7 +110,7 @@ struct PreviousSetPerformance: Equatable {
                 let sourceLoggedExercise = sourceIndex < sourceEntries.count ? sourceEntries[sourceIndex] : nil
                 return (
                     loggedExercise.id,
-                    sourceLoggedExercise.map { setPerformances(for: $0) } ?? []
+                    sourceLoggedExercise.map { sourceSetPerformances(for: loggedExercise, in: $0) } ?? []
                 )
             }
         )
@@ -151,6 +151,38 @@ struct PreviousSetPerformance: Equatable {
         }
 
         return result
+    }
+
+    private static func sourceSetPerformances(
+        for activeLoggedExercise: LoggedExercise,
+        in sourceLoggedExercise: LoggedExercise
+    ) -> [PreviousSetPerformance] {
+        let activeSets = activeLoggedExercise.sortedSets
+
+        // Legacy clones (created before sets carried a stable source link) and
+        // lower-level callers without active rows fall back to source order.
+        guard activeSets.contains(where: { $0.sourceLoggedSetID != nil }) else {
+            return setPerformances(for: sourceLoggedExercise)
+        }
+
+        // Align each active row to its specific source set so cloned rows keep
+        // their own previous values even after an earlier row is deleted or the
+        // rows are reordered. Rows added after cloning have no source set.
+        let sourceSets = sourceLoggedExercise.sortedSets
+        let sourceSetsByID = Dictionary(uniqueKeysWithValues: sourceSets.map { ($0.id, $0) })
+
+        return activeSets.enumerated().map { index, activeSet in
+            if let sourceSetID = activeSet.sourceLoggedSetID,
+               let sourceSet = sourceSetsByID[sourceSetID] {
+                return makePerformance(from: sourceSet)
+            }
+
+            if index < sourceSets.count {
+                return makePerformance(from: sourceSets[index])
+            }
+
+            return PreviousSetPerformance(weight: nil, reps: nil)
+        }
     }
 
     private static func setPerformances(for loggedExercise: LoggedExercise) -> [PreviousSetPerformance] {

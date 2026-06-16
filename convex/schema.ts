@@ -126,6 +126,7 @@ export default defineSchema({
     completedAt: nullableNumber,
     notes: v.string(),
     healthLinkID: nullableString,
+    sourceLoggedSetID: v.optional(nullableString),
   })
     .index("by_ownerTokenIdentifier_and_clientId", [
       "ownerTokenIdentifier",

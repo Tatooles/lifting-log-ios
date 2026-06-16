@@ -75,6 +75,7 @@ struct LoggedSetSyncPayload: Codable, Equatable {
     let completedAt: Double?
     let notes: String
     let healthLinkID: String?
+    let sourceLoggedSetID: String?
 }
 
 enum SyncPayloadMapper {
@@ -161,7 +162,8 @@ enum SyncPayloadMapper {
             isCompleted: set.isCompleted,
             completedAt: set.completedAt?.timeIntervalSince1970,
             notes: set.notes,
-            healthLinkID: set.healthLinkID?.uuidString.lowercased()
+            healthLinkID: set.healthLinkID?.uuidString.lowercased(),
+            sourceLoggedSetID: set.sourceLoggedSetID?.uuidString.lowercased()
         )
     }
 }
@@ -262,6 +264,7 @@ struct LoggedSetSyncRecord: Codable, Equatable {
     let completedAt: Double?
     let notes: String
     let healthLinkID: String?
+    let sourceLoggedSetID: String?
 }
 
 struct SyncFetchChangesResponse: Codable, Equatable {

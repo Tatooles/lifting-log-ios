@@ -195,6 +195,7 @@ enum ConvexSyncArgumentMapper {
             "completedAt": record.completedAt,
             "notes": record.notes,
             "healthLinkID": record.healthLinkID,
+            "sourceLoggedSetID": record.sourceLoggedSetID,
         ]
     }
 
