@@ -201,7 +201,12 @@ struct WorkoutSessionView: View {
                             onSelect: { value in
                                 let nextField = rpeNextFocusedField
                                 if let set = editingSet {
-                                    try? engine.updateSet(set, weight: set.weight, reps: set.reps, rpe: value, context: modelContext)
+                                    try? RPEChipSelectionAction.apply(
+                                        value: value,
+                                        to: set,
+                                        engine: engine,
+                                        context: modelContext
+                                    )
                                 }
                                 rpeEditingSetID = nil
                                 rpeEditingSourceField = nil

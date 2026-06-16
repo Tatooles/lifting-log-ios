@@ -214,6 +214,66 @@ final class PreviousSetPerformanceTests: XCTestCase {
         ])
     }
 
+    func testBatchLookupContinuesAcrossSessionsUntilAllRoutesAreFound() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let bench = Exercise(
+            name: "Bench Press",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscleGroup: .chest
+        )
+        let squat = Exercise(
+            name: "Back Squat",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscleGroup: .quads
+        )
+        context.insert(bench)
+        context.insert(squat)
+
+        try insertCompletedSession(
+            startedAt: Date(timeIntervalSince1970: 100),
+            exercise: squat,
+            sets: [(225, 8)],
+            in: context
+        )
+        try insertCompletedSession(
+            startedAt: Date(timeIntervalSince1970: 200),
+            exercise: bench,
+            sets: [(185, 5)],
+            in: context
+        )
+
+        let active = WorkoutSession(
+            title: "Today",
+            startedAt: Date(timeIntervalSince1970: 300),
+            status: .active,
+            source: .blank
+        )
+        let activeBench = LoggedExercise(orderIndex: 0, exercise: bench)
+        let activeSquat = LoggedExercise(orderIndex: 1, exercise: squat)
+        active.loggedExercises.append(contentsOf: [activeBench, activeSquat])
+        context.insert(active)
+        context.insert(activeBench)
+        context.insert(activeSquat)
+        try context.save()
+
+        let sessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let lookup = PreviousSetPerformance.lastCompletedSetsByExerciseID(
+            for: active.sortedLoggedExercises,
+            in: sessions,
+            ownerTokenIdentifier: nil
+        )
+
+        XCTAssertEqual(lookup[activeBench.id], [
+            PreviousSetPerformance(weight: 185, reps: 5),
+        ])
+        XCTAssertEqual(lookup[activeSquat.id], [
+            PreviousSetPerformance(weight: 225, reps: 8),
+        ])
+    }
+
     func testPastWorkoutLookupUsesSourceSessionInsteadOfMostRecentSession() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
@@ -340,6 +400,75 @@ final class PreviousSetPerformanceTests: XCTestCase {
         ])
     }
 
+    func testPastWorkoutLookupUsesStableSourceExerciseIDsForAllClonedDuplicates() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(
+            name: "Bench Press",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscleGroup: .chest
+        )
+        context.insert(exercise)
+
+        let selectedSource = WorkoutSession(
+            title: "Selected Past Workout",
+            startedAt: Date(timeIntervalSince1970: 100),
+            status: .completed,
+            source: .blank
+        )
+        let firstSourceBench = LoggedExercise(orderIndex: 0, exercise: exercise)
+        firstSourceBench.sets.append(
+            LoggedSet(orderIndex: 0, weight: 185, reps: 5, isCompleted: true, completedAt: selectedSource.startedAt)
+        )
+        let secondSourceBench = LoggedExercise(orderIndex: 1, exercise: exercise)
+        secondSourceBench.sets.append(
+            LoggedSet(orderIndex: 0, weight: 195, reps: 3, isCompleted: true, completedAt: selectedSource.startedAt)
+        )
+        selectedSource.loggedExercises.append(contentsOf: [firstSourceBench, secondSourceBench])
+        context.insert(selectedSource)
+        context.insert(firstSourceBench)
+        context.insert(secondSourceBench)
+
+        let active = WorkoutSession(
+            title: "Today",
+            startedAt: Date(timeIntervalSince1970: 200),
+            status: .active,
+            source: .pastWorkout,
+            sourceSessionID: selectedSource.id
+        )
+        let firstActiveBench = LoggedExercise(
+            orderIndex: 0,
+            exercise: exercise,
+            sourceLoggedExerciseID: firstSourceBench.id
+        )
+        let secondActiveBench = LoggedExercise(
+            orderIndex: 1,
+            exercise: exercise,
+            sourceLoggedExerciseID: secondSourceBench.id
+        )
+        active.loggedExercises.append(contentsOf: [firstActiveBench, secondActiveBench])
+        context.insert(active)
+        context.insert(firstActiveBench)
+        context.insert(secondActiveBench)
+        try context.save()
+
+        let sessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let lookup = PreviousSetPerformance.lastCompletedSetsByExerciseID(
+            for: active.sortedLoggedExercises,
+            in: sessions,
+            ownerTokenIdentifier: nil,
+            sourceSessionID: active.sourceSessionID
+        )
+
+        XCTAssertEqual(lookup[firstActiveBench.id], [
+            PreviousSetPerformance(weight: 185, reps: 5),
+        ])
+        XCTAssertEqual(lookup[secondActiveBench.id], [
+            PreviousSetPerformance(weight: 195, reps: 3),
+        ])
+    }
+
     func testPastWorkoutLookupUsesStableSourceExerciseAfterReorderAndDelete() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
@@ -378,7 +507,7 @@ final class PreviousSetPerformanceTests: XCTestCase {
             sourceSessionID: selectedSource.id
         )
         let deletedFirstActiveBench = LoggedExercise(
-            orderIndex: 0,
+            orderIndex: 1,
             exercise: exercise,
             sourceLoggedExerciseID: firstSourceBench.id,
             deletedAt: Date(timeIntervalSince1970: 250)
@@ -405,6 +534,79 @@ final class PreviousSetPerformanceTests: XCTestCase {
         XCTAssertEqual(lookup[remainingSecondActiveBench.id], [
             PreviousSetPerformance(weight: 195, reps: 3),
         ])
+    }
+
+    func testPastWorkoutLookupReturnsEmptyWhenSourceSessionIsMissingOrDeleted() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(
+            name: "Bench Press",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscleGroup: .chest
+        )
+        context.insert(exercise)
+
+        let deletedSource = WorkoutSession(
+            title: "Deleted Source",
+            startedAt: Date(timeIntervalSince1970: 100),
+            status: .completed,
+            source: .blank,
+            deletedAt: Date(timeIntervalSince1970: 150)
+        )
+        let deletedSourceLogged = LoggedExercise(orderIndex: 0, exercise: exercise)
+        deletedSourceLogged.sets.append(
+            LoggedSet(orderIndex: 0, weight: 185, reps: 5, isCompleted: true, completedAt: deletedSource.startedAt)
+        )
+        deletedSource.loggedExercises.append(deletedSourceLogged)
+        context.insert(deletedSource)
+        context.insert(deletedSourceLogged)
+
+        let missingSourceActive = WorkoutSession(
+            title: "Missing Source Active",
+            startedAt: Date(timeIntervalSince1970: 200),
+            status: .active,
+            source: .pastWorkout,
+            sourceSessionID: UUID()
+        )
+        let missingSourceLogged = LoggedExercise(orderIndex: 0, exercise: exercise)
+        missingSourceActive.loggedExercises.append(missingSourceLogged)
+        context.insert(missingSourceActive)
+        context.insert(missingSourceLogged)
+
+        let deletedSourceActive = WorkoutSession(
+            title: "Deleted Source Active",
+            startedAt: Date(timeIntervalSince1970: 300),
+            status: .active,
+            source: .pastWorkout,
+            sourceSessionID: deletedSource.id
+        )
+        let deletedSourceActiveLogged = LoggedExercise(
+            orderIndex: 0,
+            exercise: exercise,
+            sourceLoggedExerciseID: deletedSourceLogged.id
+        )
+        deletedSourceActive.loggedExercises.append(deletedSourceActiveLogged)
+        context.insert(deletedSourceActive)
+        context.insert(deletedSourceActiveLogged)
+        try context.save()
+
+        let sessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let missingLookup = PreviousSetPerformance.lastCompletedSetsByExerciseID(
+            for: missingSourceActive.sortedLoggedExercises,
+            in: sessions,
+            ownerTokenIdentifier: nil,
+            sourceSessionID: missingSourceActive.sourceSessionID
+        )
+        let deletedLookup = PreviousSetPerformance.lastCompletedSetsByExerciseID(
+            for: deletedSourceActive.sortedLoggedExercises,
+            in: sessions,
+            ownerTokenIdentifier: nil,
+            sourceSessionID: deletedSourceActive.sourceSessionID
+        )
+
+        XCTAssertEqual(missingLookup[missingSourceLogged.id], [])
+        XCTAssertEqual(deletedLookup[deletedSourceActiveLogged.id], [])
     }
 
     func testPastWorkoutLookupPreservesIncompleteSourceSetPositions() throws {

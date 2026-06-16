@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 struct RPEChipRow: View {
@@ -37,5 +38,11 @@ struct RPEChipRow: View {
                 )
         }
         .buttonStyle(.plain)
+    }
+}
+
+enum RPEChipSelectionAction {
+    static func apply(value: Double?, to set: LoggedSet, engine: ActiveWorkoutEngine, context: ModelContext) throws {
+        try engine.updateSet(set, weight: set.weight, reps: set.reps, rpe: value, context: context)
     }
 }
