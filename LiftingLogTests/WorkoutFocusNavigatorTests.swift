@@ -114,4 +114,25 @@ final class WorkoutFocusNavigatorTests: XCTestCase {
         XCTAssertNil(WorkoutFocusNavigator.adjacentField(from: nil, in: order, offset: 1))
         XCTAssertNil(WorkoutFocusNavigator.adjacentField(from: .setReps(secondSetID), in: order, offset: 1))
     }
+
+    func testRPEEditingResetsWhenFocusMovesToDifferentSet() {
+        let firstSetID = UUID()
+        let secondSetID = UUID()
+
+        XCTAssertFalse(
+            RPEEditingFocusPolicy.shouldReset(editingSetID: firstSetID, newFocusedField: .setWeight(firstSetID))
+        )
+        XCTAssertFalse(
+            RPEEditingFocusPolicy.shouldReset(editingSetID: firstSetID, newFocusedField: .setReps(firstSetID))
+        )
+        XCTAssertTrue(
+            RPEEditingFocusPolicy.shouldReset(editingSetID: firstSetID, newFocusedField: .setWeight(secondSetID))
+        )
+        XCTAssertTrue(
+            RPEEditingFocusPolicy.shouldReset(editingSetID: firstSetID, newFocusedField: .workoutNotes)
+        )
+        XCTAssertFalse(
+            RPEEditingFocusPolicy.shouldReset(editingSetID: nil, newFocusedField: .setWeight(secondSetID))
+        )
+    }
 }

@@ -167,7 +167,7 @@ struct WorkoutSessionView: View {
                 }
             }
             .onChange(of: focusedField) { previousField, newField in
-                if !Self.isSetField(newField) {
+                if RPEEditingFocusPolicy.shouldReset(editingSetID: rpeEditingSetID, newFocusedField: newField) {
                     rpeEditingSetID = nil
                     rpeEditingSourceField = nil
                 }
@@ -384,4 +384,17 @@ struct WorkoutSessionView: View {
     }
 
     private static let focusRevealAnchor = UnitPoint(x: 0.5, y: 0.72)
+}
+
+enum RPEEditingFocusPolicy {
+    static func shouldReset(editingSetID: UUID?, newFocusedField: WorkoutField?) -> Bool {
+        guard let editingSetID else { return false }
+
+        switch newFocusedField {
+        case .setWeight(let focusedSetID), .setReps(let focusedSetID):
+            return focusedSetID != editingSetID
+        case .workoutTitle, .workoutNotes, .exerciseNotes, nil:
+            return true
+        }
+    }
 }

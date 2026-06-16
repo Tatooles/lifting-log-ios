@@ -292,9 +292,14 @@ final class PreviousSetPerformanceTests: XCTestCase {
             source: .blank
         )
         let selectedLogged = LoggedExercise(orderIndex: 0, exercise: exercise)
-        selectedLogged.sets.append(
-            LoggedSet(orderIndex: 0, weight: 185, reps: 5, isCompleted: true, completedAt: selectedSource.startedAt)
+        let selectedSet = LoggedSet(
+            orderIndex: 0,
+            weight: 185,
+            reps: 5,
+            isCompleted: true,
+            completedAt: selectedSource.startedAt
         )
+        selectedLogged.sets.append(selectedSet)
         selectedSource.loggedExercises.append(selectedLogged)
         context.insert(selectedSource)
         context.insert(selectedLogged)
@@ -320,7 +325,12 @@ final class PreviousSetPerformanceTests: XCTestCase {
             source: .pastWorkout,
             sourceSessionID: selectedSource.id
         )
-        let activeLogged = LoggedExercise(orderIndex: 0, exercise: exercise)
+        let activeLogged = LoggedExercise(
+            orderIndex: 0,
+            exercise: exercise,
+            sourceLoggedExerciseID: selectedLogged.id
+        )
+        activeLogged.sets.append(LoggedSet(orderIndex: 0, sourceLoggedSetID: selectedSet.id))
         active.loggedExercises.append(activeLogged)
         context.insert(active)
         context.insert(activeLogged)
@@ -357,13 +367,23 @@ final class PreviousSetPerformanceTests: XCTestCase {
             source: .blank
         )
         let firstSourceBench = LoggedExercise(orderIndex: 0, exercise: exercise)
-        firstSourceBench.sets.append(
-            LoggedSet(orderIndex: 0, weight: 185, reps: 5, isCompleted: true, completedAt: selectedSource.startedAt)
+        let firstSourceSet = LoggedSet(
+            orderIndex: 0,
+            weight: 185,
+            reps: 5,
+            isCompleted: true,
+            completedAt: selectedSource.startedAt
         )
+        firstSourceBench.sets.append(firstSourceSet)
         let secondSourceBench = LoggedExercise(orderIndex: 1, exercise: exercise)
-        secondSourceBench.sets.append(
-            LoggedSet(orderIndex: 0, weight: 195, reps: 3, isCompleted: true, completedAt: selectedSource.startedAt)
+        let secondSourceSet = LoggedSet(
+            orderIndex: 0,
+            weight: 195,
+            reps: 3,
+            isCompleted: true,
+            completedAt: selectedSource.startedAt
         )
+        secondSourceBench.sets.append(secondSourceSet)
         selectedSource.loggedExercises.append(contentsOf: [firstSourceBench, secondSourceBench])
         context.insert(selectedSource)
         context.insert(firstSourceBench)
@@ -376,8 +396,18 @@ final class PreviousSetPerformanceTests: XCTestCase {
             source: .pastWorkout,
             sourceSessionID: selectedSource.id
         )
-        let firstActiveBench = LoggedExercise(orderIndex: 0, exercise: exercise)
-        let secondActiveBench = LoggedExercise(orderIndex: 1, exercise: exercise)
+        let firstActiveBench = LoggedExercise(
+            orderIndex: 0,
+            exercise: exercise,
+            sourceLoggedExerciseID: firstSourceBench.id
+        )
+        firstActiveBench.sets.append(LoggedSet(orderIndex: 0, sourceLoggedSetID: firstSourceSet.id))
+        let secondActiveBench = LoggedExercise(
+            orderIndex: 1,
+            exercise: exercise,
+            sourceLoggedExerciseID: secondSourceBench.id
+        )
+        secondActiveBench.sets.append(LoggedSet(orderIndex: 0, sourceLoggedSetID: secondSourceSet.id))
         active.loggedExercises.append(contentsOf: [firstActiveBench, secondActiveBench])
         context.insert(active)
         context.insert(firstActiveBench)
@@ -541,6 +571,61 @@ final class PreviousSetPerformanceTests: XCTestCase {
         ])
     }
 
+    func testPastWorkoutLookupDoesNotReuseSourceSetsAfterAllClonedSetsAreDeleted() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(
+            name: "Bench Press",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscleGroup: .chest
+        )
+        context.insert(exercise)
+
+        let selectedSource = WorkoutSession(
+            title: "Selected Past Workout",
+            startedAt: Date(timeIntervalSince1970: 100),
+            status: .completed,
+            source: .blank
+        )
+        let sourceLogged = LoggedExercise(orderIndex: 0, exercise: exercise)
+        sourceLogged.sets.append(contentsOf: [
+            LoggedSet(orderIndex: 0, weight: 100, reps: 5, isCompleted: true, completedAt: selectedSource.startedAt),
+            LoggedSet(orderIndex: 1, weight: 110, reps: 3, isCompleted: true, completedAt: selectedSource.startedAt),
+        ])
+        selectedSource.loggedExercises.append(sourceLogged)
+        context.insert(selectedSource)
+        context.insert(sourceLogged)
+
+        let active = WorkoutSession(
+            title: "Today",
+            startedAt: Date(timeIntervalSince1970: 200),
+            status: .active,
+            source: .pastWorkout,
+            sourceSessionID: selectedSource.id
+        )
+        let activeLogged = LoggedExercise(
+            orderIndex: 0,
+            exercise: exercise,
+            sourceLoggedExerciseID: sourceLogged.id
+        )
+        activeLogged.sets.append(LoggedSet(orderIndex: 0))
+        active.loggedExercises.append(activeLogged)
+        context.insert(active)
+        context.insert(activeLogged)
+        try context.save()
+
+        let sessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let lookup = PreviousSetPerformance.lastCompletedSetsByExerciseID(
+            for: active.sortedLoggedExercises,
+            in: sessions,
+            ownerTokenIdentifier: nil,
+            sourceSessionID: active.sourceSessionID
+        )
+
+        XCTAssertEqual(lookup[activeLogged.id], [])
+    }
+
     func testPastWorkoutLookupUsesHistoryForExerciseAddedAfterCloning() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
@@ -621,6 +706,72 @@ final class PreviousSetPerformanceTests: XCTestCase {
         ])
     }
 
+    func testPastWorkoutLookupUsesHistoryAfterAllClonedExercisesAreDeletedAndExerciseIsReadded() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(
+            name: "Bench Press",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscleGroup: .chest
+        )
+        context.insert(exercise)
+
+        let selectedSource = WorkoutSession(
+            title: "Selected Past Workout",
+            startedAt: Date(timeIntervalSince1970: 100),
+            status: .completed,
+            source: .blank
+        )
+        let sourceBench = LoggedExercise(orderIndex: 0, exercise: exercise)
+        sourceBench.sets.append(
+            LoggedSet(orderIndex: 0, weight: 185, reps: 5, isCompleted: true, completedAt: selectedSource.startedAt)
+        )
+        selectedSource.loggedExercises.append(sourceBench)
+        context.insert(selectedSource)
+        context.insert(sourceBench)
+
+        let newerSession = WorkoutSession(
+            title: "Newer Workout",
+            startedAt: Date(timeIntervalSince1970: 200),
+            status: .completed,
+            source: .blank
+        )
+        let newerBench = LoggedExercise(orderIndex: 0, exercise: exercise)
+        newerBench.sets.append(
+            LoggedSet(orderIndex: 0, weight: 225, reps: 3, isCompleted: true, completedAt: newerSession.startedAt)
+        )
+        newerSession.loggedExercises.append(newerBench)
+        context.insert(newerSession)
+        context.insert(newerBench)
+
+        let active = WorkoutSession(
+            title: "Today",
+            startedAt: Date(timeIntervalSince1970: 300),
+            status: .active,
+            source: .pastWorkout,
+            sourceSessionID: selectedSource.id
+        )
+        let readdedBench = LoggedExercise(orderIndex: 0, exercise: exercise)
+        readdedBench.sets.append(LoggedSet(orderIndex: 0))
+        active.loggedExercises.append(readdedBench)
+        context.insert(active)
+        context.insert(readdedBench)
+        try context.save()
+
+        let sessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let lookup = PreviousSetPerformance.lastCompletedSetsByExerciseID(
+            for: active.sortedLoggedExercises,
+            in: sessions,
+            ownerTokenIdentifier: nil,
+            sourceSessionID: active.sourceSessionID
+        )
+
+        XCTAssertEqual(lookup[readdedBench.id], [
+            PreviousSetPerformance(weight: 225, reps: 3),
+        ])
+    }
+
     func testPastWorkoutLookupUsesStableSourceExerciseIDsForAllClonedDuplicates() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
@@ -639,13 +790,23 @@ final class PreviousSetPerformanceTests: XCTestCase {
             source: .blank
         )
         let firstSourceBench = LoggedExercise(orderIndex: 0, exercise: exercise)
-        firstSourceBench.sets.append(
-            LoggedSet(orderIndex: 0, weight: 185, reps: 5, isCompleted: true, completedAt: selectedSource.startedAt)
+        let firstSourceSet = LoggedSet(
+            orderIndex: 0,
+            weight: 185,
+            reps: 5,
+            isCompleted: true,
+            completedAt: selectedSource.startedAt
         )
+        firstSourceBench.sets.append(firstSourceSet)
         let secondSourceBench = LoggedExercise(orderIndex: 1, exercise: exercise)
-        secondSourceBench.sets.append(
-            LoggedSet(orderIndex: 0, weight: 195, reps: 3, isCompleted: true, completedAt: selectedSource.startedAt)
+        let secondSourceSet = LoggedSet(
+            orderIndex: 0,
+            weight: 195,
+            reps: 3,
+            isCompleted: true,
+            completedAt: selectedSource.startedAt
         )
+        secondSourceBench.sets.append(secondSourceSet)
         selectedSource.loggedExercises.append(contentsOf: [firstSourceBench, secondSourceBench])
         context.insert(selectedSource)
         context.insert(firstSourceBench)
@@ -663,11 +824,13 @@ final class PreviousSetPerformanceTests: XCTestCase {
             exercise: exercise,
             sourceLoggedExerciseID: firstSourceBench.id
         )
+        firstActiveBench.sets.append(LoggedSet(orderIndex: 0, sourceLoggedSetID: firstSourceSet.id))
         let secondActiveBench = LoggedExercise(
             orderIndex: 1,
             exercise: exercise,
             sourceLoggedExerciseID: secondSourceBench.id
         )
+        secondActiveBench.sets.append(LoggedSet(orderIndex: 0, sourceLoggedSetID: secondSourceSet.id))
         active.loggedExercises.append(contentsOf: [firstActiveBench, secondActiveBench])
         context.insert(active)
         context.insert(firstActiveBench)
@@ -708,13 +871,23 @@ final class PreviousSetPerformanceTests: XCTestCase {
             source: .blank
         )
         let firstSourceBench = LoggedExercise(orderIndex: 0, exercise: exercise)
-        firstSourceBench.sets.append(
-            LoggedSet(orderIndex: 0, weight: 185, reps: 5, isCompleted: true, completedAt: selectedSource.startedAt)
+        let firstSourceSet = LoggedSet(
+            orderIndex: 0,
+            weight: 185,
+            reps: 5,
+            isCompleted: true,
+            completedAt: selectedSource.startedAt
         )
+        firstSourceBench.sets.append(firstSourceSet)
         let secondSourceBench = LoggedExercise(orderIndex: 1, exercise: exercise)
-        secondSourceBench.sets.append(
-            LoggedSet(orderIndex: 0, weight: 195, reps: 3, isCompleted: true, completedAt: selectedSource.startedAt)
+        let secondSourceSet = LoggedSet(
+            orderIndex: 0,
+            weight: 195,
+            reps: 3,
+            isCompleted: true,
+            completedAt: selectedSource.startedAt
         )
+        secondSourceBench.sets.append(secondSourceSet)
         selectedSource.loggedExercises.append(contentsOf: [firstSourceBench, secondSourceBench])
         context.insert(selectedSource)
         context.insert(firstSourceBench)
@@ -733,11 +906,15 @@ final class PreviousSetPerformanceTests: XCTestCase {
             sourceLoggedExerciseID: firstSourceBench.id,
             deletedAt: Date(timeIntervalSince1970: 250)
         )
+        deletedFirstActiveBench.sets.append(
+            LoggedSet(orderIndex: 0, deletedAt: Date(timeIntervalSince1970: 250), sourceLoggedSetID: firstSourceSet.id)
+        )
         let remainingSecondActiveBench = LoggedExercise(
             orderIndex: 0,
             exercise: exercise,
             sourceLoggedExerciseID: secondSourceBench.id
         )
+        remainingSecondActiveBench.sets.append(LoggedSet(orderIndex: 0, sourceLoggedSetID: secondSourceSet.id))
         active.loggedExercises.append(contentsOf: [deletedFirstActiveBench, remainingSecondActiveBench])
         context.insert(active)
         context.insert(deletedFirstActiveBench)
@@ -848,12 +1025,18 @@ final class PreviousSetPerformanceTests: XCTestCase {
             source: .blank
         )
         let sourceSquat = LoggedExercise(orderIndex: 0, exercise: exercise)
-        sourceSquat.sets.append(
-            LoggedSet(orderIndex: 0, isCompleted: false)
+        let incompleteSourceSet = LoggedSet(
+            orderIndex: 0,
+            isCompleted: false
         )
-        sourceSquat.sets.append(
-            LoggedSet(orderIndex: 1, weight: 225, reps: 5, isCompleted: true, completedAt: selectedSource.startedAt)
+        let completedSourceSet = LoggedSet(
+            orderIndex: 1,
+            weight: 225,
+            reps: 5,
+            isCompleted: true,
+            completedAt: selectedSource.startedAt
         )
+        sourceSquat.sets.append(contentsOf: [incompleteSourceSet, completedSourceSet])
         selectedSource.loggedExercises.append(sourceSquat)
         context.insert(selectedSource)
         context.insert(sourceSquat)
@@ -865,7 +1048,15 @@ final class PreviousSetPerformanceTests: XCTestCase {
             source: .pastWorkout,
             sourceSessionID: selectedSource.id
         )
-        let activeSquat = LoggedExercise(orderIndex: 0, exercise: exercise)
+        let activeSquat = LoggedExercise(
+            orderIndex: 0,
+            exercise: exercise,
+            sourceLoggedExerciseID: sourceSquat.id
+        )
+        activeSquat.sets.append(contentsOf: [
+            LoggedSet(orderIndex: 0, sourceLoggedSetID: incompleteSourceSet.id),
+            LoggedSet(orderIndex: 1, sourceLoggedSetID: completedSourceSet.id),
+        ])
         active.loggedExercises.append(activeSquat)
         context.insert(active)
         context.insert(activeSquat)

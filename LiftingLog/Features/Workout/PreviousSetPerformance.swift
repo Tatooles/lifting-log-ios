@@ -96,26 +96,16 @@ struct PreviousSetPerformance: Equatable {
             return Dictionary(uniqueKeysWithValues: loggedExercises.map { ($0.id, []) })
         }
 
-        let sourceEntriesByRouteID = Dictionary(grouping: sourceSession.sortedLoggedExercises) { loggedExercise in
-            ExerciseHistoryRoute(loggedExercise: loggedExercise).id
-        }
         let sourceEntriesByID = Dictionary(
             uniqueKeysWithValues: sourceSession.sortedLoggedExercises.map { ($0.id, $0) }
         )
 
-        // Modern clones link each cloned exercise to its source entry. When any
-        // link is present, an exercise without one was added after cloning, so it
-        // uses normal history (like a blank workout) rather than the legacy
-        // occurrence fallback, which would reuse a cloned source exercise's sets.
-        let hasLinkedExercise = loggedExercises.contains { $0.sourceLoggedExerciseID != nil }
-        let historyForAddedExercises = hasLinkedExercise
-            ? lastCompletedSetsByExerciseIDFromHistory(
-                for: loggedExercises.filter { $0.sourceLoggedExerciseID == nil },
-                in: sessions,
-                ownerTokenIdentifier: ownerTokenIdentifier
-            )
-            : [:]
-        var consumedSourceEntryCountByRouteID: [String: Int] = [:]
+        let unlinkedExercises = loggedExercises.filter { $0.sourceLoggedExerciseID == nil }
+        let historyForUnlinkedExercises = lastCompletedSetsByExerciseIDFromHistory(
+            for: unlinkedExercises,
+            in: sessions,
+            ownerTokenIdentifier: ownerTokenIdentifier
+        )
 
         return Dictionary(
             uniqueKeysWithValues: loggedExercises.map { loggedExercise in
@@ -127,21 +117,7 @@ struct PreviousSetPerformance: Equatable {
                     )
                 }
 
-                if hasLinkedExercise {
-                    return (loggedExercise.id, historyForAddedExercises[loggedExercise.id] ?? [])
-                }
-
-                // Legacy clone (no stable links): best-effort occurrence mapping.
-                let routeID = ExerciseHistoryRoute(loggedExercise: loggedExercise).id
-                let sourceIndex = consumedSourceEntryCountByRouteID[routeID, default: 0]
-                consumedSourceEntryCountByRouteID[routeID] = sourceIndex + 1
-
-                let sourceEntries = sourceEntriesByRouteID[routeID] ?? []
-                let sourceLoggedExercise = sourceIndex < sourceEntries.count ? sourceEntries[sourceIndex] : nil
-                return (
-                    loggedExercise.id,
-                    sourceLoggedExercise.map { sourceSetPerformances(for: loggedExercise, in: $0) } ?? []
-                )
+                return (loggedExercise.id, historyForUnlinkedExercises[loggedExercise.id] ?? [])
             }
         )
     }
@@ -189,10 +165,8 @@ struct PreviousSetPerformance: Equatable {
     ) -> [PreviousSetPerformance] {
         let activeSets = activeLoggedExercise.sortedSets
 
-        // Legacy clones (created before sets carried a stable source link) and
-        // lower-level callers without active rows fall back to source order.
         guard let lastLinkedIndex = activeSets.lastIndex(where: { $0.sourceLoggedSetID != nil }) else {
-            return setPerformances(for: sourceLoggedExercise)
+            return []
         }
 
         // Align each cloned row to its specific source set so rows keep their own
@@ -212,11 +186,6 @@ struct PreviousSetPerformance: Equatable {
 
             return PreviousSetPerformance(weight: nil, reps: nil)
         }
-    }
-
-    private static func setPerformances(for loggedExercise: LoggedExercise) -> [PreviousSetPerformance] {
-        loggedExercise.sortedSets
-            .map { makePerformance(from: $0) }
     }
 
     private static func makePerformance(from set: LoggedSet) -> PreviousSetPerformance {
