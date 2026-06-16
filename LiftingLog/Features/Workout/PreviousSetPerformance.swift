@@ -161,24 +161,23 @@ struct PreviousSetPerformance: Equatable {
 
         // Legacy clones (created before sets carried a stable source link) and
         // lower-level callers without active rows fall back to source order.
-        guard activeSets.contains(where: { $0.sourceLoggedSetID != nil }) else {
+        guard let lastLinkedIndex = activeSets.lastIndex(where: { $0.sourceLoggedSetID != nil }) else {
             return setPerformances(for: sourceLoggedExercise)
         }
 
-        // Align each active row to its specific source set so cloned rows keep
-        // their own previous values even after an earlier row is deleted or the
-        // rows are reordered. Rows added after cloning have no source set.
-        let sourceSets = sourceLoggedExercise.sortedSets
-        let sourceSetsByID = Dictionary(uniqueKeysWithValues: sourceSets.map { ($0.id, $0) })
+        // Align each cloned row to its specific source set so rows keep their own
+        // previous values even after an earlier row is deleted or the rows are
+        // reordered. Rows added after cloning carry no source link and always sort
+        // after the cloned rows, so dropping everything past the last linked row
+        // leaves them with no previous value rather than reusing a source set.
+        let sourceSetsByID = Dictionary(
+            uniqueKeysWithValues: sourceLoggedExercise.sortedSets.map { ($0.id, $0) }
+        )
 
-        return activeSets.enumerated().map { index, activeSet in
+        return activeSets.prefix(through: lastLinkedIndex).map { activeSet in
             if let sourceSetID = activeSet.sourceLoggedSetID,
                let sourceSet = sourceSetsByID[sourceSetID] {
                 return makePerformance(from: sourceSet)
-            }
-
-            if index < sourceSets.count {
-                return makePerformance(from: sourceSets[index])
             }
 
             return PreviousSetPerformance(weight: nil, reps: nil)
