@@ -68,6 +68,7 @@ export const loggedExercisePayloadValidator = v.object({
   hasSnapshotMetadata: v.optional(v.boolean()),
   notes: v.string(),
   referenceNotes: nullableString,
+  sourceLoggedExerciseID: v.optional(nullableString),
 });
 
 export const loggedSetPayloadValidator = v.object({
@@ -77,9 +78,6 @@ export const loggedSetPayloadValidator = v.object({
   weight: nullableNumber,
   reps: nullableNumber,
   rpe: nullableNumber,
-  placeholderWeight: nullableNumber,
-  placeholderReps: nullableNumber,
-  placeholderRPE: nullableNumber,
   kindRaw: v.union(
     v.literal("working"),
     v.literal("warmup"),
@@ -90,4 +88,5 @@ export const loggedSetPayloadValidator = v.object({
   completedAt: nullableNumber,
   notes: v.string(),
   healthLinkID: nullableString,
+  sourceLoggedSetID: v.optional(nullableString),
 });

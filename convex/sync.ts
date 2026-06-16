@@ -251,6 +251,7 @@ function normalizeLoggedExercisePayload(
       defaultExerciseSnapshotPrimaryMuscleGroupRaw,
     hasSnapshotMetadata:
       record.hasSnapshotMetadata ?? defaultHasSnapshotMetadata,
+    sourceLoggedExerciseID: record.sourceLoggedExerciseID ?? null,
   };
 }
 
@@ -266,6 +267,7 @@ function normalizeLoggedExerciseRecord(
       defaultExerciseSnapshotPrimaryMuscleGroupRaw,
     hasSnapshotMetadata:
       record.hasSnapshotMetadata ?? defaultHasSnapshotMetadata,
+    sourceLoggedExerciseID: record.sourceLoggedExerciseID ?? null,
   };
 }
 
@@ -287,6 +289,8 @@ function normalizeLoggedExerciseUpdatePayload(
       record.hasSnapshotMetadata ??
       existing.hasSnapshotMetadata ??
       defaultHasSnapshotMetadata,
+    sourceLoggedExerciseID:
+      record.sourceLoggedExerciseID ?? existing.sourceLoggedExerciseID ?? null,
   };
 }
 

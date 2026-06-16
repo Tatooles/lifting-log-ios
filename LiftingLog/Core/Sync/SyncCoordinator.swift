@@ -1108,6 +1108,7 @@ final class SyncCoordinator {
                     exerciseSnapshotPrimaryMuscleGroupRaw: record.exerciseSnapshotPrimaryMuscleGroupRaw,
                     notes: record.notes,
                     referenceNotes: record.referenceNotes,
+                    sourceLoggedExerciseID: record.sourceLoggedExerciseID.flatMap(UUID.init(uuidString:)),
                     createdAt: Date(timeIntervalSince1970: record.createdAt),
                     updatedAt: incomingUpdatedAt,
                     deletedAt: incomingDeletedAt
@@ -1136,6 +1137,7 @@ final class SyncCoordinator {
         loggedExercise.hasSnapshotMetadata = record.hasSnapshotMetadata
         loggedExercise.notes = record.notes
         loggedExercise.referenceNotes = record.referenceNotes
+        loggedExercise.sourceLoggedExerciseID = record.sourceLoggedExerciseID.flatMap(UUID.init(uuidString:))
         loggedExercise.createdAt = Date(timeIntervalSince1970: record.createdAt)
         loggedExercise.updatedAt = Date(timeIntervalSince1970: record.updatedAt)
         loggedExercise.deletedAt = record.deletedAt.map(Date.init(timeIntervalSince1970:))
@@ -1197,9 +1199,6 @@ final class SyncCoordinator {
                     weight: record.weight,
                     reps: record.reps,
                     rpe: record.rpe,
-                    placeholderWeight: record.placeholderWeight,
-                    placeholderReps: record.placeholderReps,
-                    placeholderRPE: record.placeholderRPE,
                     kind: SetKind(rawValue: record.kindRaw) ?? .working,
                     isCompleted: record.isCompleted,
                     completedAt: record.completedAt.map(Date.init(timeIntervalSince1970:)),
@@ -1207,7 +1206,8 @@ final class SyncCoordinator {
                     createdAt: Date(timeIntervalSince1970: record.createdAt),
                     updatedAt: incomingUpdatedAt,
                     deletedAt: incomingDeletedAt,
-                    healthLinkID: record.healthLinkID.flatMap(UUID.init(uuidString:))
+                    healthLinkID: record.healthLinkID.flatMap(UUID.init(uuidString:)),
+                    sourceLoggedSetID: record.sourceLoggedSetID.flatMap(UUID.init(uuidString:))
                 )
                 set.loggedExercise = loggedExercise
                 loggedExercise.sets.append(set)
@@ -1223,9 +1223,6 @@ final class SyncCoordinator {
         set.weight = record.weight
         set.reps = record.reps
         set.rpe = record.rpe
-        set.placeholderWeight = record.placeholderWeight
-        set.placeholderReps = record.placeholderReps
-        set.placeholderRPE = record.placeholderRPE
         set.kindRaw = record.kindRaw
         set.isCompleted = record.isCompleted
         set.completedAt = record.completedAt.map(Date.init(timeIntervalSince1970:))
@@ -1234,6 +1231,7 @@ final class SyncCoordinator {
         set.updatedAt = Date(timeIntervalSince1970: record.updatedAt)
         set.deletedAt = record.deletedAt.map(Date.init(timeIntervalSince1970:))
         set.healthLinkID = record.healthLinkID.flatMap(UUID.init(uuidString:))
+        set.sourceLoggedSetID = record.sourceLoggedSetID.flatMap(UUID.init(uuidString:))
         set.loggedExercise = loggedExercise
         if !loggedExercise.sets.contains(where: { $0.id == set.id }) {
             loggedExercise.sets.append(set)

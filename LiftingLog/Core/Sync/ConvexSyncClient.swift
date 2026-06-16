@@ -175,6 +175,7 @@ enum ConvexSyncArgumentMapper {
             "hasSnapshotMetadata": record.hasSnapshotMetadata,
             "notes": record.notes,
             "referenceNotes": record.referenceNotes,
+            "sourceLoggedExerciseID": record.sourceLoggedExerciseID,
         ]
     }
 
@@ -189,14 +190,12 @@ enum ConvexSyncArgumentMapper {
             "weight": record.weight,
             "reps": record.reps.map(Double.init),
             "rpe": record.rpe,
-            "placeholderWeight": record.placeholderWeight,
-            "placeholderReps": record.placeholderReps.map(Double.init),
-            "placeholderRPE": record.placeholderRPE,
             "kindRaw": record.kindRaw,
             "isCompleted": record.isCompleted,
             "completedAt": record.completedAt,
             "notes": record.notes,
             "healthLinkID": record.healthLinkID,
+            "sourceLoggedSetID": record.sourceLoggedSetID,
         ]
     }
 

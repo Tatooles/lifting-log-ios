@@ -8,9 +8,6 @@ final class LoggedSet: Identifiable {
     var weight: Double?
     var reps: Int?
     var rpe: Double?
-    var placeholderWeight: Double?
-    var placeholderReps: Int?
-    var placeholderRPE: Double?
     var kindRaw: String
     var isCompleted: Bool
     var completedAt: Date?
@@ -19,6 +16,7 @@ final class LoggedSet: Identifiable {
     var updatedAt: Date
     var deletedAt: Date?
     var healthLinkID: UUID?
+    var sourceLoggedSetID: UUID?
     var loggedExercise: LoggedExercise?
 
     init(
@@ -27,9 +25,6 @@ final class LoggedSet: Identifiable {
         weight: Double? = nil,
         reps: Int? = nil,
         rpe: Double? = nil,
-        placeholderWeight: Double? = nil,
-        placeholderReps: Int? = nil,
-        placeholderRPE: Double? = nil,
         kind: SetKind = .working,
         isCompleted: Bool = false,
         completedAt: Date? = nil,
@@ -37,16 +32,14 @@ final class LoggedSet: Identifiable {
         createdAt: Date = .now,
         updatedAt: Date = .now,
         deletedAt: Date? = nil,
-        healthLinkID: UUID? = nil
+        healthLinkID: UUID? = nil,
+        sourceLoggedSetID: UUID? = nil
     ) {
         self.id = id
         self.orderIndex = orderIndex
         self.weight = weight
         self.reps = reps
         self.rpe = rpe
-        self.placeholderWeight = placeholderWeight
-        self.placeholderReps = placeholderReps
-        self.placeholderRPE = placeholderRPE
         self.kindRaw = kind.rawValue
         self.isCompleted = isCompleted
         self.completedAt = completedAt
@@ -55,6 +48,7 @@ final class LoggedSet: Identifiable {
         self.updatedAt = updatedAt
         self.deletedAt = deletedAt
         self.healthLinkID = healthLinkID
+        self.sourceLoggedSetID = sourceLoggedSetID
     }
 
     var kind: SetKind {

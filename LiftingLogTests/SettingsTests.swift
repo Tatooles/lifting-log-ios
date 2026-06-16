@@ -37,8 +37,6 @@ final class SettingsTests: XCTestCase {
             orderIndex: 0,
             weight: 225,
             reps: 5,
-            placeholderWeight: 185,
-            placeholderReps: 5,
             isCompleted: true,
             updatedAt: originalUpdatedAt
         )
@@ -49,7 +47,6 @@ final class SettingsTests: XCTestCase {
 
         XCTAssertEqual(settings.weightUnit, .kilograms)
         XCTAssertEqual(set.weight, 225)
-        XCTAssertEqual(set.placeholderWeight, 185)
         XCTAssertEqual(set.completedVolume, 1125)
         XCTAssertEqual(set.updatedAt, originalUpdatedAt)
     }
@@ -63,8 +60,6 @@ final class SettingsTests: XCTestCase {
             orderIndex: 0,
             weight: 225,
             reps: 5,
-            placeholderWeight: 225,
-            placeholderReps: 5,
             isCompleted: true,
             updatedAt: Date(timeIntervalSince1970: 100)
         )
@@ -76,7 +71,6 @@ final class SettingsTests: XCTestCase {
         try settings.updateWeightUnit(.kilograms, context: context)
 
         XCTAssertEqual(set.weight, 225)
-        XCTAssertEqual(set.placeholderWeight, 225)
         XCTAssertEqual(set.updatedAt, deletedAt)
         XCTAssertEqual(set.deletedAt, deletedAt)
     }
