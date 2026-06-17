@@ -61,7 +61,9 @@ final class LiftingLogUITests: XCTestCase {
 
         let secondWeightField = app.textFields["SetWeightField-0-1"]
         XCTAssertTrue(secondWeightField.waitForExistence(timeout: 3))
-        XCTAssertEqual(secondWeightField.value as? String, "185")
+        // Adding a set creates a blank row and moves focus to its weight field,
+        // so it shows the unit placeholder rather than carrying the prior value.
+        XCTAssertEqual(secondWeightField.value as? String, "LBS")
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3))
     }
 
@@ -285,6 +287,12 @@ final class LiftingLogUITests: XCTestCase {
 
         XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
         XCTAssertEqual(app.textFields["WorkoutTitle"].value as? String, "Past Push")
+        let previousValue = app.buttons["SetPreviousValue-0-0"]
+        XCTAssertTrue(previousValue.waitForExistence(timeout: 3))
+        XCTAssertEqual(previousValue.label, "Previous: 185 × 5")
+        XCTAssertEqual(app.textFields["SetWeightField-0-0"].value as? String, "LBS")
+        XCTAssertEqual(app.textFields["SetRepsField-0-0"].value as? String, "REPS")
+        previousValue.tap()
         XCTAssertEqual(app.textFields["SetWeightField-0-0"].value as? String, "185")
         XCTAssertEqual(app.textFields["SetRepsField-0-0"].value as? String, "5")
         XCTAssertTrue(app.buttons["SetCompletionButton-0-0"].exists)
@@ -292,28 +300,10 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
-    func testCompletingClonedSetWhileWeightFieldIsFocusedCommitsPlaceholders() {
-        assertCompletingClonedSetCommitsPlaceholdersAfterFocusing(fieldIdentifier: "SetWeightField-0-0")
-    }
-
-    @MainActor
-    func testCompletingClonedSetWhileRPEFieldIsFocusedCommitsPlaceholders() {
-        assertCompletingClonedSetCommitsPlaceholdersAfterFocusing(fieldIdentifier: "SetRPEField-0-0")
-    }
-
-    @MainActor
     func testClearingCompletedWeightRemovesLoggedWeight() {
         assertClearingCompletedSetField(
             fieldIdentifier: "SetWeightField-0-0",
             expectedHistorySummary: "- x 5 @ 8"
-        )
-    }
-
-    @MainActor
-    func testClearingCompletedRPERemovesLoggedRPE() {
-        assertClearingCompletedSetField(
-            fieldIdentifier: "SetRPEField-0-0",
-            expectedHistorySummary: "185 x 5"
         )
     }
 
@@ -393,6 +383,11 @@ final class LiftingLogUITests: XCTestCase {
         app.buttons["AddSetButton-0"].tap()
         let secondWeightField = app.textFields["SetWeightField-0-1"]
         XCTAssertTrue(secondWeightField.waitForExistence(timeout: 3))
+        // A newly added set is blank, so it shows the kilogram placeholder.
+        XCTAssertEqual(secondWeightField.value as? String, "KG")
+        secondWeightField.tap()
+        secondWeightField.typeText("100")
+        dismissKeyboardIfNeeded(in: app)
         XCTAssertEqual(secondWeightField.value as? String, "100")
 
         app.buttons["ProfileTab"].tap()
@@ -708,6 +703,7 @@ final class LiftingLogUITests: XCTestCase {
         replaceText(in: app.textFields["WorkoutTitle"], with: title)
         addBenchPress(in: app)
         fillFirstBenchSet(in: app)
+        enterRPEViaChips("8", in: app)
         app.buttons["SetCompletionButton-0-0"].tap()
         dismissKeyboardIfNeeded(in: app)
         openFinishWorkoutSheet(in: app)
@@ -739,43 +735,13 @@ final class LiftingLogUITests: XCTestCase {
         app.textFields["SetWeightField-0-0"].typeText(weight)
         app.textFields["SetRepsField-0-0"].tap()
         app.textFields["SetRepsField-0-0"].typeText(reps)
-        app.textFields["SetRPEField-0-0"].tap()
-        app.textFields["SetRPEField-0-0"].typeText(rpe)
+        enterRPEViaChips(rpe, in: app)
         app.buttons["SetCompletionButton-0-0"].tap()
         dismissKeyboardIfNeeded(in: app)
         openFinishWorkoutSheet(in: app)
         XCTAssertTrue(app.buttons["SaveWorkoutButton"].waitForExistence(timeout: 3))
         app.buttons["SaveWorkoutButton"].tap()
         XCTAssertTrue(app.staticTexts["StartWorkoutTitle"].waitForExistence(timeout: 3))
-    }
-
-    @MainActor
-    private func assertCompletingClonedSetCommitsPlaceholdersAfterFocusing(fieldIdentifier: String) {
-        let app = makeApp()
-        app.launch()
-
-        createCompletedBenchWorkout(in: app, title: "Focused Clone")
-
-        app.buttons["WorkoutTab"].tap()
-        XCTAssertTrue(app.buttons["PastWorkoutButton-0"].waitForExistence(timeout: 3))
-        app.buttons["PastWorkoutButton-0"].tap()
-        XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
-
-        app.textFields[fieldIdentifier].tap()
-        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3))
-        app.buttons["SetCompletionButton-0-0"].tap()
-        dismissKeyboardIfNeeded(in: app)
-
-        openFinishWorkoutSheet(in: app)
-        XCTAssertTrue(app.buttons["SaveWorkoutButton"].waitForExistence(timeout: 3))
-        app.buttons["SaveWorkoutButton"].tap()
-
-        app.buttons["HistoryTab"].tap()
-        XCTAssertTrue(app.staticTexts["HistoryTitle"].waitForExistence(timeout: 3))
-        app.segmentedControls["HistoryModePicker"].buttons["Exercises"].tap()
-        XCTAssertTrue(app.buttons["ExerciseHistoryButton-0"].waitForExistence(timeout: 3))
-        app.buttons["ExerciseHistoryButton-0"].tap()
-        XCTAssertTrue(app.staticTexts["185 x 5 @ 8"].waitForExistence(timeout: 3))
     }
 
     @MainActor
@@ -787,6 +753,7 @@ final class LiftingLogUITests: XCTestCase {
         XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
         addBenchPress(in: app)
         fillFirstBenchSet(in: app)
+        enterRPEViaChips("8", in: app)
         app.buttons["SetCompletionButton-0-0"].tap()
 
         replaceText(in: app.textFields[fieldIdentifier], with: "")
@@ -816,8 +783,14 @@ final class LiftingLogUITests: XCTestCase {
         app.textFields["SetWeightField-0-0"].typeText("185")
         app.textFields["SetRepsField-0-0"].tap()
         app.textFields["SetRepsField-0-0"].typeText("5")
-        app.textFields["SetRPEField-0-0"].tap()
-        app.textFields["SetRPEField-0-0"].typeText("8")
+    }
+
+    @MainActor
+    private func enterRPEViaChips(_ value: String, in app: XCUIApplication) {
+        XCTAssertTrue(app.buttons["RPEToolbarButton"].waitForExistence(timeout: 3))
+        app.buttons["RPEToolbarButton"].tap()
+        XCTAssertTrue(app.buttons["RPEChip-\(value)"].waitForExistence(timeout: 3))
+        app.buttons["RPEChip-\(value)"].tap()
     }
 
     @MainActor

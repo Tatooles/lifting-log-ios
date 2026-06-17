@@ -94,6 +94,7 @@ export default defineSchema({
     hasSnapshotMetadata: v.optional(v.boolean()),
     notes: v.string(),
     referenceNotes: nullableString,
+    sourceLoggedExerciseID: v.optional(nullableString),
   })
     .index("by_ownerTokenIdentifier_and_clientId", [
       "ownerTokenIdentifier",
@@ -115,9 +116,6 @@ export default defineSchema({
     weight: nullableNumber,
     reps: nullableNumber,
     rpe: nullableNumber,
-    placeholderWeight: nullableNumber,
-    placeholderReps: nullableNumber,
-    placeholderRPE: nullableNumber,
     kindRaw: v.union(
       v.literal("working"),
       v.literal("warmup"),
@@ -128,6 +126,7 @@ export default defineSchema({
     completedAt: nullableNumber,
     notes: v.string(),
     healthLinkID: nullableString,
+    sourceLoggedSetID: v.optional(nullableString),
   })
     .index("by_ownerTokenIdentifier_and_clientId", [
       "ownerTokenIdentifier",

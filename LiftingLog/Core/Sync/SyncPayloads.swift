@@ -57,6 +57,7 @@ struct LoggedExerciseSyncPayload: Codable, Equatable {
     let hasSnapshotMetadata: Bool
     let notes: String
     let referenceNotes: String?
+    let sourceLoggedExerciseID: String?
 }
 
 struct LoggedSetSyncPayload: Codable, Equatable {
@@ -69,14 +70,12 @@ struct LoggedSetSyncPayload: Codable, Equatable {
     let weight: Double?
     let reps: Int?
     let rpe: Double?
-    let placeholderWeight: Double?
-    let placeholderReps: Int?
-    let placeholderRPE: Double?
     let kindRaw: String
     let isCompleted: Bool
     let completedAt: Double?
     let notes: String
     let healthLinkID: String?
+    let sourceLoggedSetID: String?
 }
 
 enum SyncPayloadMapper {
@@ -143,7 +142,8 @@ enum SyncPayloadMapper {
             exerciseSnapshotPrimaryMuscleGroupRaw: loggedExercise.effectiveSnapshotPrimaryMuscleGroupRaw,
             hasSnapshotMetadata: loggedExercise.hasSnapshotMetadata,
             notes: loggedExercise.notes,
-            referenceNotes: loggedExercise.referenceNotes
+            referenceNotes: loggedExercise.referenceNotes,
+            sourceLoggedExerciseID: loggedExercise.sourceLoggedExerciseID?.uuidString.lowercased()
         )
     }
 
@@ -158,14 +158,12 @@ enum SyncPayloadMapper {
             weight: set.weight,
             reps: set.reps,
             rpe: set.rpe,
-            placeholderWeight: set.placeholderWeight,
-            placeholderReps: set.placeholderReps,
-            placeholderRPE: set.placeholderRPE,
             kindRaw: set.kindRaw,
             isCompleted: set.isCompleted,
             completedAt: set.completedAt?.timeIntervalSince1970,
             notes: set.notes,
-            healthLinkID: set.healthLinkID?.uuidString.lowercased()
+            healthLinkID: set.healthLinkID?.uuidString.lowercased(),
+            sourceLoggedSetID: set.sourceLoggedSetID?.uuidString.lowercased()
         )
     }
 }
@@ -247,6 +245,7 @@ struct LoggedExerciseSyncRecord: Codable, Equatable {
     let hasSnapshotMetadata: Bool
     let notes: String
     let referenceNotes: String?
+    let sourceLoggedExerciseID: String?
 }
 
 struct LoggedSetSyncRecord: Codable, Equatable {
@@ -260,14 +259,12 @@ struct LoggedSetSyncRecord: Codable, Equatable {
     let weight: Double?
     let reps: Int?
     let rpe: Double?
-    let placeholderWeight: Double?
-    let placeholderReps: Int?
-    let placeholderRPE: Double?
     let kindRaw: String
     let isCompleted: Bool
     let completedAt: Double?
     let notes: String
     let healthLinkID: String?
+    let sourceLoggedSetID: String?
 }
 
 struct SyncFetchChangesResponse: Codable, Equatable {

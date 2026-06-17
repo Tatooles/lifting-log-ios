@@ -165,6 +165,7 @@ final class SyncPayloadMappingTests: XCTestCase {
         let loggedExerciseID = UUID(uuidString: "00000000-0000-0000-0000-000000004201")!
         let setID = UUID(uuidString: "00000000-0000-0000-0000-000000004202")!
         let healthID = UUID(uuidString: "00000000-0000-0000-0000-000000004203")!
+        let sourceSetID = UUID(uuidString: "00000000-0000-0000-0000-000000004204")!
         let loggedExercise = LoggedExercise(id: loggedExerciseID, orderIndex: 0)
         let set = LoggedSet(
             id: setID,
@@ -172,9 +173,6 @@ final class SyncPayloadMappingTests: XCTestCase {
             weight: 185,
             reps: 5,
             rpe: 8.5,
-            placeholderWeight: 175,
-            placeholderReps: 6,
-            placeholderRPE: 7.5,
             kind: .working,
             isCompleted: true,
             completedAt: Date(timeIntervalSince1970: 125),
@@ -182,7 +180,8 @@ final class SyncPayloadMappingTests: XCTestCase {
             createdAt: Date(timeIntervalSince1970: 100),
             updatedAt: Date(timeIntervalSince1970: 130),
             deletedAt: nil,
-            healthLinkID: healthID
+            healthLinkID: healthID,
+            sourceLoggedSetID: sourceSetID
         )
         set.loggedExercise = loggedExercise
 
@@ -194,14 +193,12 @@ final class SyncPayloadMappingTests: XCTestCase {
         XCTAssertEqual(payload.weight, 185)
         XCTAssertEqual(payload.reps, 5)
         XCTAssertEqual(payload.rpe, 8.5)
-        XCTAssertEqual(payload.placeholderWeight, 175)
-        XCTAssertEqual(payload.placeholderReps, 6)
-        XCTAssertEqual(payload.placeholderRPE, 7.5)
         XCTAssertEqual(payload.kindRaw, "working")
         XCTAssertTrue(payload.isCompleted)
         XCTAssertEqual(payload.completedAt, 125)
         XCTAssertEqual(payload.notes, "Solid")
         XCTAssertEqual(payload.healthLinkID, healthID.uuidString.lowercased())
+        XCTAssertEqual(payload.sourceLoggedSetID, sourceSetID.uuidString.lowercased())
         XCTAssertEqual(payload.createdAt, 100)
         XCTAssertEqual(payload.updatedAt, 130)
         XCTAssertNil(payload.deletedAt)
@@ -213,14 +210,11 @@ final class SyncPayloadMappingTests: XCTestCase {
             orderIndex: 0,
             weight: MeasurementUnit.kilograms.canonicalWeight(fromDisplayWeight: 100),
             reps: 5,
-            placeholderWeight: MeasurementUnit.kilograms.canonicalWeight(fromDisplayWeight: 80),
-            placeholderReps: 5,
             isCompleted: true
         )
 
         let payload = SyncPayloadMapper.loggedSetPayload(from: set)
 
         XCTAssertEqual(payload.weight ?? 0, 220.462262185, accuracy: 0.000_001)
-        XCTAssertEqual(payload.placeholderWeight ?? 0, 176.369809748, accuracy: 0.000_001)
     }
 }

@@ -90,6 +90,7 @@ function loggedExerciseRecord(
     hasSnapshotMetadata: true,
     notes: "",
     referenceNotes: null,
+    sourceLoggedExerciseID: null,
     createdAt: 1,
     updatedAt: 2,
     deletedAt: null,
@@ -127,9 +128,6 @@ function loggedSetRecord(overrides: Partial<LoggedSetRecord> = {}): LoggedSetRec
     weight: 135,
     reps: 10,
     rpe: 8,
-    placeholderWeight: null,
-    placeholderReps: null,
-    placeholderRPE: null,
     kindRaw: "working",
     isCompleted: true,
     completedAt: 2,
@@ -196,6 +194,7 @@ type LoggedExerciseRecord = {
   hasSnapshotMetadata: boolean;
   notes: string;
   referenceNotes: string | null;
+  sourceLoggedExerciseID: string | null;
   createdAt: number;
   updatedAt: number;
   deletedAt: number | null;
@@ -208,9 +207,6 @@ type LoggedSetRecord = {
   weight: number | null;
   reps: number | null;
   rpe: number | null;
-  placeholderWeight: number | null;
-  placeholderReps: number | null;
-  placeholderRPE: number | null;
   kindRaw: "working" | "warmup" | "drop" | "failure";
   isCompleted: boolean;
   completedAt: number | null;
@@ -336,9 +332,6 @@ describe("account data deletion", () => {
           weight: 135,
           reps: 10,
           rpe: 8,
-          placeholderWeight: null,
-          placeholderReps: null,
-          placeholderRPE: null,
           kindRaw: "working",
           isCompleted: true,
           completedAt: 2,
@@ -402,9 +395,6 @@ describe("account data deletion", () => {
           weight: 135,
           reps: 10,
           rpe: 8,
-          placeholderWeight: null,
-          placeholderReps: null,
-          placeholderRPE: null,
           kindRaw: "working",
           isCompleted: true,
           completedAt: 2,
@@ -1158,6 +1148,7 @@ describe("sync change cursors", () => {
       record: loggedExerciseRecord({
         notes: "Smooth",
         referenceNotes: "Add five pounds",
+        sourceLoggedExerciseID: "source-logged-exercise-1",
         updatedAt: 4,
       }),
     });
@@ -1166,9 +1157,6 @@ describe("sync change cursors", () => {
         weight: 185,
         reps: 5,
         rpe: 8.5,
-        placeholderWeight: 180,
-        placeholderReps: 5,
-        placeholderRPE: 8,
         completedAt: 2,
         notes: "Clean reps",
         updatedAt: 5,
@@ -1203,6 +1191,7 @@ describe("sync change cursors", () => {
       hasSnapshotMetadata: true,
       notes: "Smooth",
       referenceNotes: "Add five pounds",
+      sourceLoggedExerciseID: "source-logged-exercise-1",
     });
     expect(changes.loggedSets[0]).toMatchObject({
       clientId: "logged-set-1",
@@ -1211,9 +1200,6 @@ describe("sync change cursors", () => {
       weight: 185,
       reps: 5,
       rpe: 8.5,
-      placeholderWeight: 180,
-      placeholderReps: 5,
-      placeholderRPE: 8,
       kindRaw: "working",
       isCompleted: true,
       completedAt: 2,

@@ -917,7 +917,8 @@ final class SyncCoordinatorTests: XCTestCase {
                         exerciseSnapshotPrimaryMuscleGroupRaw: "chest",
                         hasSnapshotMetadata: true,
                         notes: "Paused",
-                        referenceNotes: nil
+                        referenceNotes: nil,
+                        sourceLoggedExerciseID: nil
                     )
                 ],
                 loggedSets: [
@@ -932,14 +933,12 @@ final class SyncCoordinatorTests: XCTestCase {
                         weight: 185,
                         reps: 5,
                         rpe: 8,
-                        placeholderWeight: nil,
-                        placeholderReps: nil,
-                        placeholderRPE: nil,
                         kindRaw: "working",
                         isCompleted: true,
                         completedAt: 190,
                         notes: "",
-                        healthLinkID: nil
+                        healthLinkID: nil,
+                        sourceLoggedSetID: nil
                     )
                 ],
                 cursors: SyncChangeCursors(
@@ -1093,14 +1092,12 @@ final class SyncCoordinatorTests: XCTestCase {
                         weight: 100,
                         reps: 5,
                         rpe: nil,
-                        placeholderWeight: nil,
-                        placeholderReps: nil,
-                        placeholderRPE: nil,
                         kindRaw: "working",
                         isCompleted: true,
                         completedAt: nil,
                         notes: "",
-                        healthLinkID: nil
+                        healthLinkID: nil,
+                        sourceLoggedSetID: nil
                     )
                 ],
                 cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 0, loggedExercises: 0, loggedSets: 50),
@@ -1169,7 +1166,8 @@ final class SyncCoordinatorTests: XCTestCase {
                         exerciseSnapshotPrimaryMuscleGroupRaw: "chest",
                         hasSnapshotMetadata: true,
                         notes: "",
-                        referenceNotes: nil
+                        referenceNotes: nil,
+                        sourceLoggedExerciseID: nil
                     )
                 ],
                 loggedSets: [],
@@ -1222,7 +1220,8 @@ final class SyncCoordinatorTests: XCTestCase {
                         exerciseSnapshotPrimaryMuscleGroupRaw: "chest",
                         hasSnapshotMetadata: true,
                         notes: "",
-                        referenceNotes: nil
+                        referenceNotes: nil,
+                        sourceLoggedExerciseID: nil
                     )
                 ],
                 loggedSets: [],
@@ -1312,7 +1311,8 @@ final class SyncCoordinatorTests: XCTestCase {
                         exerciseSnapshotPrimaryMuscleGroupRaw: "chest",
                         hasSnapshotMetadata: true,
                         notes: "",
-                        referenceNotes: nil
+                        referenceNotes: nil,
+                        sourceLoggedExerciseID: nil
                     )
                 ],
                 loggedSets: [],
@@ -1362,7 +1362,8 @@ final class SyncCoordinatorTests: XCTestCase {
                         exerciseSnapshotPrimaryMuscleGroupRaw: "other",
                         hasSnapshotMetadata: false,
                         notes: "",
-                        referenceNotes: nil
+                        referenceNotes: nil,
+                        sourceLoggedExerciseID: nil
                     )
                 ],
                 loggedSets: [],
@@ -1406,7 +1407,8 @@ final class SyncCoordinatorTests: XCTestCase {
                         exerciseSnapshotPrimaryMuscleGroupRaw: "back",
                         hasSnapshotMetadata: true,
                         notes: "",
-                        referenceNotes: nil
+                        referenceNotes: nil,
+                        sourceLoggedExerciseID: nil
                     )
                 ],
                 loggedSets: [],
@@ -1453,14 +1455,12 @@ final class SyncCoordinatorTests: XCTestCase {
                         weight: nil,
                         reps: nil,
                         rpe: nil,
-                        placeholderWeight: nil,
-                        placeholderReps: nil,
-                        placeholderRPE: nil,
                         kindRaw: "working",
                         isCompleted: false,
                         completedAt: nil,
                         notes: "",
-                        healthLinkID: nil
+                        healthLinkID: nil,
+                        sourceLoggedSetID: nil
                     )
                 ],
                 cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 0, loggedExercises: 0, loggedSets: 60),
@@ -1503,7 +1503,8 @@ final class SyncCoordinatorTests: XCTestCase {
                         exerciseSnapshotPrimaryMuscleGroupRaw: "legs",
                         hasSnapshotMetadata: true,
                         notes: "",
-                        referenceNotes: nil
+                        referenceNotes: nil,
+                        sourceLoggedExerciseID: nil
                     )
                 ],
                 loggedSets: [
@@ -1518,14 +1519,12 @@ final class SyncCoordinatorTests: XCTestCase {
                         weight: 225,
                         reps: 5,
                         rpe: nil,
-                        placeholderWeight: nil,
-                        placeholderReps: nil,
-                        placeholderRPE: nil,
                         kindRaw: "working",
                         isCompleted: true,
                         completedAt: nil,
                         notes: "",
-                        healthLinkID: nil
+                        healthLinkID: nil,
+                        sourceLoggedSetID: nil
                     )
                 ],
                 cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 70, loggedExercises: 80, loggedSets: 90),
@@ -1567,14 +1566,12 @@ final class SyncCoordinatorTests: XCTestCase {
                         weight: 100,
                         reps: 5,
                         rpe: nil,
-                        placeholderWeight: nil,
-                        placeholderReps: nil,
-                        placeholderRPE: nil,
                         kindRaw: "working",
                         isCompleted: true,
                         completedAt: nil,
                         notes: "",
-                        healthLinkID: nil
+                        healthLinkID: nil,
+                        sourceLoggedSetID: nil
                     )
                 ],
                 cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 0, loggedExercises: 0, loggedSets: 50),

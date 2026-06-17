@@ -7,11 +7,11 @@ enum WorkoutField: Hashable {
     case exerciseNotes(UUID)
     case setWeight(UUID)
     case setReps(UUID)
-    case setRPE(UUID)
 }
 
 struct WorkoutSessionView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(SyncScheduler.self) private var syncScheduler
     let session: WorkoutSession
     @Bindable var engine: ActiveWorkoutEngine
     @Bindable var navigationState: AppNavigationState
@@ -23,103 +23,114 @@ struct WorkoutSessionView: View {
     @State private var pendingScrollTarget: UUID?
     @State private var recentlyAddedExerciseID: UUID?
     @State private var collapsedExerciseIDs: Set<UUID> = []
+    @State private var rpeEditingSetID: UUID?
+    @State private var rpeEditingSourceField: WorkoutField?
     @FocusState private var focusedField: WorkoutField?
+    @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
     private let contentBottomPadding: CGFloat = 120
 
     var body: some View {
+        let previousSetsByExerciseID = previousSetsByExerciseID
+
         ScrollViewReader { scrollProxy in
-            TimelineView(.periodic(from: .now, by: 1)) { timeline in
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 14) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            TextField("Workout Name", text: workoutTitleBinding)
-                                .font(.title.weight(.bold))
-                                .foregroundStyle(AppTheme.textPrimary)
-                                .focused($focusedField, equals: .workoutTitle)
-                                .accessibilityIdentifier("WorkoutTitle")
-                                .id(WorkoutField.workoutTitle)
-                            Text(AppTheme.formatDate(session.startedAt))
-                                .font(.subheadline.weight(.medium))
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        TextField("Workout Name", text: workoutTitleBinding)
+                            .font(.title.weight(.bold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                            .focused($focusedField, equals: .workoutTitle)
+                            .accessibilityIdentifier("WorkoutTitle")
+                            .id(WorkoutField.workoutTitle)
+                        Text(AppTheme.formatDate(session.startedAt))
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                    .padding(.horizontal, 4)
+
+                    ForEach(Array(session.sortedLoggedExercises.enumerated()), id: \.element.id) { exerciseIndex, loggedExercise in
+                        ExerciseCardView(
+                            loggedExercise: loggedExercise,
+                            exerciseIndex: exerciseIndex,
+                            engine: engine,
+                            isCollapsed: isCollapsedBinding(for: loggedExercise),
+                            focusedField: $focusedField,
+                            previousSets: previousSetsByExerciseID[loggedExercise.id] ?? [],
+                            viewHistory: { selectedHistoryExercise = loggedExercise },
+                            onEditRPE: { set in
+                                focusedField = .setReps(set.id)
+                                rpeEditingSourceField = .setReps(set.id)
+                                rpeEditingSetID = set.id
+                            }
+                        )
+                        .id(loggedExercise.id)
+                    }
+
+                    Button {
+                        isAddExercisePresented = true
+                    } label: {
+                        Label("Add Exercise", systemImage: "plus")
+                            .font(.headline)
+                            .foregroundStyle(AppTheme.accentBright)
+                            .frame(maxWidth: .infinity, minHeight: 50)
+                            .background(AppTheme.accentMuted, in: Capsule())
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("AddExerciseButton")
+
+                    SurfaceCard {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("WORKOUT NOTES")
+                                .font(.caption2.weight(.bold))
+                                .tracking(1.8)
                                 .foregroundStyle(AppTheme.textSecondary)
-                        }
-                        .padding(.horizontal, 4)
-
-                        ForEach(Array(session.sortedLoggedExercises.enumerated()), id: \.element.id) { exerciseIndex, loggedExercise in
-                            ExerciseCardView(
-                                loggedExercise: loggedExercise,
-                                exerciseIndex: exerciseIndex,
-                                engine: engine,
-                                isCollapsed: isCollapsedBinding(for: loggedExercise),
-                                focusedField: $focusedField,
-                                viewHistory: { selectedHistoryExercise = loggedExercise }
+                            TextField(
+                                "How did this session feel? Any notes for next time...",
+                                text: workoutNotesBinding,
+                                axis: .vertical
                             )
-                            .id(loggedExercise.id)
-                        }
+                            .font(.subheadline)
+                            .foregroundStyle(AppTheme.textPrimary)
+                            .lineLimit(4...6)
+                            .focused($focusedField, equals: .workoutNotes)
+                            .padding(12)
+                            .background(
+                                AppTheme.fieldFill,
+                                in: RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
+                                    .strokeBorder(
+                                        focusedField == .workoutNotes ? AppTheme.accentBright.opacity(0.7) : .clear,
+                                        lineWidth: 1.5
+                                    )
+                            )
+                            .animation(.easeOut(duration: 0.15), value: focusedField == .workoutNotes)
+                            .id(WorkoutField.workoutNotes)
 
-                        Button {
-                            isAddExercisePresented = true
-                        } label: {
-                            Label("Add Exercise", systemImage: "plus")
-                                .font(.headline)
-                                .foregroundStyle(AppTheme.accentBright)
-                                .frame(maxWidth: .infinity, minHeight: 50)
-                                .background(AppTheme.accentMuted, in: Capsule())
-                                .contentShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("AddExerciseButton")
+                            if let referenceNotes {
+                                Divider()
+                                    .padding(.vertical, 4)
 
-                        SurfaceCard {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("WORKOUT NOTES")
+                                Text("LAST TIME")
                                     .font(.caption2.weight(.bold))
-                                    .tracking(1.8)
+                                    .tracking(1.4)
+                                    .foregroundStyle(AppTheme.textTertiary)
+                                Text(referenceNotes)
+                                    .font(.footnote)
                                     .foregroundStyle(AppTheme.textSecondary)
-                                TextField(
-                                    "How did this session feel? Any notes for next time...",
-                                    text: workoutNotesBinding,
-                                    axis: .vertical
-                                )
-                                .font(.subheadline)
-                                .foregroundStyle(AppTheme.textPrimary)
-                                .lineLimit(4...6)
-                                .focused($focusedField, equals: .workoutNotes)
-                                .padding(12)
-                                .background(
-                                    AppTheme.fieldFill,
-                                    in: RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
-                                        .strokeBorder(
-                                            focusedField == .workoutNotes ? AppTheme.accentBright.opacity(0.7) : .clear,
-                                            lineWidth: 1.5
-                                        )
-                                )
-                                .animation(.easeOut(duration: 0.15), value: focusedField == .workoutNotes)
-                                .id(WorkoutField.workoutNotes)
-
-                                if let referenceNotes {
-                                    Divider()
-                                        .padding(.vertical, 4)
-
-                                    Text("LAST TIME")
-                                        .font(.caption2.weight(.bold))
-                                        .tracking(1.4)
-                                        .foregroundStyle(AppTheme.textTertiary)
-                                    Text(referenceNotes)
-                                        .font(.footnote)
-                                        .foregroundStyle(AppTheme.textSecondary)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                         }
                     }
-                    .padding(.horizontal, AppTheme.shellPadding)
-                    .padding(.top, 8)
-                    .padding(.bottom, contentBottomPadding)
                 }
-                .safeAreaInset(edge: .top, spacing: 0) {
+                .padding(.horizontal, AppTheme.shellPadding)
+                .padding(.top, 8)
+                .padding(.bottom, contentBottomPadding)
+            }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                TimelineView(.periodic(from: .now, by: 1)) { timeline in
                     let metrics = WorkoutMetrics(session: session, now: timeline.date)
                     WorkoutHeaderView(
                         elapsedSeconds: metrics.durationSeconds,
@@ -156,6 +167,11 @@ struct WorkoutSessionView: View {
                 }
             }
             .onChange(of: focusedField) { previousField, newField in
+                if RPEEditingFocusPolicy.shouldReset(editingSetID: rpeEditingSetID, newFocusedField: newField) {
+                    rpeEditingSetID = nil
+                    rpeEditingSourceField = nil
+                }
+
                 if previousField == .workoutTitle, newField != .workoutTitle {
                     try? engine.finalizeWorkoutTitle(session, context: modelContext)
                 }
@@ -179,47 +195,76 @@ struct WorkoutSessionView: View {
             }
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
-                    let previousField = previousFocusedField
-                    let nextField = nextFocusedField
-
-                    Button {
-                        focusedField = previousField
-                    } label: {
-                        Image(systemName: "chevron.up")
-                            .font(.system(size: 16, weight: .semibold))
-                    }
-                    .disabled(previousField == nil)
-                    .accessibilityLabel("Previous field")
-                    .accessibilityIdentifier("PreviousWorkoutFieldButton")
-
-                    Button {
-                        focusedField = nextField
-                    } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 16, weight: .semibold))
-                    }
-                    .disabled(nextField == nil)
-                    .accessibilityLabel("Next field")
-                    .accessibilityIdentifier("NextWorkoutFieldButton")
-
-                    Spacer()
-
-                    Button("Done") {
-                        let scrollTarget = recentlyAddedExerciseID
-                        focusedField = nil
-
-                        if let scrollTarget {
-                            Task { @MainActor in
-                                try? await Task.sleep(for: .milliseconds(500))
-                                withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
-                                    scrollProxy.scrollTo(scrollTarget, anchor: .top)
+                    if rpeEditingSetID != nil {
+                        RPEChipRow(
+                            selected: editingSet?.rpe,
+                            onSelect: { value in
+                                let nextField = rpeNextFocusedField
+                                if let set = editingSet {
+                                    try? RPEChipSelectionAction.apply(
+                                        value: value,
+                                        to: set,
+                                        engine: engine,
+                                        context: modelContext
+                                    )
                                 }
-                                self.recentlyAddedExerciseID = nil
+                                rpeEditingSetID = nil
+                                rpeEditingSourceField = nil
+                                focusedField = nextField
+                            }
+                        )
+                    } else {
+                        let previousField = previousFocusedField
+                        let nextField = nextFocusedField
+
+                        Button {
+                            focusedField = previousField
+                        } label: {
+                            Image(systemName: "chevron.up")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .disabled(previousField == nil)
+                        .accessibilityLabel("Previous field")
+                        .accessibilityIdentifier("PreviousWorkoutFieldButton")
+
+                        Button {
+                            focusedField = nextField
+                        } label: {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .disabled(nextField == nil)
+                        .accessibilityLabel("Next field")
+                        .accessibilityIdentifier("NextWorkoutFieldButton")
+
+                        if let focusedSetID {
+                            Button("RPE") {
+                                rpeEditingSourceField = focusedField
+                                rpeEditingSetID = focusedSetID
+                            }
+                            .font(.system(size: 16, weight: .semibold))
+                            .accessibilityIdentifier("RPEToolbarButton")
+                        }
+
+                        Spacer()
+
+                        Button("Done") {
+                            let scrollTarget = recentlyAddedExerciseID
+                            focusedField = nil
+
+                            if let scrollTarget {
+                                Task { @MainActor in
+                                    try? await Task.sleep(for: .milliseconds(500))
+                                    withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+                                        scrollProxy.scrollTo(scrollTarget, anchor: .top)
+                                    }
+                                    self.recentlyAddedExerciseID = nil
+                                }
                             }
                         }
+                        .font(.system(size: 16, weight: .semibold))
+                        .accessibilityIdentifier("DismissKeyboardButton")
                     }
-                    .font(.system(size: 16, weight: .semibold))
-                    .accessibilityIdentifier("DismissKeyboardButton")
                 }
             }
         }
@@ -272,12 +317,48 @@ struct WorkoutSessionView: View {
         WorkoutFocusNavigator.focusOrder(for: session, collapsedExerciseIDs: collapsedExerciseIDs)
     }
 
+    private var previousSetsByExerciseID: [UUID: [PreviousSetPerformance]] {
+        PreviousSetPerformance.lastCompletedSetsByExerciseID(
+            for: session.sortedLoggedExercises,
+            in: sessions,
+            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier,
+            sourceSessionID: session.source == .pastWorkout ? session.sourceSessionID : nil
+        )
+    }
+
     private var previousFocusedField: WorkoutField? {
         WorkoutFocusNavigator.adjacentField(from: focusedField, in: focusOrder, offset: -1)
     }
 
     private var nextFocusedField: WorkoutField? {
         WorkoutFocusNavigator.adjacentField(from: focusedField, in: focusOrder, offset: 1)
+    }
+
+    private var rpeNextFocusedField: WorkoutField? {
+        WorkoutFocusNavigator.adjacentField(
+            from: rpeEditingSourceField ?? focusedField,
+            in: focusOrder,
+            offset: 1
+        )
+    }
+
+    private var focusedSetID: UUID? {
+        switch focusedField {
+        case .setWeight(let id), .setReps(let id):
+            return id
+        default:
+            return nil
+        }
+    }
+
+    private var editingSet: LoggedSet? {
+        guard let rpeEditingSetID else { return nil }
+        for loggedExercise in session.sortedLoggedExercises {
+            if let match = loggedExercise.sortedSets.first(where: { $0.id == rpeEditingSetID }) {
+                return match
+            }
+        }
+        return nil
     }
 
     private func isCollapsedBinding(for loggedExercise: LoggedExercise) -> Binding<Bool> {
@@ -295,7 +376,7 @@ struct WorkoutSessionView: View {
 
     private static func isSetField(_ field: WorkoutField?) -> Bool {
         switch field {
-        case .setWeight, .setReps, .setRPE:
+        case .setWeight, .setReps:
             return true
         case .workoutTitle, .workoutNotes, .exerciseNotes, nil:
             return false
@@ -303,4 +384,17 @@ struct WorkoutSessionView: View {
     }
 
     private static let focusRevealAnchor = UnitPoint(x: 0.5, y: 0.72)
+}
+
+enum RPEEditingFocusPolicy {
+    static func shouldReset(editingSetID: UUID?, newFocusedField: WorkoutField?) -> Bool {
+        guard let editingSetID else { return false }
+
+        switch newFocusedField {
+        case .setWeight(let focusedSetID), .setReps(let focusedSetID):
+            return focusedSetID != editingSetID
+        case .workoutTitle, .workoutNotes, .exerciseNotes, nil:
+            return true
+        }
+    }
 }

@@ -50,7 +50,7 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertEqual(try activeSessions(in: context).map(\.id), [session.id])
     }
 
-    func testStartingFromPastCopiesStructureWithPlaceholderValuesAndBlankActualSetValues() throws {
+    func testStartingFromPastCopiesStructureWithBlankActualSetValues() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
         let exercise = Exercise(name: "Back Squat", category: .strength, equipment: .barbell, primaryMuscleGroup: .quads)
@@ -85,6 +85,7 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertEqual(copiedExercise.exerciseSnapshotEquipmentRaw, "smithMachine")
         XCTAssertEqual(copiedExercise.exerciseSnapshotPrimaryMuscleGroupRaw, "glutes")
         XCTAssertEqual(copiedExercise.notes, "")
+        XCTAssertEqual(copiedExercise.sourceLoggedExerciseID, loggedExercise.id)
 
         let copiedSets = copiedExercise.sortedSets
         XCTAssertEqual(copiedSets.map(\.isCompleted), [false, false])
@@ -92,9 +93,6 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertEqual(copiedSets.map(\.weight), [nil, nil])
         XCTAssertEqual(copiedSets.map(\.reps), [nil, nil])
         XCTAssertEqual(copiedSets.map(\.rpe), [nil, nil])
-        XCTAssertEqual(copiedSets.map(\.placeholderWeight), [315, 335])
-        XCTAssertEqual(copiedSets.map(\.placeholderReps), [5, 3])
-        XCTAssertEqual(copiedSets.map(\.placeholderRPE), [8, 9])
     }
 
     func testStartingFromPastCopiesTitleAndShowsPreviousNotesAsReferenceOnly() throws {
@@ -124,6 +122,41 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertEqual(newSession.loggedExercises.first?.referenceNotes, "Used wrist wraps")
     }
 
+    func testStartingFromPastReturnsExistingActiveSessionWithoutCloning() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(name: "Overhead Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .shoulders)
+        let pastLoggedExercise = LoggedExercise(orderIndex: 0, exercise: exercise, exerciseSnapshotName: exercise.name)
+        pastLoggedExercise.sets = [
+            LoggedSet(orderIndex: 0, weight: 135, reps: 5, rpe: 8, isCompleted: true)
+        ]
+        let past = WorkoutSession(
+            title: "Push Day",
+            startedAt: Date(timeIntervalSince1970: 100),
+            status: .completed,
+            source: .blank,
+            loggedExercises: [pastLoggedExercise]
+        )
+        let existingActive = WorkoutSession(
+            title: "Already Active",
+            startedAt: Date(timeIntervalSince1970: 200),
+            status: .active,
+            source: .blank
+        )
+        context.insert(exercise)
+        context.insert(past)
+        context.insert(existingActive)
+        try context.save()
+
+        let engine = ActiveWorkoutEngine()
+        let returned = try engine.startWorkout(fromPast: past, context: context)
+
+        XCTAssertEqual(returned.id, existingActive.id)
+        XCTAssertEqual(engine.activeSessionID, existingActive.id)
+        XCTAssertEqual(try activeSessions(in: context).map(\.id), [existingActive.id])
+        XCTAssertTrue(existingActive.loggedExercises.isEmpty)
+    }
+
     func testAddingExerciseAppendsOrderIndexAndFirstSet() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
@@ -141,7 +174,7 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertEqual(added.sets.count, 1)
     }
 
-    func testAddingSetCarriesPreviousValuesAsPlaceholdersAndStartsIncomplete() throws {
+    func testAddingSetCopiesKindOnlyAndStartsIncompleteWithBlankValues() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
         let engine = ActiveWorkoutEngine()
@@ -150,6 +183,7 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         context.insert(exercise)
         let loggedExercise = try engine.addExercise(exercise, to: session, context: context)
         try engine.updateSet(loggedExercise.sets[0], weight: 185, reps: 5, rpe: 8, context: context)
+        loggedExercise.sets[0].kind = .drop
 
         let newSet = try engine.addSet(to: loggedExercise, context: context)
 
@@ -157,13 +191,11 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertNil(newSet.weight)
         XCTAssertNil(newSet.reps)
         XCTAssertNil(newSet.rpe)
-        XCTAssertEqual(newSet.placeholderWeight, 185)
-        XCTAssertEqual(newSet.placeholderReps, 5)
-        XCTAssertEqual(newSet.placeholderRPE, 8)
+        XCTAssertEqual(newSet.kind, .drop)
         XCTAssertFalse(newSet.isCompleted)
     }
 
-    func testAddingSetFromIncompleteClonedSetCarriesPlaceholderDefaultsForward() throws {
+    func testFillSetFromPreviousOnlyFillsEmptyFields() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
         let engine = ActiveWorkoutEngine()
@@ -171,21 +203,35 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
         context.insert(exercise)
         let loggedExercise = try engine.addExercise(exercise, to: session, context: context)
-        let previousSet = loggedExercise.sets[0]
-        previousSet.placeholderWeight = 185
-        previousSet.placeholderReps = 5
-        previousSet.placeholderRPE = 8
+        let set = loggedExercise.sets[0]
+        set.reps = 8
 
-        let newSet = try engine.addSet(to: loggedExercise, context: context)
+        try engine.fillSetFromPrevious(set, previous: PreviousSetPerformance(weight: 185, reps: 5), context: context)
 
-        XCTAssertEqual(newSet.orderIndex, 1)
-        XCTAssertNil(newSet.weight)
-        XCTAssertNil(newSet.reps)
-        XCTAssertNil(newSet.rpe)
-        XCTAssertEqual(newSet.placeholderWeight, 185)
-        XCTAssertEqual(newSet.placeholderReps, 5)
-        XCTAssertEqual(newSet.placeholderRPE, 8)
-        XCTAssertFalse(newSet.isCompleted)
+        XCTAssertEqual(set.weight, 185)
+        XCTAssertEqual(set.reps, 8)
+    }
+
+    func testFillSetFromPreviousNoOpsWhenWeightAndRepsAlreadyExist() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let engine = ActiveWorkoutEngine()
+        let session = try engine.startBlankWorkout(context: context)
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
+        context.insert(exercise)
+        let loggedExercise = try engine.addExercise(exercise, to: session, context: context)
+        let set = loggedExercise.sets[0]
+        let originalUpdatedAt = Date(timeIntervalSince1970: 100)
+        set.weight = 205
+        set.reps = 4
+        set.updatedAt = originalUpdatedAt
+        try context.save()
+
+        try engine.fillSetFromPrevious(set, previous: PreviousSetPerformance(weight: 185, reps: 5), context: context)
+
+        XCTAssertEqual(set.weight, 205)
+        XCTAssertEqual(set.reps, 4)
+        XCTAssertEqual(set.updatedAt, originalUpdatedAt)
     }
 
     func testRemovingSetReindexesRemainingSets() throws {
@@ -338,7 +384,7 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertEqual(metrics.completedVolume, 1000)
     }
 
-    func testCompletingSetCommitsBlankWeightRepsAndRPEFromPlaceholders() throws {
+    func testCompletingSetPreservesManualWeightRepsAndRPE() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
         let engine = ActiveWorkoutEngine()
@@ -347,30 +393,6 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         context.insert(exercise)
         let loggedExercise = try engine.addExercise(exercise, to: session, context: context)
         let set = loggedExercise.sets[0]
-        set.placeholderWeight = 185
-        set.placeholderReps = 5
-        set.placeholderRPE = 8
-
-        try engine.toggleSetCompletion(set, context: context, now: Date(timeIntervalSince1970: 300))
-
-        XCTAssertTrue(set.isCompleted)
-        XCTAssertEqual(set.weight, 185)
-        XCTAssertEqual(set.reps, 5)
-        XCTAssertEqual(set.rpe, 8)
-    }
-
-    func testCompletingSetDoesNotOverwriteManualWeightRepsOrRPEWithPlaceholders() throws {
-        let container = try SwiftDataTestSupport.makeInMemoryContainer()
-        let context = container.mainContext
-        let engine = ActiveWorkoutEngine()
-        let session = try engine.startBlankWorkout(context: context)
-        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
-        context.insert(exercise)
-        let loggedExercise = try engine.addExercise(exercise, to: session, context: context)
-        let set = loggedExercise.sets[0]
-        set.placeholderWeight = 185
-        set.placeholderReps = 5
-        set.placeholderRPE = 7
         try engine.updateSet(set, weight: 195, reps: 4, rpe: 8.5, context: context)
 
         try engine.toggleSetCompletion(set, context: context, now: Date(timeIntervalSince1970: 300))
@@ -379,9 +401,14 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertEqual(set.weight, 195)
         XCTAssertEqual(set.reps, 4)
         XCTAssertEqual(set.rpe, 8.5)
+        XCTAssertEqual(set.completedAt, Date(timeIntervalSince1970: 300))
     }
 
-    func testUncheckingCompletedSetDoesNotApplyPlaceholders() throws {
+    func testRPEChipsIncludeHalfStepsFromSixThroughTen() {
+        XCTAssertEqual(RPEChipRow.values, [6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10])
+    }
+
+    func testRPEChipSelectionWritesSelectedValueOntoSet() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
         let engine = ActiveWorkoutEngine()
@@ -390,8 +417,24 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         context.insert(exercise)
         let loggedExercise = try engine.addExercise(exercise, to: session, context: context)
         let set = loggedExercise.sets[0]
-        set.placeholderWeight = 185
-        set.placeholderReps = 5
+        try engine.updateSet(set, weight: 185, reps: 5, rpe: nil, context: context)
+
+        try RPEChipSelectionAction.apply(value: 8.5, to: set, engine: engine, context: context)
+
+        XCTAssertEqual(set.weight, 185)
+        XCTAssertEqual(set.reps, 5)
+        XCTAssertEqual(set.rpe, 8.5)
+    }
+
+    func testUncheckingCompletedSetClearsCompletedAtAndPreservesValues() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let engine = ActiveWorkoutEngine()
+        let session = try engine.startBlankWorkout(context: context)
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
+        context.insert(exercise)
+        let loggedExercise = try engine.addExercise(exercise, to: session, context: context)
+        let set = loggedExercise.sets[0]
         try engine.updateSet(set, weight: 195, reps: 4, rpe: nil, context: context)
         try engine.toggleSetCompletion(set, context: context, now: Date(timeIntervalSince1970: 300))
 
@@ -633,9 +676,6 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         firstSet.weight = 315
         firstSet.reps = 5
         firstSet.rpe = 8
-        firstSet.placeholderWeight = 305
-        firstSet.placeholderReps = 5
-        firstSet.placeholderRPE = 7.5
         firstSet.isCompleted = true
 
         try engine.reorderLoggedExercises(in: session, orderedIDs: [second.id, first.id], context: context)
@@ -648,9 +688,6 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertEqual(movedFirst.sortedSets[0].weight, 315)
         XCTAssertEqual(movedFirst.sortedSets[0].reps, 5)
         XCTAssertEqual(movedFirst.sortedSets[0].rpe, 8)
-        XCTAssertEqual(movedFirst.sortedSets[0].placeholderWeight, 305)
-        XCTAssertEqual(movedFirst.sortedSets[0].placeholderReps, 5)
-        XCTAssertEqual(movedFirst.sortedSets[0].placeholderRPE, 7.5)
         XCTAssertTrue(movedFirst.sortedSets[0].isCompleted)
     }
 

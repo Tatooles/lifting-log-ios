@@ -95,6 +95,7 @@ final class ActiveWorkoutEngine {
                 exerciseSnapshotEquipmentRaw: resolvedEquipmentRaw,
                 exerciseSnapshotPrimaryMuscleGroupRaw: resolvedPrimaryMuscleGroupRaw,
                 referenceNotes: pastLoggedExercise.notes,
+                sourceLoggedExerciseID: pastLoggedExercise.id,
                 createdAt: now,
                 updatedAt: now
             )
@@ -106,13 +107,11 @@ final class ActiveWorkoutEngine {
             for pastSet in pastLoggedExercise.sortedSets {
                 let set = LoggedSet(
                     orderIndex: pastSet.orderIndex,
-                    placeholderWeight: pastSet.weight,
-                    placeholderReps: pastSet.reps,
-                    placeholderRPE: pastSet.rpe,
                     kind: pastSet.kind,
                     isCompleted: false,
                     createdAt: now,
-                    updatedAt: now
+                    updatedAt: now,
+                    sourceLoggedSetID: pastSet.id
                 )
                 set.loggedExercise = loggedExercise
                 context.insert(set)
@@ -195,9 +194,6 @@ final class ActiveWorkoutEngine {
         let previous = sortedSets.last
         let set = LoggedSet(
             orderIndex: (sortedSets.map(\.orderIndex).max() ?? -1) + 1,
-            placeholderWeight: previous?.weight ?? previous?.placeholderWeight,
-            placeholderReps: previous?.reps ?? previous?.placeholderReps,
-            placeholderRPE: previous?.rpe ?? previous?.placeholderRPE,
             kind: previous?.kind ?? .working,
             isCompleted: false
         )
@@ -227,12 +223,26 @@ final class ActiveWorkoutEngine {
         try context.save()
     }
 
-    func toggleSetCompletion(_ set: LoggedSet, context: ModelContext, now: Date = .now) throws {
-        let willComplete = !set.isCompleted
-        if willComplete {
-            applyPlaceholderValuesIfNeeded(to: set)
+    func fillSetFromPrevious(_ set: LoggedSet, previous: PreviousSetPerformance, context: ModelContext) throws {
+        var didChange = false
+
+        if set.weight == nil, let weight = previous.weight {
+            set.weight = weight
+            didChange = true
         }
 
+        if set.reps == nil, let reps = previous.reps {
+            set.reps = reps
+            didChange = true
+        }
+
+        guard didChange else { return }
+
+        set.touch()
+        try context.save()
+    }
+
+    func toggleSetCompletion(_ set: LoggedSet, context: ModelContext, now: Date = .now) throws {
         set.isCompleted.toggle()
         set.completedAt = set.isCompleted ? now : nil
         set.touch(now: now)
@@ -361,20 +371,6 @@ final class ActiveWorkoutEngine {
         for (index, set) in loggedExercise.sortedSets.enumerated() where set.orderIndex != index {
             set.orderIndex = index
             set.touch(now: now)
-        }
-    }
-
-    private func applyPlaceholderValuesIfNeeded(to set: LoggedSet) {
-        if set.weight == nil, let placeholderWeight = set.placeholderWeight {
-            set.weight = placeholderWeight
-        }
-
-        if set.reps == nil, let placeholderReps = set.placeholderReps {
-            set.reps = placeholderReps
-        }
-
-        if set.rpe == nil, let placeholderRPE = set.placeholderRPE {
-            set.rpe = placeholderRPE
         }
     }
 
