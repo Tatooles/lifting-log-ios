@@ -33,10 +33,24 @@ struct ProfileView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) {
-                Text("Profile")
-                    .font(.largeTitle.weight(.bold))
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .accessibilityIdentifier("ProfileTitle")
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text("Profile")
+                        .font(.largeTitle.weight(.bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .accessibilityIdentifier("ProfileTitle")
+
+                    #if DEBUG
+                    if AppEnvironmentConfiguration.current.environment == .development {
+                        Text("DEV")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(AppTheme.accentBright)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(AppTheme.accentBright.opacity(0.12), in: Capsule())
+                            .accessibilityIdentifier("ProfileEnvironmentBadge")
+                    }
+                    #endif
+                }
 
                 ProfileAccountCard()
 

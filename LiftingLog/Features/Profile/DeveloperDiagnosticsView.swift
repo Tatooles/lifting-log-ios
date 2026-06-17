@@ -16,9 +16,30 @@ struct DeveloperDiagnosticsView: View {
 
     var body: some View {
         Form {
+            Section("Environment") {
+                diagnosticsRow(
+                    title: "Mode",
+                    value: AppEnvironmentConfiguration.current.environment.rawValue,
+                    valueIdentifier: "DeveloperDiagnosticsEnvironment"
+                )
+                diagnosticsRow(
+                    title: "Clerk Domain",
+                    value: ClerkConfiguration.associatedDomain,
+                    valueIdentifier: "DeveloperDiagnosticsClerkDomain"
+                )
+            }
+
             Section("Convex") {
-                LabeledContent("Deployment", value: ConvexConfiguration.deploymentURLString)
-                LabeledContent("Auth State", value: authStateLabel)
+                diagnosticsRow(
+                    title: "Deployment",
+                    value: ConvexConfiguration.deploymentURLString,
+                    valueIdentifier: "DeveloperDiagnosticsConvexDeployment"
+                )
+                diagnosticsRow(
+                    title: "Auth State",
+                    value: authStateLabel,
+                    valueIdentifier: "DeveloperDiagnosticsAuthState"
+                )
             }
 
             Section("Auth Smoke") {
@@ -87,6 +108,18 @@ struct DeveloperDiagnosticsView: View {
             lastFailureMessage: syncScheduler.lastFailure?.message,
             entries: entries
         )
+    }
+
+    private func diagnosticsRow(title: String, value: String, valueIdentifier: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+            Spacer(minLength: 16)
+            Text(value)
+                .foregroundStyle(AppTheme.textSecondary)
+                .multilineTextAlignment(.trailing)
+                .textSelection(.enabled)
+                .accessibilityIdentifier(valueIdentifier)
+        }
     }
 
     private func observeAuthState() {
