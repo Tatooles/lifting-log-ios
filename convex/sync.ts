@@ -566,6 +566,19 @@ async function findWorkoutSessionByClientId(
     .unique();
 }
 
+async function findExerciseByClientId(
+  ctx: MutationCtx,
+  ownerTokenIdentifier: string,
+  clientId: string,
+): Promise<Doc<"exercises"> | null> {
+  return await ctx.db
+    .query("exercises")
+    .withIndex("by_ownerTokenIdentifier_and_clientId", (q) =>
+      q.eq("ownerTokenIdentifier", ownerTokenIdentifier).eq("clientId", clientId),
+    )
+    .unique();
+}
+
 async function findLoggedExerciseByClientId(
   ctx: MutationCtx,
   ownerTokenIdentifier: string,
@@ -597,6 +610,19 @@ async function assertLoggedExerciseParentExists(
     throw new Error(
       "Cannot upsert active logged exercise without its workout session parent.",
     );
+  }
+
+  if (record.exerciseClientId !== null) {
+    const exercise = await findExerciseByClientId(
+      ctx,
+      ownerTokenIdentifier,
+      record.exerciseClientId,
+    );
+    if (exercise === null || exercise.deletedAt !== null) {
+      throw new Error(
+        "Cannot upsert active logged exercise with a missing exercise reference.",
+      );
+    }
   }
 }
 
