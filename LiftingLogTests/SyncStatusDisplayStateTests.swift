@@ -120,4 +120,27 @@ final class SyncStatusDisplayStateTests: XCTestCase {
         XCTAssertEqual(state.kind, .needsAttention)
         XCTAssertEqual(state.detailText, "The network appears to be offline.")
     }
+
+    func testIncompleteRemotePullUsesWorkoutDataWarningCopy() {
+        let state = SyncStatusDisplayState.make(
+            ownerTokenIdentifier: "issuer|owner_a",
+            isSyncing: false,
+            lastSyncedAt: nil,
+            lastFailureMessage: "Cloud sync could not finish.",
+            pendingCount: 0,
+            failedCount: 0,
+            now: Date(timeIntervalSince1970: 1_000)
+        )
+
+        XCTAssertEqual(state.kind, .needsAttention)
+        XCTAssertEqual(state.title, "Cloud sync could not finish")
+        XCTAssertEqual(state.subtitle, "Some cloud workout data is incomplete. Your local data is still available.")
+        XCTAssertNil(state.detailText)
+        XCTAssertEqual(state.trailingText, "Retry")
+        XCTAssertTrue(state.canRetry)
+        XCTAssertTrue(state.showsGlobalFailureNotice)
+        XCTAssertEqual(state.failureNoticeTitle, "Cloud sync could not finish")
+        XCTAssertEqual(state.failureNoticeMessage, "Some cloud workout data is incomplete. Your local data is still available.")
+        XCTAssertEqual(state.userVisibleFailureMessage, "Some cloud workout data is incomplete. Your local data is still available.")
+    }
 }

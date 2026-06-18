@@ -110,6 +110,8 @@ struct AppShellView: View {
         .safeAreaInset(edge: .bottom) {
             if shouldShowGlobalSyncFailureBanner {
                 GlobalSyncFailureBanner(
+                    title: syncDisplayState.failureNoticeTitle ?? "Cloud sync failed",
+                    message: syncDisplayState.failureNoticeMessage ?? "Your data is saved on this iPhone.",
                     retry: { syncScheduler.retrySync() },
                     details: { navigationState.openSyncSettings() },
                     dismiss: { dismissGlobalSyncFailureBanner() }
@@ -135,6 +137,8 @@ struct AppShellView: View {
 }
 
 private struct GlobalSyncFailureBanner: View {
+    let title: String
+    let message: String
     let retry: () -> Void
     let details: () -> Void
     let dismiss: () -> Void
@@ -148,10 +152,10 @@ private struct GlobalSyncFailureBanner: View {
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Cloud sync failed")
+                    Text(title)
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(AppTheme.textPrimary)
-                    Text("Your data is saved on this iPhone.")
+                    Text(message)
                         .font(.footnote.weight(.medium))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
