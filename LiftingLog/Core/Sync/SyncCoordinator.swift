@@ -25,12 +25,14 @@ final class SyncCoordinator {
         let bootstrapScope: BootstrapScope
         let includeOwnerlessCompletedWorkouts: Bool
         let didPullBeforePush: Bool
+        var hasIncompleteRemotePull = false
         if state.hasBootstrappedSettingsExercises && state.hasBootstrappedWorkoutGraph {
             bootstrapScope = .allOwned
             includeOwnerlessCompletedWorkouts = false
             didPullBeforePush = false
         } else {
             let summary = try await pullChanges(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
+            hasIncompleteRemotePull = hasIncompleteRemotePull || summary.hasIncompleteRemotePull
             try Task.checkCancellation()
             bootstrapScope = summary.hasRemoteSettingsExerciseRecords ? .unownedOnly : .allOwned
             includeOwnerlessCompletedWorkouts = !summary.hasRemoteWorkoutGraphRecords
@@ -46,15 +48,20 @@ final class SyncCoordinator {
         try Task.checkCancellation()
         let pushResult = try await pushPendingEntries(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
         guard pushResult.didComplete else {
-            return SyncRunResult(didPush: pushResult.didPush)
+            return SyncRunResult(didPush: pushResult.didPush, hasIncompleteRemotePull: hasIncompleteRemotePull)
         }
         guard !pushResult.hasMorePendingEntries else {
-            return SyncRunResult(didPush: pushResult.didPush, hasMorePendingEntries: true)
+            return SyncRunResult(
+                didPush: pushResult.didPush,
+                hasMorePendingEntries: true,
+                hasIncompleteRemotePull: hasIncompleteRemotePull
+            )
         }
         if pushResult.didPush || !didPullBeforePush {
-            _ = try await pullChanges(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
+            let summary = try await pullChanges(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
+            hasIncompleteRemotePull = hasIncompleteRemotePull || summary.hasIncompleteRemotePull
         }
-        return SyncRunResult(didPush: pushResult.didPush)
+        return SyncRunResult(didPush: pushResult.didPush, hasIncompleteRemotePull: hasIncompleteRemotePull)
     }
 
     func prepareForSync(
@@ -730,15 +737,19 @@ final class SyncCoordinator {
             )
             let loggedExerciseApplyResult = try apply(
                 loggedExerciseRecords: response.loggedExercises,
+                hasMore: response.hasMore,
                 ownerTokenIdentifier: ownerTokenIdentifier,
                 context: context
             )
             let loggedSetApplyResult = try apply(
                 loggedSetRecords: response.loggedSets,
+                hasMore: response.hasMore,
                 ownerTokenIdentifier: ownerTokenIdentifier,
                 context: context
             )
 
+            summary.record(loggedExerciseApplyResult)
+            summary.record(loggedSetApplyResult)
             state.userSettingsCursor = max(state.userSettingsCursor, response.cursors.userSettings)
             state.exercisesCursor = max(state.exercisesCursor, response.cursors.exercises)
             if let appliedWorkoutSessionCursor {
@@ -752,13 +763,7 @@ final class SyncCoordinator {
             }
             try context.save()
 
-            let deferredWorkoutChild = loggedExerciseApplyResult.deferredMissingParent || loggedSetApplyResult.deferredMissingParent
-            hasMore = !deferredWorkoutChild
-                && (response.hasMore.userSettings
-                    || response.hasMore.exercises
-                    || response.hasMore.workoutSessions
-                    || response.hasMore.loggedExercises
-                    || response.hasMore.loggedSets)
+            hasMore = response.hasMore.hasAnyMore
         }
 
         return summary
@@ -1038,10 +1043,12 @@ final class SyncCoordinator {
 
     private func apply(
         loggedExerciseRecords records: [LoggedExerciseSyncRecord],
+        hasMore: SyncHasMore,
         ownerTokenIdentifier: String,
         context: ModelContext
     ) throws -> WorkoutChildApplyResult {
         var maxAppliedServerUpdatedAt: Double?
+        var skippedMissingParent = false
         for record in records {
             guard let id = UUID(uuidString: record.clientId) else {
                 maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
@@ -1053,10 +1060,12 @@ final class SyncCoordinator {
                     maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
                     continue
                 }
-                return WorkoutChildApplyResult(
-                    appliedCursor: maxAppliedServerUpdatedAt,
-                    deferredMissingParent: true
-                )
+                guard hasMore.workoutSessions else {
+                    maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
+                    skippedMissingParent = true
+                    continue
+                }
+                return WorkoutChildApplyResult(appliedCursor: maxAppliedServerUpdatedAt)
             }
             guard session.syncOwnerTokenIdentifier == ownerTokenIdentifier else {
                 maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
@@ -1072,10 +1081,12 @@ final class SyncCoordinator {
                         maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
                         continue
                     }
-                    return WorkoutChildApplyResult(
-                        appliedCursor: maxAppliedServerUpdatedAt,
-                        deferredMissingParent: true
-                    )
+                    guard hasMore.exercises else {
+                        maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
+                        skippedMissingParent = true
+                        continue
+                    }
+                    return WorkoutChildApplyResult(appliedCursor: maxAppliedServerUpdatedAt)
                 }
                 exercise = resolvedExercise
             } else {
@@ -1120,7 +1131,7 @@ final class SyncCoordinator {
             }
             maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
         }
-        return WorkoutChildApplyResult(appliedCursor: maxAppliedServerUpdatedAt)
+        return WorkoutChildApplyResult(appliedCursor: maxAppliedServerUpdatedAt, skippedMissingParent: skippedMissingParent)
     }
 
     private func apply(
@@ -1149,10 +1160,12 @@ final class SyncCoordinator {
 
     private func apply(
         loggedSetRecords records: [LoggedSetSyncRecord],
+        hasMore: SyncHasMore,
         ownerTokenIdentifier: String,
         context: ModelContext
     ) throws -> WorkoutChildApplyResult {
         var maxAppliedServerUpdatedAt: Double?
+        var skippedMissingParent = false
         for record in records {
             guard let id = UUID(uuidString: record.clientId) else {
                 maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
@@ -1164,10 +1177,12 @@ final class SyncCoordinator {
                     maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
                     continue
                 }
-                return WorkoutChildApplyResult(
-                    appliedCursor: maxAppliedServerUpdatedAt,
-                    deferredMissingParent: true
-                )
+                guard hasMore.exercises || hasMore.workoutSessions || hasMore.loggedExercises else {
+                    maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
+                    skippedMissingParent = true
+                    continue
+                }
+                return WorkoutChildApplyResult(appliedCursor: maxAppliedServerUpdatedAt)
             }
             guard loggedExercise.session?.syncOwnerTokenIdentifier == ownerTokenIdentifier else {
                 maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
@@ -1215,7 +1230,7 @@ final class SyncCoordinator {
             }
             maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
         }
-        return WorkoutChildApplyResult(appliedCursor: maxAppliedServerUpdatedAt)
+        return WorkoutChildApplyResult(appliedCursor: maxAppliedServerUpdatedAt, skippedMissingParent: skippedMissingParent)
     }
 
     private func apply(_ record: LoggedSetSyncRecord, to set: LoggedSet, loggedExercise: LoggedExercise) {
@@ -1425,6 +1440,7 @@ private struct SyncPullSummary {
     var hasWorkoutSessions = false
     var hasLoggedExercises = false
     var hasLoggedSets = false
+    var hasIncompleteRemotePull = false
 
     var hasRemoteSettingsExerciseRecords: Bool {
         hasUserSettings || hasExercises
@@ -1441,11 +1457,16 @@ private struct SyncPullSummary {
         hasLoggedExercises = hasLoggedExercises || !response.loggedExercises.isEmpty
         hasLoggedSets = hasLoggedSets || !response.loggedSets.isEmpty
     }
+
+    mutating func record(_ result: WorkoutChildApplyResult) {
+        hasIncompleteRemotePull = hasIncompleteRemotePull || result.skippedMissingParent
+    }
 }
 
 struct SyncRunResult {
     var didPush = false
     var hasMorePendingEntries = false
+    var hasIncompleteRemotePull = false
 }
 
 private struct SyncPushResult {
@@ -1456,7 +1477,13 @@ private struct SyncPushResult {
 
 private struct WorkoutChildApplyResult {
     var appliedCursor: Double?
-    var deferredMissingParent = false
+    var skippedMissingParent = false
+}
+
+private extension SyncHasMore {
+    var hasAnyMore: Bool {
+        userSettings || exercises || workoutSessions || loggedExercises || loggedSets
+    }
 }
 
 private extension SyncEntityKind {

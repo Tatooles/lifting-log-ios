@@ -153,6 +153,10 @@ final class SyncScheduler {
                         lastFailure = Failure(message: Self.incompleteSyncFailureMessage, occurredAt: .now)
                         break
                     }
+                    guard !result.hasIncompleteRemotePull else {
+                        lastFailure = Failure(message: Self.incompleteSyncFailureMessage, occurredAt: .now)
+                        break
+                    }
                     if result.hasMorePendingEntries {
                         needsSync = true
                     } else {
