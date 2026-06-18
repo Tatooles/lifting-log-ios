@@ -37,16 +37,17 @@ targets:
     settings:
       base:
         PRODUCT_NAME: LiftingLog
-        PRODUCT_BUNDLE_IDENTIFIER: com.kevintatooles.LiftingLog
+        PRODUCT_BUNDLE_IDENTIFIER: com.kevintatooles.LiftingLog.dev
         CODE_SIGN_ENTITLEMENTS: LiftingLog/LiftingLog.entitlements
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: RJGJJ38RV9
+        APP_DISPLAY_NAME: Lifting Log Dev
         LIFTING_LOG_ENVIRONMENT: Development
         CLERK_PUBLISHABLE_KEY: pk_test_Z2xhZC1rcmlsbC0yMi5jbGVyay5hY2NvdW50cy5kZXYk
         CLERK_ASSOCIATED_DOMAIN: webcredentials:glad-krill-22.clerk.accounts.dev
         CONVEX_DEPLOYMENT_URL: https://glad-cow-603.convex.cloud
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Lifting Log
+        INFOPLIST_KEY_CFBundleDisplayName: $(APP_DISPLAY_NAME)
         INFOPLIST_KEY_LiftingLogEnvironment: $(LIFTING_LOG_ENVIRONMENT)
         INFOPLIST_KEY_ClerkPublishableKey: $(CLERK_PUBLISHABLE_KEY)
         INFOPLIST_KEY_ClerkAssociatedDomain: $(CLERK_ASSOCIATED_DOMAIN)
@@ -59,6 +60,8 @@ targets:
         TARGETED_DEVICE_FAMILY: 1
       configs:
         Release:
+          PRODUCT_BUNDLE_IDENTIFIER: com.kevintatooles.LiftingLog
+          APP_DISPLAY_NAME: Lifting Log
           LIFTING_LOG_ENVIRONMENT: Production
           CLERK_PUBLISHABLE_KEY: pk_live_Y2xlcmsuYXV0aC5saWZ0aW5nbG9nLmFwcCQ
           CLERK_ASSOCIATED_DOMAIN: webcredentials:clerk.auth.liftinglog.app

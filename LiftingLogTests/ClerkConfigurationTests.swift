@@ -2,6 +2,14 @@ import XCTest
 @testable import LiftingLog
 
 final class ClerkConfigurationTests: XCTestCase {
+    func testDebugBuildUsesDevelopmentBundleIdentity() {
+        XCTAssertEqual(Bundle.main.bundleIdentifier, "com.kevintatooles.LiftingLog.dev")
+        XCTAssertEqual(
+            Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String,
+            "Lifting Log Dev"
+        )
+    }
+
     func testDevelopmentInfoDictionaryBuildsDevelopmentConfiguration() {
         let configuration = AppEnvironmentConfiguration(infoDictionary: [
             "LiftingLogEnvironment": "Development",
