@@ -121,12 +121,13 @@ final class SyncStatusDisplayStateTests: XCTestCase {
         XCTAssertEqual(state.detailText, "The network appears to be offline.")
     }
 
-    func testGenericFailureWithCloudSyncCopyDoesNotUseIncompleteWorkoutWarning() {
+    func testFailedOutboxPushWithCloudSyncCopyDoesNotUseIncompleteWorkoutWarning() {
         let state = SyncStatusDisplayState.make(
             ownerTokenIdentifier: "issuer|owner_a",
             isSyncing: false,
             lastSyncedAt: nil,
             lastFailureMessage: "Cloud sync could not finish.",
+            lastFailureReason: .failedOutboxPush,
             pendingCount: 0,
             failedCount: 1,
             now: Date(timeIntervalSince1970: 1_000)
@@ -144,7 +145,7 @@ final class SyncStatusDisplayStateTests: XCTestCase {
             isSyncing: false,
             lastSyncedAt: nil,
             lastFailureMessage: "Cloud sync could not finish.",
-            lastFailureKind: .incompleteRemotePull,
+            lastFailureReason: .incompleteRemotePull,
             pendingCount: 0,
             failedCount: 0,
             now: Date(timeIntervalSince1970: 1_000)

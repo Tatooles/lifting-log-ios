@@ -6,15 +6,16 @@ import SwiftData
 final class SyncScheduler {
     private static let incompleteSyncFailureMessage = "Cloud sync could not finish."
 
-    enum FailureKind: Equatable {
-        case generic
+    enum FailureReason: Equatable {
+        case failedOutboxPush
         case incompleteRemotePull
+        case syncError
     }
 
     struct Failure: Equatable {
         let message: String
         let occurredAt: Date
-        let kind: FailureKind
+        let reason: FailureReason
     }
 
     var currentOwnerTokenIdentifier: String? {
@@ -123,8 +124,8 @@ final class SyncScheduler {
         try? SeedDataService.seedIfNeeded(context: modelContext)
     }
 
-    func recordFailureForTesting(message: String, at date: Date = .now, kind: FailureKind = .generic) {
-        lastFailure = Failure(message: message, occurredAt: date, kind: kind)
+    func recordFailureForTesting(message: String, at date: Date = .now, reason: FailureReason = .syncError) {
+        lastFailure = Failure(message: message, occurredAt: date, reason: reason)
     }
 
     private func cancelInFlightSync() {
@@ -156,13 +157,21 @@ final class SyncScheduler {
                         ownerTokenIdentifier: syncOwnerTokenIdentifier,
                         context: modelContext
                     ) else {
-                        lastFailure = Failure(message: Self.incompleteSyncFailureMessage, occurredAt: .now, kind: .generic)
+                        lastFailure = Failure(
+                            message: Self.incompleteSyncFailureMessage,
+                            occurredAt: .now,
+                            reason: .failedOutboxPush
+                        )
                         break
                     }
                     if result.hasMorePendingEntries {
                         needsSync = true
                     } else if result.hasIncompleteRemotePull {
-                        lastFailure = Failure(message: Self.incompleteSyncFailureMessage, occurredAt: .now, kind: .incompleteRemotePull)
+                        lastFailure = Failure(
+                            message: Self.incompleteSyncFailureMessage,
+                            occurredAt: .now,
+                            reason: .incompleteRemotePull
+                        )
                         break
                     } else {
                         lastSyncedAt = .now
@@ -174,7 +183,7 @@ final class SyncScheduler {
                     guard !Task.isCancelled, currentOwnerTokenIdentifier == syncOwnerTokenIdentifier else {
                         break
                     }
-                    lastFailure = Failure(message: error.localizedDescription, occurredAt: .now, kind: .generic)
+                    lastFailure = Failure(message: error.localizedDescription, occurredAt: .now, reason: .syncError)
                     break
                 }
                 if Task.isCancelled {

@@ -33,7 +33,7 @@ struct SyncStatusDisplayState {
         isSyncing: Bool,
         lastSyncedAt: Date?,
         lastFailureMessage: String?,
-        lastFailureKind: SyncScheduler.FailureKind? = nil,
+        lastFailureReason: SyncScheduler.FailureReason? = nil,
         pendingCount: Int,
         failedCount: Int,
         now: Date = .now
@@ -73,7 +73,7 @@ struct SyncStatusDisplayState {
         }
 
         if failedCount > 0 || lastFailureMessage != nil {
-            let failureCopy = displayCopy(forFailureKind: lastFailureKind)
+            let failureCopy = displayCopy(forFailureReason: lastFailureReason)
             let fallbackDetailText: String? = failureCopy.suppressesDetailFallback
                 ? nil
                 : sanitizedFailureReason(from: lastFailureMessage ?? "")
@@ -127,7 +127,7 @@ struct SyncStatusDisplayState {
         )
     }
 
-    private static func displayCopy(forFailureKind kind: SyncScheduler.FailureKind?) -> (
+    private static func displayCopy(forFailureReason reason: SyncScheduler.FailureReason?) -> (
         statusTitle: String,
         statusMessage: String,
         noticeTitle: String,
@@ -135,7 +135,7 @@ struct SyncStatusDisplayState {
         userVisibleFailureMessage: String,
         suppressesDetailFallback: Bool
     ) {
-        if kind == .incompleteRemotePull {
+        if reason == .incompleteRemotePull {
             let title = "Cloud sync could not finish"
             let message = "Some cloud workout data is incomplete. Your local data is still available."
             return (
