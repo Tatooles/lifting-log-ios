@@ -364,6 +364,78 @@ final class SyncCoordinatorTests: XCTestCase {
         XCTAssertTrue(state.hasBootstrappedWorkoutGraph)
     }
 
+    func testIncompleteOrphanOnlyPrePullLeavesWorkoutGraphBootstrapRetryable() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let owner = "issuer|owner_a"
+        let session = WorkoutSession(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000007041")!,
+            title: "Retryable Local Push",
+            startedAt: Date(timeIntervalSince1970: 100),
+            endedAt: Date(timeIntervalSince1970: 200),
+            durationSeconds: 100,
+            status: .completed,
+            source: .blank
+        )
+        context.insert(session)
+        try context.save()
+
+        let client = FakeSyncClient()
+        client.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [],
+                workoutSessions: [],
+                loggedExercises: [
+                    LoggedExerciseSyncRecord(
+                        clientId: "00000000-0000-0000-0000-000000007042",
+                        createdAt: 1,
+                        updatedAt: 2,
+                        deletedAt: nil,
+                        serverUpdatedAt: 50,
+                        sessionClientId: "00000000-0000-0000-0000-000000007043",
+                        exerciseClientId: nil,
+                        orderIndex: 0,
+                        exerciseSnapshotName: "Standing Calf Raise",
+                        exerciseSnapshotEquipmentRaw: "machine",
+                        exerciseSnapshotPrimaryMuscleGroupRaw: "legs",
+                        hasSnapshotMetadata: true,
+                        notes: "",
+                        referenceNotes: nil,
+                        sourceLoggedExerciseID: nil
+                    )
+                ],
+                loggedSets: [],
+                cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 0, loggedExercises: 50, loggedSets: 0),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            ),
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [],
+                cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 0, loggedExercises: 0, loggedSets: 0),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            ),
+        ]
+
+        let coordinator = SyncCoordinator(client: client)
+        let firstResult = try await coordinator.run(ownerTokenIdentifier: owner, context: context)
+        let stateAfterIncompletePull = try XCTUnwrap(context.fetch(FetchDescriptor<SyncCursorState>()).first)
+
+        XCTAssertTrue(firstResult.hasIncompleteRemotePull)
+        XCTAssertFalse(stateAfterIncompletePull.hasBootstrappedWorkoutGraph)
+        XCTAssertTrue(client.upsertedWorkoutSessions.isEmpty)
+
+        let secondResult = try await coordinator.run(ownerTokenIdentifier: owner, context: context)
+        let stateAfterCleanRetry = try XCTUnwrap(context.fetch(FetchDescriptor<SyncCursorState>()).first)
+
+        XCTAssertFalse(secondResult.hasIncompleteRemotePull)
+        XCTAssertEqual(client.upsertedWorkoutSessions.map(\.clientId), [session.id.uuidString.lowercased()])
+        XCTAssertTrue(stateAfterCleanRetry.hasBootstrappedWorkoutGraph)
+    }
+
     func testPostPushPullCanClearBootstrapIncompleteRemotePull() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

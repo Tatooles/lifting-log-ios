@@ -24,18 +24,21 @@ final class SyncCoordinator {
         let state = try SyncCursorState.state(for: ownerTokenIdentifier, context: context)
         let bootstrapScope: BootstrapScope
         let includeOwnerlessCompletedWorkouts: Bool
+        let completeWorkoutGraphBootstrap: Bool
         let didPullBeforePush: Bool
         var hasIncompleteRemotePull = false
         if state.hasBootstrappedSettingsExercises && state.hasBootstrappedWorkoutGraph {
             bootstrapScope = .allOwned
             includeOwnerlessCompletedWorkouts = false
+            completeWorkoutGraphBootstrap = true
             didPullBeforePush = false
         } else {
             let summary = try await pullChanges(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
             hasIncompleteRemotePull = hasIncompleteRemotePull || summary.hasIncompleteRemotePull
             try Task.checkCancellation()
             bootstrapScope = summary.hasRemoteSettingsExerciseRecords ? .unownedOnly : .allOwned
-            includeOwnerlessCompletedWorkouts = !summary.hasRemoteWorkoutGraphRecords
+            completeWorkoutGraphBootstrap = !summary.hasIncompleteRemotePull || summary.hasAppliedRemoteWorkoutGraphRecords
+            includeOwnerlessCompletedWorkouts = completeWorkoutGraphBootstrap && !summary.hasAppliedRemoteWorkoutGraphRecords
             didPullBeforePush = true
         }
 
@@ -43,7 +46,8 @@ final class SyncCoordinator {
             ownerTokenIdentifier: ownerTokenIdentifier,
             context: context,
             bootstrapScope: bootstrapScope,
-            includeOwnerlessCompletedWorkouts: includeOwnerlessCompletedWorkouts
+            includeOwnerlessCompletedWorkouts: includeOwnerlessCompletedWorkouts,
+            completeWorkoutGraphBootstrap: completeWorkoutGraphBootstrap
         )
         try Task.checkCancellation()
         let pushResult = try await pushPendingEntries(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
@@ -68,7 +72,8 @@ final class SyncCoordinator {
         ownerTokenIdentifier: String,
         context: ModelContext,
         bootstrapScope: BootstrapScope = .allOwned,
-        includeOwnerlessCompletedWorkouts: Bool = true
+        includeOwnerlessCompletedWorkouts: Bool = true,
+        completeWorkoutGraphBootstrap: Bool = true
     ) throws {
         let state = try SyncCursorState.state(for: ownerTokenIdentifier, context: context)
         let hadBootstrappedWorkoutGraph = state.hasBootstrappedWorkoutGraph
@@ -141,7 +146,7 @@ final class SyncCoordinator {
             )
             state.hasBootstrappedSettingsExercises = true
         }
-        if !state.hasBootstrappedWorkoutGraph {
+        if !state.hasBootstrappedWorkoutGraph && completeWorkoutGraphBootstrap {
             let didCompleteWorkoutGraphBootstrap = try bootstrapWorkoutGraphForSync(
                 ownerTokenIdentifier: ownerTokenIdentifier,
                 includeOwnerlessCompletedWorkouts: includeOwnerlessCompletedWorkouts,
@@ -751,6 +756,7 @@ final class SyncCoordinator {
                 context: context
             )
 
+            summary.recordAppliedWorkoutGraphCursor(appliedWorkoutSessionCursor)
             summary.record(loggedExerciseApplyResult)
             summary.record(loggedSetApplyResult)
             fetchCursors.userSettings = max(fetchCursors.userSettings, response.cursors.userSettings)
@@ -1485,29 +1491,25 @@ private struct BootstrapCandidates {
 private struct SyncPullSummary {
     var hasUserSettings = false
     var hasExercises = false
-    var hasWorkoutSessions = false
-    var hasLoggedExercises = false
-    var hasLoggedSets = false
     var hasIncompleteRemotePull = false
+    var hasAppliedRemoteWorkoutGraphRecords = false
 
     var hasRemoteSettingsExerciseRecords: Bool {
         hasUserSettings || hasExercises
     }
 
-    var hasRemoteWorkoutGraphRecords: Bool {
-        hasWorkoutSessions || hasLoggedExercises || hasLoggedSets
-    }
-
     mutating func record(_ response: SyncFetchChangesResponse) {
         hasUserSettings = hasUserSettings || !response.userSettings.isEmpty
         hasExercises = hasExercises || !response.exercises.isEmpty
-        hasWorkoutSessions = hasWorkoutSessions || !response.workoutSessions.isEmpty
-        hasLoggedExercises = hasLoggedExercises || !response.loggedExercises.isEmpty
-        hasLoggedSets = hasLoggedSets || !response.loggedSets.isEmpty
+    }
+
+    mutating func recordAppliedWorkoutGraphCursor(_ cursor: Double?) {
+        hasAppliedRemoteWorkoutGraphRecords = hasAppliedRemoteWorkoutGraphRecords || cursor != nil
     }
 
     mutating func record(_ result: WorkoutChildApplyResult) {
         hasIncompleteRemotePull = hasIncompleteRemotePull || result.skippedMissingParent
+        hasAppliedRemoteWorkoutGraphRecords = hasAppliedRemoteWorkoutGraphRecords || result.appliedCursor != nil
     }
 }
 
