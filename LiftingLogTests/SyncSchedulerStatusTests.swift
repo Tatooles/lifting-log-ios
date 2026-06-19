@@ -173,6 +173,75 @@ final class SyncSchedulerStatusTests: XCTestCase {
         XCTAssertEqual(scheduler.lastFailure?.message, "Cloud sync could not finish.")
     }
 
+    func testSchedulerDrainsMorePendingEntriesBeforeFailingIncompleteRemotePull() async throws {
+        let owner = "issuer|owner_a"
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let recorder = SyncOutboxRecorder()
+        for index in 0..<51 {
+            let exercise = Exercise(
+                name: "Exercise \(index)",
+                category: .strength,
+                equipment: .barbell,
+                primaryMuscle: "Chest",
+                syncOwnerTokenIdentifier: owner
+            )
+            context.insert(exercise)
+            try recorder.recordUpdate(
+                entityKind: .exercise,
+                entityID: exercise.id,
+                ownerTokenIdentifier: owner,
+                context: context,
+                now: Date(timeIntervalSince1970: Double(index))
+            )
+        }
+        try context.save()
+
+        let client = FakeSyncClient()
+        client.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [],
+                workoutSessions: [],
+                loggedExercises: [
+                    LoggedExerciseSyncRecord(
+                        clientId: "00000000-0000-0000-0000-000000006611",
+                        createdAt: 1,
+                        updatedAt: 2,
+                        deletedAt: nil,
+                        serverUpdatedAt: 50,
+                        sessionClientId: "00000000-0000-0000-0000-000000006612",
+                        exerciseClientId: nil,
+                        orderIndex: 0,
+                        exerciseSnapshotName: "Standing Calf Raise",
+                        exerciseSnapshotEquipmentRaw: "machine",
+                        exerciseSnapshotPrimaryMuscleGroupRaw: "legs",
+                        hasSnapshotMetadata: true,
+                        notes: "",
+                        referenceNotes: nil,
+                        sourceLoggedExerciseID: nil
+                    )
+                ],
+                loggedSets: [],
+                cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 0, loggedExercises: 50, loggedSets: 0),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            )
+        ]
+        let coordinator = SyncCoordinator(client: client, maxPendingPushEntriesPerRun: 50)
+        let scheduler = SyncScheduler(coordinator: coordinator, modelContext: context)
+        scheduler.currentOwnerTokenIdentifier = owner
+
+        scheduler.requestSync()
+        try await waitUntil {
+            scheduler.lastSyncedAt != nil || scheduler.lastFailure != nil
+        }
+
+        XCTAssertNil(scheduler.lastFailure)
+        XCTAssertNotNil(scheduler.lastSyncedAt)
+        XCTAssertEqual(client.upsertedExercises.count, 51)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
+    }
+
     func testSchedulerDiscardsOutboxEntryWhenLocalRecordBelongsToDifferentOwner() async throws {
         let currentOwner = "issuer|owner_a"
         let otherOwner = "issuer|owner_b"
