@@ -436,6 +436,101 @@ final class SyncCoordinatorTests: XCTestCase {
         XCTAssertTrue(stateAfterCleanRetry.hasBootstrappedWorkoutGraph)
     }
 
+    func testCursorOnlyChildTombstoneDoesNotCompleteWorkoutGraphBootstrap() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let owner = "issuer|owner_a"
+        let session = WorkoutSession(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000007061")!,
+            title: "Local Completed",
+            startedAt: Date(timeIntervalSince1970: 100),
+            endedAt: Date(timeIntervalSince1970: 200),
+            durationSeconds: 100,
+            status: .completed,
+            source: .blank
+        )
+        context.insert(session)
+        try context.save()
+
+        let client = FakeSyncClient()
+        client.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [],
+                workoutSessions: [],
+                loggedExercises: [
+                    LoggedExerciseSyncRecord(
+                        clientId: "00000000-0000-0000-0000-000000007062",
+                        createdAt: 1,
+                        updatedAt: 2,
+                        deletedAt: 3,
+                        serverUpdatedAt: 40,
+                        sessionClientId: "00000000-0000-0000-0000-000000007063",
+                        exerciseClientId: nil,
+                        orderIndex: 0,
+                        exerciseSnapshotName: "Deleted Orphan",
+                        exerciseSnapshotEquipmentRaw: "",
+                        exerciseSnapshotPrimaryMuscleGroupRaw: "",
+                        hasSnapshotMetadata: false,
+                        notes: "",
+                        referenceNotes: nil,
+                        sourceLoggedExerciseID: nil
+                    ),
+                    LoggedExerciseSyncRecord(
+                        clientId: "00000000-0000-0000-0000-000000007064",
+                        createdAt: 1,
+                        updatedAt: 2,
+                        deletedAt: nil,
+                        serverUpdatedAt: 50,
+                        sessionClientId: "00000000-0000-0000-0000-000000007065",
+                        exerciseClientId: nil,
+                        orderIndex: 1,
+                        exerciseSnapshotName: "Active Orphan",
+                        exerciseSnapshotEquipmentRaw: "",
+                        exerciseSnapshotPrimaryMuscleGroupRaw: "",
+                        hasSnapshotMetadata: false,
+                        notes: "",
+                        referenceNotes: nil,
+                        sourceLoggedExerciseID: nil
+                    )
+                ],
+                loggedSets: [],
+                cursors: SyncChangeCursors(
+                    userSettings: 0,
+                    exercises: 0,
+                    workoutSessions: 0,
+                    loggedExercises: 50,
+                    loggedSets: 0
+                ),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            ),
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [],
+                cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 0, loggedExercises: 0, loggedSets: 0),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            ),
+        ]
+
+        let coordinator = SyncCoordinator(client: client)
+        let firstResult = try await coordinator.run(ownerTokenIdentifier: owner, context: context)
+        let stateAfterCursorOnlyPull = try XCTUnwrap(context.fetch(FetchDescriptor<SyncCursorState>()).first)
+
+        XCTAssertTrue(firstResult.hasIncompleteRemotePull)
+        XCTAssertFalse(stateAfterCursorOnlyPull.hasBootstrappedWorkoutGraph)
+        XCTAssertTrue(client.upsertedWorkoutSessions.isEmpty)
+
+        let secondResult = try await coordinator.run(ownerTokenIdentifier: owner, context: context)
+        let stateAfterCleanRetry = try XCTUnwrap(context.fetch(FetchDescriptor<SyncCursorState>()).first)
+
+        XCTAssertFalse(secondResult.hasIncompleteRemotePull)
+        XCTAssertEqual(client.upsertedWorkoutSessions.map(\.clientId), [session.id.uuidString.lowercased()])
+        XCTAssertTrue(stateAfterCleanRetry.hasBootstrappedWorkoutGraph)
+    }
+
     func testPostPushPullCanClearBootstrapIncompleteRemotePull() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
@@ -1236,6 +1331,142 @@ final class SyncCoordinatorTests: XCTestCase {
         XCTAssertTrue(session.sortedLoggedExercises.isEmpty)
         XCTAssertTrue(loggedExercise.sortedSets.isEmpty)
         XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
+    }
+
+    func testBootstrappedRunPullsRemoteParentTombstoneBeforePushingChildUpdates() async throws {
+        struct ActiveChildPushError: LocalizedError {
+            var errorDescription: String? { "Cannot upsert active child without parent." }
+        }
+
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let owner = "issuer|owner_a"
+        let deletedAt = Date(timeIntervalSince1970: 300)
+        let sessionID = UUID(uuidString: "00000000-0000-0000-0000-000000006071")!
+        let loggedExerciseID = UUID(uuidString: "00000000-0000-0000-0000-000000006072")!
+        let setID = UUID(uuidString: "00000000-0000-0000-0000-000000006073")!
+
+        let state = SyncCursorState(
+            ownerTokenIdentifier: owner,
+            hasBootstrappedSettingsExercises: true,
+            hasBootstrappedWorkoutGraph: true
+        )
+        let session = WorkoutSession(
+            id: sessionID,
+            title: "Remote Deleted",
+            startedAt: Date(timeIntervalSince1970: 100),
+            endedAt: Date(timeIntervalSince1970: 200),
+            durationSeconds: 100,
+            status: .completed,
+            source: .blank,
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 200),
+            syncOwnerTokenIdentifier: owner
+        )
+        let loggedExercise = LoggedExercise(
+            id: loggedExerciseID,
+            orderIndex: 0,
+            exerciseSnapshotName: "Bench Press",
+            createdAt: Date(timeIntervalSince1970: 110),
+            updatedAt: Date(timeIntervalSince1970: 250)
+        )
+        let set = LoggedSet(
+            id: setID,
+            orderIndex: 0,
+            weight: 185,
+            reps: 5,
+            kind: .working,
+            isCompleted: true,
+            createdAt: Date(timeIntervalSince1970: 120),
+            updatedAt: Date(timeIntervalSince1970: 260)
+        )
+        loggedExercise.session = session
+        set.loggedExercise = loggedExercise
+        session.loggedExercises.append(loggedExercise)
+        loggedExercise.sets.append(set)
+        context.insert(state)
+        context.insert(session)
+        context.insert(loggedExercise)
+        context.insert(set)
+
+        let recorder = SyncOutboxRecorder()
+        try recorder.recordUpdate(
+            entityKind: .loggedExercise,
+            entityID: loggedExercise.id,
+            ownerTokenIdentifier: owner,
+            context: context,
+            now: Date(timeIntervalSince1970: 250)
+        )
+        try recorder.recordUpdate(
+            entityKind: .loggedSet,
+            entityID: set.id,
+            ownerTokenIdentifier: owner,
+            context: context,
+            now: Date(timeIntervalSince1970: 260)
+        )
+        try context.save()
+
+        let client = FakeSyncClient()
+        client.onUpsertLoggedExercise = { record in
+            if record.deletedAt == nil {
+                throw ActiveChildPushError()
+            }
+        }
+        client.onUpsertLoggedSet = { record in
+            if record.deletedAt == nil {
+                throw ActiveChildPushError()
+            }
+        }
+        client.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [],
+                workoutSessions: [
+                    WorkoutSessionSyncRecord(
+                        clientId: sessionID.uuidString.lowercased(),
+                        createdAt: 100,
+                        updatedAt: 300,
+                        deletedAt: 300,
+                        serverUpdatedAt: 400,
+                        title: "Remote Deleted",
+                        startedAt: 100,
+                        endedAt: 200,
+                        durationSeconds: 100,
+                        notes: "",
+                        referenceNotes: nil,
+                        statusRaw: "completed",
+                        sourceRaw: "blank",
+                        sourceSessionID: nil,
+                        healthLinkID: nil
+                    )
+                ],
+                loggedExercises: [],
+                loggedSets: [],
+                cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 400),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            ),
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [],
+                cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 400),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            )
+        ]
+
+        let result = try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
+        let entries = try context.fetch(FetchDescriptor<SyncOutboxEntry>())
+
+        XCTAssertFalse(result.hasIncompleteRemotePull)
+        XCTAssertEqual(client.fetchRequests.first?.cursors.workoutSessions, 0)
+        XCTAssertEqual(session.deletedAt, deletedAt)
+        XCTAssertEqual(loggedExercise.deletedAt, deletedAt)
+        XCTAssertEqual(set.deletedAt, deletedAt)
+        XCTAssertEqual(client.upsertedLoggedExercises.map(\.deletedAt), [deletedAt.timeIntervalSince1970])
+        XCTAssertEqual(client.upsertedLoggedSets.map(\.deletedAt), [deletedAt.timeIntervalSince1970])
+        XCTAssertTrue(entries.isEmpty)
     }
 
     func testPullSkipsLoggedSetWhenParentLoggedExerciseStreamIsExhausted() async throws {
@@ -2578,6 +2809,15 @@ final class SyncCoordinatorTests: XCTestCase {
             SyncFetchChangesResponse(
                 userSettings: [],
                 exercises: [],
+                workoutSessions: [],
+                loggedExercises: [],
+                loggedSets: [],
+                cursors: SyncChangeCursors(userSettings: 0, exercises: 0, workoutSessions: 50),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            ),
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [],
                 workoutSessions: [
                     WorkoutSessionSyncRecord(
                         clientId: sessionID.uuidString.lowercased(),
@@ -2606,7 +2846,7 @@ final class SyncCoordinatorTests: XCTestCase {
 
         try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
 
-        XCTAssertEqual(client.fetchRequests.map(\.cursors.workoutSessions), [39])
+        XCTAssertEqual(client.fetchRequests.map(\.cursors.workoutSessions), [50, 39])
         XCTAssertEqual(session.title, "Remote Push")
         XCTAssertEqual(state.workoutSessionsCursor, 40)
         XCTAssertTrue(try context.fetch(FetchDescriptor<SyncOutboxEntry>()).isEmpty)
@@ -3355,6 +3595,8 @@ final class FakeSyncClient: SyncClient, @unchecked Sendable {
         hasMore: SyncHasMore(userSettings: false, exercises: false)
     )
     var onFetchChanges: (() -> Void)?
+    var onUpsertLoggedExercise: ((LoggedExerciseSyncPayload) throws -> Void)?
+    var onUpsertLoggedSet: ((LoggedSetSyncPayload) throws -> Void)?
     var error: Error?
     var fetchError: Error?
 
@@ -3388,6 +3630,7 @@ final class FakeSyncClient: SyncClient, @unchecked Sendable {
 
     func upsertLoggedExercise(_ record: LoggedExerciseSyncPayload) async throws -> SyncMutationResult {
         if let error { throw error }
+        try onUpsertLoggedExercise?(record)
         operationLog.append("upsertLoggedExercise:\(record.clientId)")
         upsertedLoggedExercises.append(record)
         if !loggedExerciseMutationResults.isEmpty {
@@ -3398,6 +3641,7 @@ final class FakeSyncClient: SyncClient, @unchecked Sendable {
 
     func upsertLoggedSet(_ record: LoggedSetSyncPayload) async throws -> SyncMutationResult {
         if let error { throw error }
+        try onUpsertLoggedSet?(record)
         operationLog.append("upsertLoggedSet:\(record.clientId)")
         upsertedLoggedSets.append(record)
         if !loggedSetMutationResults.isEmpty {

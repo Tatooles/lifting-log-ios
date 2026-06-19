@@ -22,24 +22,21 @@ final class SyncCoordinator {
         try Task.checkCancellation()
 
         let state = try SyncCursorState.state(for: ownerTokenIdentifier, context: context)
+        let pullSummary = try await pullChanges(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
+        var hasIncompleteRemotePull = pullSummary.hasIncompleteRemotePull
+        try Task.checkCancellation()
+
         let bootstrapScope: BootstrapScope
         let includeOwnerlessCompletedWorkouts: Bool
         let completeWorkoutGraphBootstrap: Bool
-        let didPullBeforePush: Bool
-        var hasIncompleteRemotePull = false
         if state.hasBootstrappedSettingsExercises && state.hasBootstrappedWorkoutGraph {
             bootstrapScope = .allOwned
             includeOwnerlessCompletedWorkouts = false
             completeWorkoutGraphBootstrap = true
-            didPullBeforePush = false
         } else {
-            let summary = try await pullChanges(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
-            hasIncompleteRemotePull = hasIncompleteRemotePull || summary.hasIncompleteRemotePull
-            try Task.checkCancellation()
-            bootstrapScope = summary.hasRemoteSettingsExerciseRecords ? .unownedOnly : .allOwned
-            completeWorkoutGraphBootstrap = !summary.hasIncompleteRemotePull || summary.hasAppliedRemoteWorkoutGraphRecords
-            includeOwnerlessCompletedWorkouts = completeWorkoutGraphBootstrap && !summary.hasAppliedRemoteWorkoutGraphRecords
-            didPullBeforePush = true
+            bootstrapScope = pullSummary.hasRemoteSettingsExerciseRecords ? .unownedOnly : .allOwned
+            completeWorkoutGraphBootstrap = !pullSummary.hasIncompleteRemotePull || pullSummary.hasAppliedRemoteWorkoutGraphRecords
+            includeOwnerlessCompletedWorkouts = completeWorkoutGraphBootstrap && !pullSummary.hasAppliedRemoteWorkoutGraphRecords
         }
 
         try prepareForSync(
@@ -61,7 +58,7 @@ final class SyncCoordinator {
                 hasIncompleteRemotePull: hasIncompleteRemotePull
             )
         }
-        if pushResult.didPush || !didPullBeforePush {
+        if pushResult.didPush {
             let summary = try await pullChanges(ownerTokenIdentifier: ownerTokenIdentifier, context: context)
             hasIncompleteRemotePull = summary.hasIncompleteRemotePull
         }
@@ -738,7 +735,7 @@ final class SyncCoordinator {
             summary.record(response)
             try apply(userSettingsRecords: response.userSettings, ownerTokenIdentifier: ownerTokenIdentifier, context: context)
             try apply(exerciseRecords: response.exercises, ownerTokenIdentifier: ownerTokenIdentifier, context: context)
-            let appliedWorkoutSessionCursor = try apply(
+            let workoutSessionApplyResult = try apply(
                 workoutSessionRecords: response.workoutSessions,
                 ownerTokenIdentifier: ownerTokenIdentifier,
                 context: context
@@ -756,7 +753,7 @@ final class SyncCoordinator {
                 context: context
             )
 
-            summary.recordAppliedWorkoutGraphCursor(appliedWorkoutSessionCursor)
+            summary.record(workoutSessionApplyResult)
             summary.record(loggedExerciseApplyResult)
             summary.record(loggedSetApplyResult)
             fetchCursors.userSettings = max(fetchCursors.userSettings, response.cursors.userSettings)
@@ -774,7 +771,7 @@ final class SyncCoordinator {
             )
             state.userSettingsCursor = max(state.userSettingsCursor, response.cursors.userSettings)
             state.exercisesCursor = max(state.exercisesCursor, response.cursors.exercises)
-            if let appliedWorkoutSessionCursor {
+            if let appliedWorkoutSessionCursor = workoutSessionApplyResult.appliedCursor {
                 state.workoutSessionsCursor = max(state.workoutSessionsCursor, appliedWorkoutSessionCursor)
             }
             if let appliedLoggedExerciseCursor = loggedExerciseApplyResult.appliedCursor, !loggedExercisesCursorBlocked {
@@ -988,8 +985,9 @@ final class SyncCoordinator {
         workoutSessionRecords records: [WorkoutSessionSyncRecord],
         ownerTokenIdentifier: String,
         context: ModelContext
-    ) throws -> Double? {
+    ) throws -> WorkoutGraphApplyResult {
         var maxAppliedServerUpdatedAt: Double?
+        var didApplyLocalGraphRecord = false
         for record in records {
             guard let id = UUID(uuidString: record.clientId) else {
                 maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
@@ -1014,6 +1012,7 @@ final class SyncCoordinator {
                     continue
                 }
                 apply(record, to: session, ownerTokenIdentifier: ownerTokenIdentifier)
+                didApplyLocalGraphRecord = true
             } else {
                 guard incomingDeletedAt == nil else {
                     maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
@@ -1037,10 +1036,14 @@ final class SyncCoordinator {
                     syncOwnerTokenIdentifier: ownerTokenIdentifier
                 )
                 context.insert(session)
+                didApplyLocalGraphRecord = true
             }
             maxAppliedServerUpdatedAt = max(maxAppliedServerUpdatedAt ?? 0, record.serverUpdatedAt)
         }
-        return maxAppliedServerUpdatedAt
+        return WorkoutGraphApplyResult(
+            appliedCursor: maxAppliedServerUpdatedAt,
+            didApplyLocalGraphRecord: didApplyLocalGraphRecord
+        )
     }
 
     private func apply(_ record: WorkoutSessionSyncRecord, to session: WorkoutSession, ownerTokenIdentifier: String) {
@@ -1091,6 +1094,7 @@ final class SyncCoordinator {
     ) throws -> WorkoutChildApplyResult {
         var maxAppliedServerUpdatedAt: Double?
         var skippedMissingParent = false
+        var didApplyLocalGraphRecord = false
         var canAdvanceCursor = true
         func recordAppliedCursor(_ serverUpdatedAt: Double) {
             guard canAdvanceCursor else { return }
@@ -1153,6 +1157,7 @@ final class SyncCoordinator {
                     continue
                 }
                 apply(record, to: loggedExercise, session: session, exercise: exercise)
+                didApplyLocalGraphRecord = true
             } else {
                 guard incomingDeletedAt == nil else {
                     recordAppliedCursor(record.serverUpdatedAt)
@@ -1176,10 +1181,15 @@ final class SyncCoordinator {
                 loggedExercise.session = session
                 session.loggedExercises.append(loggedExercise)
                 context.insert(loggedExercise)
+                didApplyLocalGraphRecord = true
             }
             recordAppliedCursor(record.serverUpdatedAt)
         }
-        return WorkoutChildApplyResult(appliedCursor: maxAppliedServerUpdatedAt, skippedMissingParent: skippedMissingParent)
+        return WorkoutChildApplyResult(
+            appliedCursor: maxAppliedServerUpdatedAt,
+            didApplyLocalGraphRecord: didApplyLocalGraphRecord,
+            skippedMissingParent: skippedMissingParent
+        )
     }
 
     private func apply(
@@ -1214,6 +1224,7 @@ final class SyncCoordinator {
     ) throws -> WorkoutChildApplyResult {
         var maxAppliedServerUpdatedAt: Double?
         var skippedMissingParent = false
+        var didApplyLocalGraphRecord = false
         var canAdvanceCursor = true
         func recordAppliedCursor(_ serverUpdatedAt: Double) {
             guard canAdvanceCursor else { return }
@@ -1257,6 +1268,7 @@ final class SyncCoordinator {
                     continue
                 }
                 apply(record, to: set, loggedExercise: loggedExercise)
+                didApplyLocalGraphRecord = true
             } else {
                 guard incomingDeletedAt == nil else {
                     recordAppliedCursor(record.serverUpdatedAt)
@@ -1281,10 +1293,15 @@ final class SyncCoordinator {
                 set.loggedExercise = loggedExercise
                 loggedExercise.sets.append(set)
                 context.insert(set)
+                didApplyLocalGraphRecord = true
             }
             recordAppliedCursor(record.serverUpdatedAt)
         }
-        return WorkoutChildApplyResult(appliedCursor: maxAppliedServerUpdatedAt, skippedMissingParent: skippedMissingParent)
+        return WorkoutChildApplyResult(
+            appliedCursor: maxAppliedServerUpdatedAt,
+            didApplyLocalGraphRecord: didApplyLocalGraphRecord,
+            skippedMissingParent: skippedMissingParent
+        )
     }
 
     private func apply(_ record: LoggedSetSyncRecord, to set: LoggedSet, loggedExercise: LoggedExercise) {
@@ -1503,13 +1520,13 @@ private struct SyncPullSummary {
         hasExercises = hasExercises || !response.exercises.isEmpty
     }
 
-    mutating func recordAppliedWorkoutGraphCursor(_ cursor: Double?) {
-        hasAppliedRemoteWorkoutGraphRecords = hasAppliedRemoteWorkoutGraphRecords || cursor != nil
+    mutating func record(_ result: WorkoutGraphApplyResult) {
+        hasAppliedRemoteWorkoutGraphRecords = hasAppliedRemoteWorkoutGraphRecords || result.didApplyLocalGraphRecord
     }
 
     mutating func record(_ result: WorkoutChildApplyResult) {
         hasIncompleteRemotePull = hasIncompleteRemotePull || result.skippedMissingParent
-        hasAppliedRemoteWorkoutGraphRecords = hasAppliedRemoteWorkoutGraphRecords || result.appliedCursor != nil
+        hasAppliedRemoteWorkoutGraphRecords = hasAppliedRemoteWorkoutGraphRecords || result.didApplyLocalGraphRecord
     }
 }
 
@@ -1525,8 +1542,14 @@ private struct SyncPushResult {
     var hasMorePendingEntries = false
 }
 
+private struct WorkoutGraphApplyResult {
+    var appliedCursor: Double?
+    var didApplyLocalGraphRecord = false
+}
+
 private struct WorkoutChildApplyResult {
     var appliedCursor: Double?
+    var didApplyLocalGraphRecord = false
     var skippedMissingParent = false
 }
 
