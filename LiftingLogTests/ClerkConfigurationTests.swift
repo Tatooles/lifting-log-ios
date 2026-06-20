@@ -21,6 +21,12 @@ final class ClerkConfigurationTests: XCTestCase {
         XCTAssertNotNil(infoDictionary["CFBundleVersion"])
     }
 
+    func testAppBundleUsesCanonicalSimulatorPlatformValue() {
+        let supportedPlatforms = Bundle.main.object(forInfoDictionaryKey: "CFBundleSupportedPlatforms") as? [String]
+
+        XCTAssertEqual(supportedPlatforms, ["iPhoneSimulator"])
+    }
+
     func testDevelopmentInfoDictionaryBuildsDevelopmentConfiguration() {
         let configuration = AppEnvironmentConfiguration(infoDictionary: [
             "LiftingLogEnvironment": "Development",
