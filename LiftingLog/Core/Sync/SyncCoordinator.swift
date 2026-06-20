@@ -718,6 +718,8 @@ final class SyncCoordinator {
         var hasMore = true
         var loggedExercisesCursorBlocked = false
         var loggedSetsCursorBlocked = false
+        var pulledRemoteExerciseIDs = Set<UUID>()
+        let allowsOwnerScopedSeedAdoption = !state.hasBootstrappedSettingsExercises
         var fetchCursors = SyncChangeCursors(
             userSettings: state.userSettingsCursor,
             exercises: state.exercisesCursor,
@@ -734,7 +736,13 @@ final class SyncCoordinator {
 
             summary.record(response)
             try apply(userSettingsRecords: response.userSettings, ownerTokenIdentifier: ownerTokenIdentifier, context: context)
-            try apply(exerciseRecords: response.exercises, ownerTokenIdentifier: ownerTokenIdentifier, context: context)
+            try apply(
+                exerciseRecords: response.exercises,
+                ownerTokenIdentifier: ownerTokenIdentifier,
+                allowsOwnerScopedSeedAdoption: allowsOwnerScopedSeedAdoption,
+                pulledRemoteExerciseIDs: &pulledRemoteExerciseIDs,
+                context: context
+            )
             let workoutSessionApplyResult = try apply(
                 workoutSessionRecords: response.workoutSessions,
                 ownerTokenIdentifier: ownerTokenIdentifier,
@@ -888,10 +896,13 @@ final class SyncCoordinator {
     private func apply(
         exerciseRecords records: [ExerciseSyncRecord],
         ownerTokenIdentifier: String,
+        allowsOwnerScopedSeedAdoption: Bool,
+        pulledRemoteExerciseIDs: inout Set<UUID>,
         context: ModelContext
     ) throws {
         for record in records {
             guard let id = UUID(uuidString: record.clientId) else { continue }
+            defer { pulledRemoteExerciseIDs.insert(id) }
             let incomingUpdatedAt = Date(timeIntervalSince1970: record.updatedAt)
             let incomingDeletedAt = record.deletedAt.map(Date.init(timeIntervalSince1970:))
 
@@ -914,6 +925,8 @@ final class SyncCoordinator {
                    let exercise = try adoptableSeedExercise(
                        seedIdentifier: seedIdentifier,
                        ownerTokenIdentifier: ownerTokenIdentifier,
+                       allowsOwnerScopedAdoption: allowsOwnerScopedSeedAdoption,
+                       excluding: pulledRemoteExerciseIDs,
                        context: context
                    ) {
                     let localID = exercise.id
@@ -1409,11 +1422,15 @@ final class SyncCoordinator {
     private func adoptableSeedExercise(
         seedIdentifier: String,
         ownerTokenIdentifier: String,
+        allowsOwnerScopedAdoption: Bool,
+        excluding pulledRemoteExerciseIDs: Set<UUID>,
         context: ModelContext
     ) throws -> Exercise? {
         try context.fetch(FetchDescriptor<Exercise>())
             .first { exercise in
-                (exercise.syncOwnerTokenIdentifier == nil || exercise.syncOwnerTokenIdentifier == ownerTokenIdentifier)
+                !pulledRemoteExerciseIDs.contains(exercise.id)
+                    && (exercise.syncOwnerTokenIdentifier == nil
+                        || (allowsOwnerScopedAdoption && exercise.syncOwnerTokenIdentifier == ownerTokenIdentifier))
                     && exercise.isSeeded
                     && exercise.seedIdentifier == seedIdentifier
             }

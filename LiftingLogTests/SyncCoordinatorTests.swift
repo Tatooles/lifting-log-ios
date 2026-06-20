@@ -1239,6 +1239,135 @@ final class SyncCoordinatorTests: XCTestCase {
         XCTAssertEqual(state.loggedSetsCursor, 33)
     }
 
+    func testRunPullsWorkoutGraphWhenRemoteHasDuplicateSeedExercises() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let owner = "issuer|owner_a"
+        try SeedDataService.seedIfNeeded(context: context)
+
+        let firstRemoteBenchID = UUID(uuidString: "00000000-0000-0000-0000-000000006101")!
+        let secondRemoteBenchID = UUID(uuidString: "00000000-0000-0000-0000-000000006102")!
+        let sessionID = UUID(uuidString: "00000000-0000-0000-0000-000000006103")!
+        let loggedExerciseID = UUID(uuidString: "00000000-0000-0000-0000-000000006104")!
+        let setID = UUID(uuidString: "00000000-0000-0000-0000-000000006105")!
+        let client = FakeSyncClient()
+        client.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [
+                    ExerciseSyncRecord(
+                        clientId: firstRemoteBenchID.uuidString.lowercased(),
+                        createdAt: 10,
+                        updatedAt: 20,
+                        deletedAt: nil,
+                        serverUpdatedAt: 30,
+                        seedIdentifier: "bench-press",
+                        name: "Bench Press",
+                        categoryRaw: "strength",
+                        equipmentRaw: "barbell",
+                        primaryMuscleRaw: "Chest",
+                        primaryMuscleGroupRaw: "chest",
+                        notes: "",
+                        isArchived: false,
+                        isSeeded: true
+                    ),
+                    ExerciseSyncRecord(
+                        clientId: secondRemoteBenchID.uuidString.lowercased(),
+                        createdAt: 11,
+                        updatedAt: 21,
+                        deletedAt: nil,
+                        serverUpdatedAt: 31,
+                        seedIdentifier: "bench-press",
+                        name: "Bench Press",
+                        categoryRaw: "strength",
+                        equipmentRaw: "barbell",
+                        primaryMuscleRaw: "Chest",
+                        primaryMuscleGroupRaw: "chest",
+                        notes: "",
+                        isArchived: false,
+                        isSeeded: true
+                    )
+                ],
+                workoutSessions: [
+                    WorkoutSessionSyncRecord(
+                        clientId: sessionID.uuidString.lowercased(),
+                        createdAt: 12,
+                        updatedAt: 22,
+                        deletedAt: nil,
+                        serverUpdatedAt: 32,
+                        title: "Push",
+                        startedAt: 100,
+                        endedAt: 200,
+                        durationSeconds: 100,
+                        notes: "",
+                        referenceNotes: nil,
+                        statusRaw: "completed",
+                        sourceRaw: "blank",
+                        sourceSessionID: nil,
+                        healthLinkID: nil
+                    )
+                ],
+                loggedExercises: [
+                    LoggedExerciseSyncRecord(
+                        clientId: loggedExerciseID.uuidString.lowercased(),
+                        createdAt: 13,
+                        updatedAt: 23,
+                        deletedAt: nil,
+                        serverUpdatedAt: 33,
+                        sessionClientId: sessionID.uuidString.lowercased(),
+                        exerciseClientId: firstRemoteBenchID.uuidString.lowercased(),
+                        orderIndex: 0,
+                        exerciseSnapshotName: "Bench Press",
+                        exerciseSnapshotEquipmentRaw: "barbell",
+                        exerciseSnapshotPrimaryMuscleGroupRaw: "chest",
+                        hasSnapshotMetadata: true,
+                        notes: "",
+                        referenceNotes: nil,
+                        sourceLoggedExerciseID: nil
+                    )
+                ],
+                loggedSets: [
+                    LoggedSetSyncRecord(
+                        clientId: setID.uuidString.lowercased(),
+                        createdAt: 14,
+                        updatedAt: 24,
+                        deletedAt: nil,
+                        serverUpdatedAt: 34,
+                        loggedExerciseClientId: loggedExerciseID.uuidString.lowercased(),
+                        orderIndex: 0,
+                        weight: 185,
+                        reps: 5,
+                        rpe: nil,
+                        kindRaw: "working",
+                        isCompleted: true,
+                        completedAt: 190,
+                        notes: "",
+                        healthLinkID: nil,
+                        sourceLoggedSetID: nil
+                    )
+                ],
+                cursors: SyncChangeCursors(
+                    userSettings: 0,
+                    exercises: 31,
+                    workoutSessions: 32,
+                    loggedExercises: 33,
+                    loggedSets: 34
+                ),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            )
+        ]
+
+        let result = try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
+
+        XCTAssertFalse(result.hasIncompleteRemotePull)
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        XCTAssertNotNil(exercises.first { $0.id == firstRemoteBenchID })
+        XCTAssertNotNil(exercises.first { $0.id == secondRemoteBenchID })
+        let loggedExercise = try XCTUnwrap(context.fetch(FetchDescriptor<LoggedExercise>()).first { $0.id == loggedExerciseID })
+        XCTAssertEqual(loggedExercise.exercise?.id, firstRemoteBenchID)
+        XCTAssertEqual(loggedExercise.sortedSets.map(\.id), [setID])
+    }
+
     func testPullCascadesRemoteWorkoutSessionTombstoneToLocalChildren() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
