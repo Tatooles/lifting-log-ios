@@ -112,6 +112,13 @@ const syncCursorValidator = v.object({
   loggedSets: v.number(),
 });
 
+type SyncCursors = Infer<typeof syncCursorValidator>;
+type FetchChangesArgs = {
+  cursors: SyncCursors;
+  limit?: number;
+};
+type SyncReadCtx = QueryCtx | MutationCtx;
+
 function assertFiniteNumber(value: number, fieldName: string): void {
   if (!Number.isFinite(value)) {
     throw new Error(`${fieldName} must be a finite number`);
@@ -891,7 +898,7 @@ async function tombstoneLoggedSetByClientId(
 }
 
 async function fetchUserSettingsChanges(
-  ctx: QueryCtx,
+  ctx: SyncReadCtx,
   ownerTokenIdentifier: string,
   cursor: number,
   limit: number,
@@ -909,7 +916,7 @@ async function fetchUserSettingsChanges(
 }
 
 async function fetchExerciseChanges(
-  ctx: QueryCtx,
+  ctx: SyncReadCtx,
   ownerTokenIdentifier: string,
   cursor: number,
   limit: number,
@@ -927,7 +934,7 @@ async function fetchExerciseChanges(
 }
 
 async function fetchWorkoutSessionChanges(
-  ctx: QueryCtx,
+  ctx: SyncReadCtx,
   ownerTokenIdentifier: string,
   cursor: number,
   limit: number,
@@ -945,7 +952,7 @@ async function fetchWorkoutSessionChanges(
 }
 
 async function fetchLoggedExerciseChanges(
-  ctx: QueryCtx,
+  ctx: SyncReadCtx,
   ownerTokenIdentifier: string,
   cursor: number,
   limit: number,
@@ -963,7 +970,7 @@ async function fetchLoggedExerciseChanges(
 }
 
 async function fetchLoggedSetChanges(
-  ctx: QueryCtx,
+  ctx: SyncReadCtx,
   ownerTokenIdentifier: string,
   cursor: number,
   limit: number,
@@ -1323,85 +1330,95 @@ export async function deleteAccountDataForOwner(
   return await deleteAccountDataWithBatches(runBatch);
 }
 
+async function fetchChangesForOwner(ctx: SyncReadCtx, args: FetchChangesArgs) {
+  assertFiniteCursors(args.cursors);
+  const ownerTokenIdentifier = await requireOwnerTokenIdentifier(ctx);
+  const limit = normalizeFetchLimit(args.limit);
+
+  const userSettingsPage = await fetchUserSettingsChanges(
+    ctx,
+    ownerTokenIdentifier,
+    args.cursors.userSettings,
+    limit,
+  );
+  const exercisePage = await fetchExerciseChanges(
+    ctx,
+    ownerTokenIdentifier,
+    args.cursors.exercises,
+    limit,
+  );
+  const workoutSessionPage = await fetchWorkoutSessionChanges(
+    ctx,
+    ownerTokenIdentifier,
+    args.cursors.workoutSessions,
+    limit,
+  );
+  const loggedExercisePage = await fetchLoggedExerciseChanges(
+    ctx,
+    ownerTokenIdentifier,
+    args.cursors.loggedExercises,
+    limit,
+  );
+  const loggedSetPage = await fetchLoggedSetChanges(
+    ctx,
+    ownerTokenIdentifier,
+    args.cursors.loggedSets,
+    limit,
+  );
+  const userSettings = userSettingsPage.records;
+  const exercises = exercisePage.records.map(normalizeExerciseRecord);
+  const workoutSessions = workoutSessionPage.records;
+  const loggedExercises = loggedExercisePage.records.map(
+    normalizeLoggedExerciseRecord,
+  );
+  const loggedSets = loggedSetPage.records;
+
+  return {
+    userSettings,
+    exercises,
+    workoutSessions,
+    loggedExercises,
+    loggedSets,
+    cursors: {
+      userSettings: nextCursorFromRecords(
+        userSettings,
+        args.cursors.userSettings,
+      ),
+      exercises: nextCursorFromRecords(exercises, args.cursors.exercises),
+      workoutSessions: nextCursorFromRecords(
+        workoutSessions,
+        args.cursors.workoutSessions,
+      ),
+      loggedExercises: nextCursorFromRecords(
+        loggedExercises,
+        args.cursors.loggedExercises,
+      ),
+      loggedSets: nextCursorFromRecords(loggedSets, args.cursors.loggedSets),
+    },
+    hasMore: {
+      userSettings: userSettingsPage.hasMore,
+      exercises: exercisePage.hasMore,
+      workoutSessions: workoutSessionPage.hasMore,
+      loggedExercises: loggedExercisePage.hasMore,
+      loggedSets: loggedSetPage.hasMore,
+    },
+  };
+}
+
 export const fetchChanges = query({
   args: {
     cursors: syncCursorValidator,
     limit: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
-    assertFiniteCursors(args.cursors);
-    const ownerTokenIdentifier = await requireOwnerTokenIdentifier(ctx);
-    const limit = normalizeFetchLimit(args.limit);
+  handler: fetchChangesForOwner,
+});
 
-    const userSettingsPage = await fetchUserSettingsChanges(
-      ctx,
-      ownerTokenIdentifier,
-      args.cursors.userSettings,
-      limit,
-    );
-    const exercisePage = await fetchExerciseChanges(
-      ctx,
-      ownerTokenIdentifier,
-      args.cursors.exercises,
-      limit,
-    );
-    const workoutSessionPage = await fetchWorkoutSessionChanges(
-      ctx,
-      ownerTokenIdentifier,
-      args.cursors.workoutSessions,
-      limit,
-    );
-    const loggedExercisePage = await fetchLoggedExerciseChanges(
-      ctx,
-      ownerTokenIdentifier,
-      args.cursors.loggedExercises,
-      limit,
-    );
-    const loggedSetPage = await fetchLoggedSetChanges(
-      ctx,
-      ownerTokenIdentifier,
-      args.cursors.loggedSets,
-      limit,
-    );
-    const userSettings = userSettingsPage.records;
-    const exercises = exercisePage.records.map(normalizeExerciseRecord);
-    const workoutSessions = workoutSessionPage.records;
-    const loggedExercises = loggedExercisePage.records.map(
-      normalizeLoggedExerciseRecord,
-    );
-    const loggedSets = loggedSetPage.records;
-
-    return {
-      userSettings,
-      exercises,
-      workoutSessions,
-      loggedExercises,
-      loggedSets,
-      cursors: {
-        userSettings: nextCursorFromRecords(
-          userSettings,
-          args.cursors.userSettings,
-        ),
-        exercises: nextCursorFromRecords(exercises, args.cursors.exercises),
-        workoutSessions: nextCursorFromRecords(
-          workoutSessions,
-          args.cursors.workoutSessions,
-        ),
-        loggedExercises: nextCursorFromRecords(
-          loggedExercises,
-          args.cursors.loggedExercises,
-        ),
-        loggedSets: nextCursorFromRecords(loggedSets, args.cursors.loggedSets),
-      },
-      hasMore: {
-        userSettings: userSettingsPage.hasMore,
-        exercises: exercisePage.hasMore,
-        workoutSessions: workoutSessionPage.hasMore,
-        loggedExercises: loggedExercisePage.hasMore,
-        loggedSets: loggedSetPage.hasMore,
-      },
-    };
+export const fetchChangesOnce = mutation({
+  args: {
+    cursors: syncCursorValidator,
+    limit: v.optional(v.number()),
   },
+  handler: fetchChangesForOwner,
 });
 
 export const fetchSettingsExerciseChanges = query({

@@ -1,10 +1,14 @@
 import { type AuthConfig } from "convex/server";
 
+const clerkJwtIssuerDomain = process.env.CLERK_JWT_ISSUER_DOMAIN!;
+
 export default {
   providers: [
     {
-      domain: process.env.CLERK_JWT_ISSUER_DOMAIN!,
-      applicationID: "convex",
+      type: "customJwt",
+      issuer: clerkJwtIssuerDomain,
+      jwks: `${clerkJwtIssuerDomain}/.well-known/jwks.json`,
+      algorithm: "RS256",
     },
   ],
 } satisfies AuthConfig;

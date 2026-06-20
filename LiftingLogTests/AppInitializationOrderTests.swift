@@ -1,0 +1,51 @@
+import XCTest
+@testable import LiftingLog
+
+final class AppInitializationOrderTests: XCTestCase {
+    func testConvexClientIsInitializedAfterClerkConfiguration() throws {
+        let appSource = try sourceFileContents("LiftingLog/App/LiftingLogApp.swift")
+
+        XCTAssertFalse(
+            appSource.contains("@State private var convexClient = ConvexClientFactory.makeAuthenticatedClient()"),
+            "ConvexClientWithAuth must not be created before LiftingLogApp.init() calls Clerk.configure."
+        )
+
+        let clerkConfigureOffset = try XCTUnwrap(appSource.range(of: "Clerk.configure")).lowerBound
+        let convexClientOffset = try XCTUnwrap(appSource.range(of: "convexClient = ConvexClientFactory.makeAuthenticatedClient()")).lowerBound
+
+        XCTAssertLessThan(
+            appSource.distance(from: appSource.startIndex, to: clerkConfigureOffset),
+            appSource.distance(from: appSource.startIndex, to: convexClientOffset),
+            "Clerk.configure must run before ConvexClientFactory creates the ClerkConvex auth provider."
+        )
+    }
+
+    func testRestoredClerkSessionRetriesConvexCacheLoginAfterClerkLoads() throws {
+        let appSource = try sourceFileContents("LiftingLog/App/LiftingLogApp.swift")
+
+        XCTAssertTrue(
+            appSource.contains("await syncConvexAuthFromRestoredClerkSessionIfAvailable()"),
+            "App startup must retry Convex auth for already-restored Clerk sessions before observing sync state."
+        )
+        XCTAssertTrue(
+            appSource.contains("Clerk.shared.session?.status == .active"),
+            "The retry must be limited to restored active Clerk sessions."
+        )
+        XCTAssertTrue(
+            appSource.contains("Clerk.shared.isLoaded"),
+            "Convex cache login must wait until Clerk can issue session tokens."
+        )
+        XCTAssertTrue(
+            appSource.contains("await convexClient.loginFromCache()"),
+            "Restored Clerk sessions need an explicit Convex cache login because no sessionChanged event is emitted."
+        )
+    }
+
+    private func sourceFileContents(_ relativePath: String) throws -> String {
+        let testFileURL = URL(fileURLWithPath: #filePath)
+        let projectRootURL = testFileURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        return try String(contentsOf: projectRootURL.appending(path: relativePath), encoding: .utf8)
+    }
+}
