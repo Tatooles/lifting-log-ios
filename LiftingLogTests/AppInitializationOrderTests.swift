@@ -35,11 +35,11 @@ final class AppInitializationOrderTests: XCTestCase {
             appSource.contains("Clerk.shared.isLoaded"),
             "Convex cache login must wait until Clerk can issue session tokens."
         )
-        let isLoadedOffset = try XCTUnwrap(appSource.range(of: "if Clerk.shared.isLoaded")).lowerBound
+        let waitForClerkOffset = try XCTUnwrap(appSource.range(of: "await waitUntilClerkIsLoaded()")).lowerBound
         let activeSessionOffset = try XCTUnwrap(appSource.range(of: "guard Clerk.shared.session?.status == .active")).lowerBound
         let loginFromCacheOffset = try XCTUnwrap(appSource.range(of: "await convexClient.loginFromCache()")).lowerBound
         XCTAssertLessThan(
-            appSource.distance(from: appSource.startIndex, to: isLoadedOffset),
+            appSource.distance(from: appSource.startIndex, to: waitForClerkOffset),
             appSource.distance(from: appSource.startIndex, to: activeSessionOffset),
             "Startup retry must wait for Clerk to load before deciding whether a restored active session exists."
         )
@@ -51,6 +51,19 @@ final class AppInitializationOrderTests: XCTestCase {
         XCTAssertTrue(
             appSource.contains("await convexClient.loginFromCache()"),
             "Restored Clerk sessions need an explicit Convex cache login because no sessionChanged event is emitted."
+        )
+    }
+
+    func testRestoredClerkSessionWaitHasNoFixedRetryDeadline() throws {
+        let appSource = try sourceFileContents("LiftingLog/App/LiftingLogApp.swift")
+
+        XCTAssertFalse(
+            appSource.contains("for _ in 0..<50"),
+            "Restored Clerk session sync must not give up after a fixed retry cap; slow Clerk startup should still reach Convex cache login."
+        )
+        XCTAssertTrue(
+            appSource.contains("Task.isCancelled"),
+            "An unbounded Clerk load wait must exit when the startup task is cancelled."
         )
     }
 

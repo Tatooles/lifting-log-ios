@@ -83,7 +83,10 @@ struct LiftingLogApp: App {
         syncScheduler.configure(coordinator: coordinator, modelContext: modelContainer.mainContext)
 
         syncAuthTask = Task { @MainActor in
-            await syncConvexAuthFromRestoredClerkSessionIfAvailable()
+            let restoredSessionTask = Task { @MainActor in
+                await syncConvexAuthFromRestoredClerkSessionIfAvailable()
+            }
+            defer { restoredSessionTask.cancel() }
 
             for await state in convexClient.authState.values {
                 switch state {
@@ -103,23 +106,28 @@ struct LiftingLogApp: App {
     }
 
     private func syncConvexAuthFromRestoredClerkSessionIfAvailable() async {
-        for _ in 0..<50 {
+        await waitUntilClerkIsLoaded()
+        guard !Task.isCancelled else { return }
+        guard Clerk.shared.session?.status == .active else { return }
+
+        let result = await convexClient.loginFromCache()
+        let token: String
+        switch result {
+        case .success(let authToken):
+            token = authToken
+        case .failure:
+            return
+        }
+
+        guard let ownerTokenIdentifier = ClerkJWTIdentityResolver.ownerTokenIdentifier(from: token) else {
+            return
+        }
+        authenticateSyncOwner(ownerTokenIdentifier)
+    }
+
+    private func waitUntilClerkIsLoaded() async {
+        while !Task.isCancelled {
             if Clerk.shared.isLoaded {
-                guard Clerk.shared.session?.status == .active else { return }
-
-                let result = await convexClient.loginFromCache()
-                let token: String
-                switch result {
-                case .success(let authToken):
-                    token = authToken
-                case .failure:
-                    return
-                }
-
-                guard let ownerTokenIdentifier = ClerkJWTIdentityResolver.ownerTokenIdentifier(from: token) else {
-                    return
-                }
-                authenticateSyncOwner(ownerTokenIdentifier)
                 return
             }
 
