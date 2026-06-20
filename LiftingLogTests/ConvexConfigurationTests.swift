@@ -55,12 +55,16 @@ final class ConvexConfigurationTests: XCTestCase {
         XCTAssertTrue(firstClient === secondClient)
     }
 
-    func testAuthenticatedClientFactoryRequestsConvexJWTTemplate() throws {
+    func testAuthenticatedClientFactoryUsesClerkConvexProvider() throws {
         let factorySource = try sourceFileContents("LiftingLog/Core/Sync/ConvexClientFactory.swift")
 
         XCTAssertTrue(
-            factorySource.contains(#"ClerkConvexTemplateAuthProvider(jwtTemplate: "convex")"#),
-            "Convex auth must request the Clerk JWT template that emits aud=convex."
+            factorySource.contains("ClerkConvexAuthProvider()"),
+            "Convex auth should use Clerk's Swift integration package."
+        )
+        XCTAssertFalse(
+            factorySource.contains("ClerkConvexTemplateAuthProvider"),
+            "Do not bypass the official Clerk Convex provider with a local template-specific provider."
         )
     }
 
@@ -70,6 +74,10 @@ final class ConvexConfigurationTests: XCTestCase {
         XCTAssertTrue(
             authConfigSource.contains(#"applicationID: "convex""#),
             "Production Convex auth must preserve audience verification for Clerk JWTs."
+        )
+        XCTAssertFalse(
+            authConfigSource.contains(#"type: "customJwt""#),
+            "Clerk Convex auth should use the standard OIDC provider config."
         )
     }
 
