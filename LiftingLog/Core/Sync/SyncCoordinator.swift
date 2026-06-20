@@ -82,6 +82,14 @@ final class SyncCoordinator {
                 context: context
             )
 
+        // Collapse signed-out duplicate seeds before claiming, while they are still
+        // ownerless — once the claim loop below stamps an edited duplicate with the owner
+        // it would be indistinguishable from the canonical seed and slip through.
+        try mergeOwnerlessDuplicateSeedExercises(
+            ownerTokenIdentifier: ownerTokenIdentifier,
+            context: context
+        )
+
         for settings in try context.fetch(FetchDescriptor<UserSettings>()) {
             if settings.syncOwnerTokenIdentifier == nil,
                try canClaimUnownedRecord(
@@ -1417,6 +1425,88 @@ final class SyncCoordinator {
                 (settings.syncOwnerTokenIdentifier == nil || settings.syncOwnerTokenIdentifier == ownerTokenIdentifier)
                     && !settings.isDeleted
             }
+    }
+
+    /// Collapses ownerless duplicate seeded exercises into the matching owner-scoped seed.
+    ///
+    /// Signed-out mode re-seeds default exercises as ownerless rows because it cannot see
+    /// the owner-scoped library, so after a sign-in / sign-out / sign-in cycle a seed can
+    /// exist twice: once owner-scoped (already synced) and once ownerless. A workout logged
+    /// while signed out references the ownerless copy, whose `exerciseClientId` does not
+    /// exist remotely for the owner, so the server rejects the logged exercise. Repoint
+    /// those references onto the canonical owner-scoped seed and drop the stranded
+    /// duplicate. Only runs when an owner-scoped seed already exists for the identifier, so
+    /// it never interferes with first-time bootstrap of a purely ownerless library.
+    private func mergeOwnerlessDuplicateSeedExercises(
+        ownerTokenIdentifier: String,
+        context: ModelContext
+    ) throws {
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+
+        var canonicalBySeedIdentifier: [String: Exercise] = [:]
+        for exercise in exercises
+        where exercise.isSeeded && exercise.syncOwnerTokenIdentifier == ownerTokenIdentifier {
+            guard let seedIdentifier = exercise.seedIdentifier else { continue }
+            if let existing = canonicalBySeedIdentifier[seedIdentifier],
+               existing.createdAt <= exercise.createdAt {
+                continue
+            }
+            canonicalBySeedIdentifier[seedIdentifier] = exercise
+        }
+
+        guard !canonicalBySeedIdentifier.isEmpty else { return }
+
+        for duplicate in exercises
+        where duplicate.isSeeded && duplicate.syncOwnerTokenIdentifier == nil {
+            guard let seedIdentifier = duplicate.seedIdentifier,
+                  let canonical = canonicalBySeedIdentifier[seedIdentifier],
+                  canonical.id != duplicate.id else {
+                continue
+            }
+            try mergeSeedExercise(
+                duplicate: duplicate,
+                into: canonical,
+                ownerTokenIdentifier: ownerTokenIdentifier,
+                context: context
+            )
+        }
+    }
+
+    private func mergeSeedExercise(
+        duplicate: Exercise,
+        into canonical: Exercise,
+        ownerTokenIdentifier: String,
+        context: ModelContext
+    ) throws {
+        let duplicateID = duplicate.id
+
+        // Last-write-wins: a seed edited while signed out (a newer duplicate) carries the
+        // user's library-field changes. Preserve them on the canonical seed rather than
+        // discarding them with the duplicate. The retargeted outbox entry then pushes the
+        // merged values under the canonical id.
+        if duplicate.updatedAt > canonical.updatedAt {
+            canonical.name = duplicate.name
+            canonical.categoryRaw = duplicate.categoryRaw
+            canonical.equipmentRaw = duplicate.equipmentRaw
+            canonical.primaryMuscleRaw = duplicate.primaryMuscleRaw
+            canonical.primaryMuscleGroupRaw = duplicate.primaryMuscleGroupRaw
+            canonical.notes = duplicate.notes
+            canonical.isArchived = duplicate.isArchived
+            canonical.updatedAt = duplicate.updatedAt
+        }
+
+        for loggedExercise in try context.fetch(FetchDescriptor<LoggedExercise>())
+        where loggedExercise.exercise?.id == duplicateID {
+            loggedExercise.exercise = canonical
+        }
+        try retargetOutboxEntries(
+            entityKind: .exercise,
+            from: duplicateID,
+            to: canonical.id,
+            ownerTokenIdentifier: ownerTokenIdentifier,
+            context: context
+        )
+        context.delete(duplicate)
     }
 
     private func adoptableSeedExercise(
