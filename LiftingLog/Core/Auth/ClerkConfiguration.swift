@@ -13,27 +13,23 @@ struct AppEnvironmentConfiguration: Equatable {
 
     init(infoDictionary: [String: Any] = Bundle.main.infoDictionary ?? [:]) {
         self.environment = LiftingLogEnvironment(
-            rawValue: AppEnvironmentConfiguration.string(
+            rawValue: AppEnvironmentConfiguration.requiredString(
                 forKey: "LiftingLogEnvironment",
-                in: infoDictionary,
-                fallback: AppEnvironmentConfiguration.developmentEnvironment.rawValue
+                in: infoDictionary
             )
         ) ?? .development
-        self.clerkPublishableKey = AppEnvironmentConfiguration.string(
+        self.clerkPublishableKey = AppEnvironmentConfiguration.requiredString(
             forKey: "ClerkPublishableKey",
-            in: infoDictionary,
-            fallback: AppEnvironmentConfiguration.developmentClerkPublishableKey
+            in: infoDictionary
         )
-        self.clerkAssociatedDomain = AppEnvironmentConfiguration.string(
+        self.clerkAssociatedDomain = AppEnvironmentConfiguration.requiredString(
             forKey: "ClerkAssociatedDomain",
-            in: infoDictionary,
-            fallback: AppEnvironmentConfiguration.developmentClerkAssociatedDomain
+            in: infoDictionary
         )
 
-        let deploymentURLString = AppEnvironmentConfiguration.string(
+        let deploymentURLString = AppEnvironmentConfiguration.requiredString(
             forKey: "ConvexDeploymentURL",
-            in: infoDictionary,
-            fallback: AppEnvironmentConfiguration.developmentConvexDeploymentURLString
+            in: infoDictionary
         )
         guard let deploymentURL = URL(string: deploymentURLString) else {
             preconditionFailure("Invalid ConvexDeploymentURL: \(deploymentURLString)")
@@ -43,14 +39,9 @@ struct AppEnvironmentConfiguration: Equatable {
 
     static let current = AppEnvironmentConfiguration()
 
-    private static let developmentEnvironment = LiftingLogEnvironment.development
-    private static let developmentClerkPublishableKey = "pk_test_Z2xhZC1rcmlsbC0yMi5jbGVyay5hY2NvdW50cy5kZXYk"
-    private static let developmentClerkAssociatedDomain = "webcredentials:glad-krill-22.clerk.accounts.dev"
-    private static let developmentConvexDeploymentURLString = "https://glad-cow-603.convex.cloud"
-
-    private static func string(forKey key: String, in infoDictionary: [String: Any], fallback: String) -> String {
+    private static func requiredString(forKey key: String, in infoDictionary: [String: Any]) -> String {
         guard let value = infoDictionary[key] as? String, !value.isEmpty else {
-            return fallback
+            preconditionFailure("Missing required Info.plist value: \(key)")
         }
         return value
     }

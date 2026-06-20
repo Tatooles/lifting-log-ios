@@ -46,15 +46,7 @@ targets:
         CLERK_PUBLISHABLE_KEY: pk_test_Z2xhZC1rcmlsbC0yMi5jbGVyay5hY2NvdW50cy5kZXYk
         CLERK_ASSOCIATED_DOMAIN: webcredentials:glad-krill-22.clerk.accounts.dev
         CONVEX_DEPLOYMENT_URL: https://glad-cow-603.convex.cloud
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: $(APP_DISPLAY_NAME)
-        INFOPLIST_KEY_LiftingLogEnvironment: $(LIFTING_LOG_ENVIRONMENT)
-        INFOPLIST_KEY_ClerkPublishableKey: $(CLERK_PUBLISHABLE_KEY)
-        INFOPLIST_KEY_ClerkAssociatedDomain: $(CLERK_ASSOCIATED_DOMAIN)
-        INFOPLIST_KEY_ConvexDeploymentURL: $(CONVEX_DEPLOYMENT_URL)
-        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
+        INFOPLIST_FILE: LiftingLog/Info.plist
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         SUPPORTS_MACCATALYST: NO
         TARGETED_DEVICE_FAMILY: 1

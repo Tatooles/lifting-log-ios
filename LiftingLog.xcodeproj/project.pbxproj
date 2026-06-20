@@ -170,6 +170,7 @@
 		0D41DF9D24F54196760629B7 /* WorkoutFocusNavigatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutFocusNavigatorTests.swift; sourceTree = "<group>"; };
 		123F0A21D452E6423D91E240 /* ExerciseLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseLibraryView.swift; sourceTree = "<group>"; };
 		15F1E9CE302E62AC787DD878 /* SeedDataServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedDataServiceTests.swift; sourceTree = "<group>"; };
+		16DA0E25F88D6F44862C43F7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		1A67B2675FB5B64B2EB4B3AE /* WorkoutMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutMetrics.swift; sourceTree = "<group>"; };
 		1DA9B9B6ECE4ADA84317722E /* PrivacySupportConfigurationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacySupportConfigurationTests.swift; sourceTree = "<group>"; };
 		1E72D1E37AD9AEE42873FC6F /* LiftingLogSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiftingLogSchema.swift; sourceTree = "<group>"; };
@@ -350,6 +351,7 @@
 		40808DB2FCF33594546A0328 /* LiftingLog */ = {
 			isa = PBXGroup;
 			children = (
+				16DA0E25F88D6F44862C43F7 /* Info.plist */,
 				3DB3484AD2211A8F31EC4FC1 /* LiftingLog.entitlements */,
 				F623F80C35B8454B64D03A3A /* App */,
 				2FA5E6FC9D297E93F2EA7365 /* Core */,
@@ -955,15 +957,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CONVEX_DEPLOYMENT_URL = "https://glad-cow-603.convex.cloud";
 				DEVELOPMENT_TEAM = RJGJJ38RV9;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "$(APP_DISPLAY_NAME)";
-				INFOPLIST_KEY_ClerkAssociatedDomain = "$(CLERK_ASSOCIATED_DOMAIN)";
-				INFOPLIST_KEY_ClerkPublishableKey = "$(CLERK_PUBLISHABLE_KEY)";
-				INFOPLIST_KEY_ConvexDeploymentURL = "$(CONVEX_DEPLOYMENT_URL)";
-				INFOPLIST_KEY_LiftingLogEnvironment = "$(LIFTING_LOG_ENVIRONMENT)";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				INFOPLIST_FILE = LiftingLog/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -992,15 +986,7 @@
 				CONVEX_DEPLOYMENT_URL = "https://sensible-reindeer-16.convex.cloud";
 				DEVELOPMENT_TEAM = RJGJJ38RV9;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "$(APP_DISPLAY_NAME)";
-				INFOPLIST_KEY_ClerkAssociatedDomain = "$(CLERK_ASSOCIATED_DOMAIN)";
-				INFOPLIST_KEY_ClerkPublishableKey = "$(CLERK_PUBLISHABLE_KEY)";
-				INFOPLIST_KEY_ConvexDeploymentURL = "$(CONVEX_DEPLOYMENT_URL)";
-				INFOPLIST_KEY_LiftingLogEnvironment = "$(LIFTING_LOG_ENVIRONMENT)";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				INFOPLIST_FILE = LiftingLog/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

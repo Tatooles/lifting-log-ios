@@ -10,6 +10,15 @@ final class ClerkConfigurationTests: XCTestCase {
         )
     }
 
+    func testAppBundleIncludesEnvironmentConfigurationKeys() {
+        let infoDictionary = Bundle.main.infoDictionary ?? [:]
+
+        XCTAssertNotNil(infoDictionary["LiftingLogEnvironment"])
+        XCTAssertNotNil(infoDictionary["ClerkPublishableKey"])
+        XCTAssertNotNil(infoDictionary["ClerkAssociatedDomain"])
+        XCTAssertNotNil(infoDictionary["ConvexDeploymentURL"])
+    }
+
     func testDevelopmentInfoDictionaryBuildsDevelopmentConfiguration() {
         let configuration = AppEnvironmentConfiguration(infoDictionary: [
             "LiftingLogEnvironment": "Development",
