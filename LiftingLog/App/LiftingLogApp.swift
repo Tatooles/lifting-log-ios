@@ -103,12 +103,10 @@ struct LiftingLogApp: App {
     }
 
     private func syncConvexAuthFromRestoredClerkSessionIfAvailable() async {
-        guard Clerk.shared.session?.status == .active else { return }
-
         for _ in 0..<50 {
-            guard Clerk.shared.session?.status == .active else { return }
-
             if Clerk.shared.isLoaded {
+                guard Clerk.shared.session?.status == .active else { return }
+
                 let result = await convexClient.loginFromCache()
                 let token: String
                 switch result {
