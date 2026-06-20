@@ -1480,11 +1480,18 @@ final class SyncCoordinator {
     ) throws {
         let duplicateID = duplicate.id
 
-        // Last-write-wins: a seed edited while signed out (a newer duplicate) carries the
-        // user's library-field changes. Preserve them on the canonical seed rather than
-        // discarding them with the duplicate. The retargeted outbox entry then pushes the
-        // merged values under the canonical id.
-        if duplicate.updatedAt > canonical.updatedAt {
+        // Last-write-wins, but only for a duplicate the user actually edited while signed
+        // out. A freshly re-seeded duplicate gets a current `updatedAt` purely from being
+        // created, so a timestamp comparison alone would let an unedited default overwrite
+        // the canonical seed's previously-synced custom fields. Require an active exercise
+        // outbox entry (real local intent) before copying. The retargeted outbox entry then
+        // pushes the merged values under the canonical id.
+        let duplicateHasLocalEdit = try hasActiveOutboxEntry(
+            entityKind: .exercise,
+            entityID: duplicateID,
+            context: context
+        )
+        if duplicateHasLocalEdit, duplicate.updatedAt > canonical.updatedAt {
             canonical.name = duplicate.name
             canonical.categoryRaw = duplicate.categoryRaw
             canonical.equipmentRaw = duplicate.equipmentRaw
