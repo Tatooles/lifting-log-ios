@@ -1,19 +1,21 @@
 import SwiftData
 import SwiftUI
 import ClerkKit
+@preconcurrency import ConvexMobile
 
 @main
 struct LiftingLogApp: App {
     private let modelContainer: ModelContainer
+    private let convexClient: ConvexClientWithAuth<String>
     private let uiTestSyncOwner: String?
     @State private var navigationState = AppNavigationState()
     @State private var activeWorkoutEngine = ActiveWorkoutEngine()
     @State private var syncScheduler = SyncScheduler()
-    @State private var convexClient = ConvexClientFactory.makeAuthenticatedClient()
     @State private var syncAuthTask: Task<Void, Never>?
 
     init() {
         Clerk.configure(publishableKey: ClerkConfiguration.publishableKey)
+        convexClient = ConvexClientFactory.makeAuthenticatedClient()
         let arguments = ProcessInfo.processInfo.arguments
         let uiTestSyncOwnerIndex = arguments.firstIndex(of: "--uitest-sync-owner")
         uiTestSyncOwner = uiTestSyncOwnerIndex.flatMap { index -> String? in
@@ -81,6 +83,11 @@ struct LiftingLogApp: App {
         syncScheduler.configure(coordinator: coordinator, modelContext: modelContainer.mainContext)
 
         syncAuthTask = Task { @MainActor in
+            let restoredSessionTask = Task { @MainActor in
+                await syncConvexAuthFromRestoredClerkSessionIfAvailable()
+            }
+            defer { restoredSessionTask.cancel() }
+
             for await state in convexClient.authState.values {
                 switch state {
                 case .loading:
@@ -88,36 +95,49 @@ struct LiftingLogApp: App {
                 case .unauthenticated:
                     syncScheduler.currentOwnerTokenIdentifier = nil
                     syncScheduler.seedDefaultsForLocalMode()
-                case .authenticated:
-                    guard let ownerTokenIdentifier = await resolveOwnerTokenIdentifier() else {
+                case .authenticated(let token):
+                    guard let ownerTokenIdentifier = ClerkJWTIdentityResolver.ownerTokenIdentifier(from: token) else {
                         break
                     }
-                    syncScheduler.currentOwnerTokenIdentifier = ownerTokenIdentifier
-                    syncScheduler.seedDefaultsForCurrentOwner()
-                    syncScheduler.requestSync()
+                    authenticateSyncOwner(ownerTokenIdentifier)
                 }
             }
         }
     }
 
-    private func resolveOwnerTokenIdentifier() async -> String? {
-        let publisher = convexClient.subscribe(
-            to: "authSmoke:me",
-            yielding: ConvexAuthSmokeIdentity.self
-        )
+    private func syncConvexAuthFromRestoredClerkSessionIfAvailable() async {
+        await waitUntilClerkIsLoaded()
+        guard !Task.isCancelled else { return }
+        guard Clerk.shared.session?.status == .active else { return }
 
-        do {
-            for try await identity in publisher.values {
-                return identity.tokenIdentifier
-            }
-        } catch {
-            return nil
+        let result = await convexClient.loginFromCache()
+        let token: String
+        switch result {
+        case .success(let authToken):
+            token = authToken
+        case .failure:
+            return
         }
 
-        return nil
+        guard let ownerTokenIdentifier = ClerkJWTIdentityResolver.ownerTokenIdentifier(from: token) else {
+            return
+        }
+        authenticateSyncOwner(ownerTokenIdentifier)
     }
-}
 
-private struct ConvexAuthSmokeIdentity: Decodable {
-    let tokenIdentifier: String
+    private func waitUntilClerkIsLoaded() async {
+        while !Task.isCancelled {
+            if Clerk.shared.isLoaded {
+                return
+            }
+
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+    }
+
+    private func authenticateSyncOwner(_ ownerTokenIdentifier: String) {
+        syncScheduler.currentOwnerTokenIdentifier = ownerTokenIdentifier
+        syncScheduler.seedDefaultsForCurrentOwner()
+        syncScheduler.requestSync()
+    }
 }

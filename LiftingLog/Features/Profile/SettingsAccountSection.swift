@@ -40,7 +40,7 @@ struct SettingsAccountSection: View {
                 Label {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Developer Diagnostics")
-                        Text("Convex auth smoke checks.")
+                        Text("Environment and Convex auth checks.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

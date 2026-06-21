@@ -284,6 +284,22 @@ describe("sync access control", () => {
       "exercise-2",
     ]);
   });
+
+  test("one-shot fetch changes mutation returns owner-scoped records", async () => {
+    const t = testDb();
+
+    await t
+      .withIdentity(userA)
+      .mutation(api.sync.upsertExercise, { record: exerciseRecord() });
+
+    const changes = await t
+      .withIdentity(userA)
+      .mutation(api.sync.fetchChangesOnce, { cursors: zeroCursors });
+
+    expect(changes.exercises.map((record) => record.clientId)).toEqual([
+      "exercise-1",
+    ]);
+  });
 });
 
 describe("account data deletion", () => {

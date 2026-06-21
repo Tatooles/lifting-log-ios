@@ -29,6 +29,7 @@ final class LiftingLogUITests: XCTestCase {
 
         app.buttons["ProfileTab"].tap()
         XCTAssertTrue(app.staticTexts["ProfileTitle"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["ProfileEnvironmentBadge"].exists)
 
         app.buttons["WorkoutTab"].tap()
         XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
@@ -435,6 +436,13 @@ final class LiftingLogUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Cloud sync could not finish. Your data is saved on this iPhone."].exists)
 
         app.buttons["SettingsDeveloperDiagnosticsRow"].tap()
+        XCTAssertTrue(app.staticTexts["DeveloperDiagnosticsEnvironment"].waitForExistence(timeout: 3))
+        XCTAssertEqual(app.staticTexts["DeveloperDiagnosticsEnvironment"].label, "Development")
+        XCTAssertTrue(app.staticTexts["DeveloperDiagnosticsClerkDomain"].exists)
+        XCTAssertEqual(
+            app.staticTexts["DeveloperDiagnosticsClerkDomain"].label,
+            "webcredentials:glad-krill-22.clerk.accounts.dev"
+        )
         let syncSummary = app.staticTexts["DeveloperDiagnosticsSyncSummary"]
         XCTAssertTrue(syncSummary.waitForExistence(timeout: 3))
         XCTAssertTrue(syncSummary.label.contains("lastFailure: Convex function sync:fetchChanges failed for token issuer|ui_owner"))

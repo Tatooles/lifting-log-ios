@@ -1,4 +1,3 @@
-import Combine
 import ConvexMobile
 import Foundation
 
@@ -26,21 +25,21 @@ struct ConvexSyncClient: SyncClient, @unchecked Sendable {
     }
 
     func upsertWorkoutSession(_ record: WorkoutSessionSyncPayload) async throws -> SyncMutationResult {
-        try await client.mutation(
+        return try await client.mutation(
             "sync:upsertWorkoutSession",
             with: ConvexSyncArgumentMapper.upsertWorkoutSessionArgs(record)
         )
     }
 
     func upsertLoggedExercise(_ record: LoggedExerciseSyncPayload) async throws -> SyncMutationResult {
-        try await client.mutation(
+        return try await client.mutation(
             "sync:upsertLoggedExercise",
             with: ConvexSyncArgumentMapper.upsertLoggedExerciseArgs(record)
         )
     }
 
     func upsertLoggedSet(_ record: LoggedSetSyncPayload) async throws -> SyncMutationResult {
-        try await client.mutation(
+        return try await client.mutation(
             "sync:upsertLoggedSet",
             with: ConvexSyncArgumentMapper.upsertLoggedSetArgs(record)
         )
@@ -58,17 +57,10 @@ struct ConvexSyncClient: SyncClient, @unchecked Sendable {
     }
 
     func fetchChanges(cursors: SyncChangeCursors, limit: Int) async throws -> SyncFetchChangesResponse {
-        let publisher = client.subscribe(
-            to: "sync:fetchChanges",
-            with: ConvexSyncArgumentMapper.fetchChangesArgs(cursors: cursors, limit: limit),
-            yielding: SyncFetchChangesResponse.self
+        return try await client.mutation(
+            "sync:fetchChangesOnce",
+            with: ConvexSyncArgumentMapper.fetchChangesArgs(cursors: cursors, limit: limit)
         )
-
-        for try await response in publisher.values {
-            return response
-        }
-
-        throw ConvexSyncClientError.noFetchChangesValue
     }
 
     func deleteAccountData(cancellationToken: UUID) async throws -> AccountDataDeletionResult {
@@ -207,16 +199,5 @@ enum ConvexSyncArgumentMapper {
             "loggedExercises": cursors.loggedExercises,
             "loggedSets": cursors.loggedSets,
         ]
-    }
-}
-
-enum ConvexSyncClientError: LocalizedError {
-    case noFetchChangesValue
-
-    var errorDescription: String? {
-        switch self {
-        case .noFetchChangesValue:
-            "Convex fetchChanges subscription completed without a value."
-        }
     }
 }

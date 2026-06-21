@@ -82,6 +82,14 @@ final class SyncCoordinator {
                 context: context
             )
 
+        // Collapse signed-out duplicate seeds before claiming, while they are still
+        // ownerless — once the claim loop below stamps an edited duplicate with the owner
+        // it would be indistinguishable from the canonical seed and slip through.
+        try mergeOwnerlessDuplicateSeedExercises(
+            ownerTokenIdentifier: ownerTokenIdentifier,
+            context: context
+        )
+
         for settings in try context.fetch(FetchDescriptor<UserSettings>()) {
             if settings.syncOwnerTokenIdentifier == nil,
                try canClaimUnownedRecord(
@@ -718,6 +726,8 @@ final class SyncCoordinator {
         var hasMore = true
         var loggedExercisesCursorBlocked = false
         var loggedSetsCursorBlocked = false
+        var pulledRemoteExerciseIDs = Set<UUID>()
+        let allowsOwnerScopedSeedAdoption = !state.hasBootstrappedSettingsExercises
         var fetchCursors = SyncChangeCursors(
             userSettings: state.userSettingsCursor,
             exercises: state.exercisesCursor,
@@ -734,7 +744,13 @@ final class SyncCoordinator {
 
             summary.record(response)
             try apply(userSettingsRecords: response.userSettings, ownerTokenIdentifier: ownerTokenIdentifier, context: context)
-            try apply(exerciseRecords: response.exercises, ownerTokenIdentifier: ownerTokenIdentifier, context: context)
+            try apply(
+                exerciseRecords: response.exercises,
+                ownerTokenIdentifier: ownerTokenIdentifier,
+                allowsOwnerScopedSeedAdoption: allowsOwnerScopedSeedAdoption,
+                pulledRemoteExerciseIDs: &pulledRemoteExerciseIDs,
+                context: context
+            )
             let workoutSessionApplyResult = try apply(
                 workoutSessionRecords: response.workoutSessions,
                 ownerTokenIdentifier: ownerTokenIdentifier,
@@ -888,10 +904,13 @@ final class SyncCoordinator {
     private func apply(
         exerciseRecords records: [ExerciseSyncRecord],
         ownerTokenIdentifier: String,
+        allowsOwnerScopedSeedAdoption: Bool,
+        pulledRemoteExerciseIDs: inout Set<UUID>,
         context: ModelContext
     ) throws {
         for record in records {
             guard let id = UUID(uuidString: record.clientId) else { continue }
+            defer { pulledRemoteExerciseIDs.insert(id) }
             let incomingUpdatedAt = Date(timeIntervalSince1970: record.updatedAt)
             let incomingDeletedAt = record.deletedAt.map(Date.init(timeIntervalSince1970:))
 
@@ -914,6 +933,8 @@ final class SyncCoordinator {
                    let exercise = try adoptableSeedExercise(
                        seedIdentifier: seedIdentifier,
                        ownerTokenIdentifier: ownerTokenIdentifier,
+                       allowsOwnerScopedAdoption: allowsOwnerScopedSeedAdoption,
+                       excluding: pulledRemoteExerciseIDs,
                        context: context
                    ) {
                     let localID = exercise.id
@@ -1406,14 +1427,107 @@ final class SyncCoordinator {
             }
     }
 
+    /// Collapses ownerless duplicate seeded exercises into the matching owner-scoped seed.
+    ///
+    /// Signed-out mode re-seeds default exercises as ownerless rows because it cannot see
+    /// the owner-scoped library, so after a sign-in / sign-out / sign-in cycle a seed can
+    /// exist twice: once owner-scoped (already synced) and once ownerless. A workout logged
+    /// while signed out references the ownerless copy, whose `exerciseClientId` does not
+    /// exist remotely for the owner, so the server rejects the logged exercise. Repoint
+    /// those references onto the canonical owner-scoped seed and drop the stranded
+    /// duplicate. Only runs when an owner-scoped seed already exists for the identifier, so
+    /// it never interferes with first-time bootstrap of a purely ownerless library.
+    private func mergeOwnerlessDuplicateSeedExercises(
+        ownerTokenIdentifier: String,
+        context: ModelContext
+    ) throws {
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+
+        var canonicalBySeedIdentifier: [String: Exercise] = [:]
+        for exercise in exercises
+        where exercise.isSeeded && exercise.syncOwnerTokenIdentifier == ownerTokenIdentifier {
+            guard let seedIdentifier = exercise.seedIdentifier else { continue }
+            if let existing = canonicalBySeedIdentifier[seedIdentifier],
+               existing.createdAt <= exercise.createdAt {
+                continue
+            }
+            canonicalBySeedIdentifier[seedIdentifier] = exercise
+        }
+
+        guard !canonicalBySeedIdentifier.isEmpty else { return }
+
+        for duplicate in exercises
+        where duplicate.isSeeded && duplicate.syncOwnerTokenIdentifier == nil {
+            guard let seedIdentifier = duplicate.seedIdentifier,
+                  let canonical = canonicalBySeedIdentifier[seedIdentifier],
+                  canonical.id != duplicate.id else {
+                continue
+            }
+            try mergeSeedExercise(
+                duplicate: duplicate,
+                into: canonical,
+                ownerTokenIdentifier: ownerTokenIdentifier,
+                context: context
+            )
+        }
+    }
+
+    private func mergeSeedExercise(
+        duplicate: Exercise,
+        into canonical: Exercise,
+        ownerTokenIdentifier: String,
+        context: ModelContext
+    ) throws {
+        let duplicateID = duplicate.id
+
+        // Last-write-wins, but only for a duplicate the user actually edited while signed
+        // out. A freshly re-seeded duplicate gets a current `updatedAt` purely from being
+        // created, so a timestamp comparison alone would let an unedited default overwrite
+        // the canonical seed's previously-synced custom fields. Require an active exercise
+        // outbox entry (real local intent) before copying. The retargeted outbox entry then
+        // pushes the merged values under the canonical id.
+        let duplicateHasLocalEdit = try hasActiveOutboxEntry(
+            entityKind: .exercise,
+            entityID: duplicateID,
+            context: context
+        )
+        if duplicateHasLocalEdit, duplicate.updatedAt > canonical.updatedAt {
+            canonical.name = duplicate.name
+            canonical.categoryRaw = duplicate.categoryRaw
+            canonical.equipmentRaw = duplicate.equipmentRaw
+            canonical.primaryMuscleRaw = duplicate.primaryMuscleRaw
+            canonical.primaryMuscleGroupRaw = duplicate.primaryMuscleGroupRaw
+            canonical.notes = duplicate.notes
+            canonical.isArchived = duplicate.isArchived
+            canonical.updatedAt = duplicate.updatedAt
+        }
+
+        for loggedExercise in try context.fetch(FetchDescriptor<LoggedExercise>())
+        where loggedExercise.exercise?.id == duplicateID {
+            loggedExercise.exercise = canonical
+        }
+        try retargetOutboxEntries(
+            entityKind: .exercise,
+            from: duplicateID,
+            to: canonical.id,
+            ownerTokenIdentifier: ownerTokenIdentifier,
+            context: context
+        )
+        context.delete(duplicate)
+    }
+
     private func adoptableSeedExercise(
         seedIdentifier: String,
         ownerTokenIdentifier: String,
+        allowsOwnerScopedAdoption: Bool,
+        excluding pulledRemoteExerciseIDs: Set<UUID>,
         context: ModelContext
     ) throws -> Exercise? {
         try context.fetch(FetchDescriptor<Exercise>())
             .first { exercise in
-                (exercise.syncOwnerTokenIdentifier == nil || exercise.syncOwnerTokenIdentifier == ownerTokenIdentifier)
+                !pulledRemoteExerciseIDs.contains(exercise.id)
+                    && (exercise.syncOwnerTokenIdentifier == nil
+                        || (allowsOwnerScopedAdoption && exercise.syncOwnerTokenIdentifier == ownerTokenIdentifier))
                     && exercise.isSeeded
                     && exercise.seedIdentifier == seedIdentifier
             }

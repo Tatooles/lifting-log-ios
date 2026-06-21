@@ -1239,6 +1239,411 @@ final class SyncCoordinatorTests: XCTestCase {
         XCTAssertEqual(state.loggedSetsCursor, 33)
     }
 
+    func testRunPullsWorkoutGraphWhenRemoteHasDuplicateSeedExercises() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let owner = "issuer|owner_a"
+        try SeedDataService.seedIfNeeded(context: context)
+
+        let firstRemoteBenchID = UUID(uuidString: "00000000-0000-0000-0000-000000006101")!
+        let secondRemoteBenchID = UUID(uuidString: "00000000-0000-0000-0000-000000006102")!
+        let sessionID = UUID(uuidString: "00000000-0000-0000-0000-000000006103")!
+        let loggedExerciseID = UUID(uuidString: "00000000-0000-0000-0000-000000006104")!
+        let setID = UUID(uuidString: "00000000-0000-0000-0000-000000006105")!
+        let client = FakeSyncClient()
+        client.fetchResponses = [
+            SyncFetchChangesResponse(
+                userSettings: [],
+                exercises: [
+                    ExerciseSyncRecord(
+                        clientId: firstRemoteBenchID.uuidString.lowercased(),
+                        createdAt: 10,
+                        updatedAt: 20,
+                        deletedAt: nil,
+                        serverUpdatedAt: 30,
+                        seedIdentifier: "bench-press",
+                        name: "Bench Press",
+                        categoryRaw: "strength",
+                        equipmentRaw: "barbell",
+                        primaryMuscleRaw: "Chest",
+                        primaryMuscleGroupRaw: "chest",
+                        notes: "",
+                        isArchived: false,
+                        isSeeded: true
+                    ),
+                    ExerciseSyncRecord(
+                        clientId: secondRemoteBenchID.uuidString.lowercased(),
+                        createdAt: 11,
+                        updatedAt: 21,
+                        deletedAt: nil,
+                        serverUpdatedAt: 31,
+                        seedIdentifier: "bench-press",
+                        name: "Bench Press",
+                        categoryRaw: "strength",
+                        equipmentRaw: "barbell",
+                        primaryMuscleRaw: "Chest",
+                        primaryMuscleGroupRaw: "chest",
+                        notes: "",
+                        isArchived: false,
+                        isSeeded: true
+                    )
+                ],
+                workoutSessions: [
+                    WorkoutSessionSyncRecord(
+                        clientId: sessionID.uuidString.lowercased(),
+                        createdAt: 12,
+                        updatedAt: 22,
+                        deletedAt: nil,
+                        serverUpdatedAt: 32,
+                        title: "Push",
+                        startedAt: 100,
+                        endedAt: 200,
+                        durationSeconds: 100,
+                        notes: "",
+                        referenceNotes: nil,
+                        statusRaw: "completed",
+                        sourceRaw: "blank",
+                        sourceSessionID: nil,
+                        healthLinkID: nil
+                    )
+                ],
+                loggedExercises: [
+                    LoggedExerciseSyncRecord(
+                        clientId: loggedExerciseID.uuidString.lowercased(),
+                        createdAt: 13,
+                        updatedAt: 23,
+                        deletedAt: nil,
+                        serverUpdatedAt: 33,
+                        sessionClientId: sessionID.uuidString.lowercased(),
+                        exerciseClientId: firstRemoteBenchID.uuidString.lowercased(),
+                        orderIndex: 0,
+                        exerciseSnapshotName: "Bench Press",
+                        exerciseSnapshotEquipmentRaw: "barbell",
+                        exerciseSnapshotPrimaryMuscleGroupRaw: "chest",
+                        hasSnapshotMetadata: true,
+                        notes: "",
+                        referenceNotes: nil,
+                        sourceLoggedExerciseID: nil
+                    )
+                ],
+                loggedSets: [
+                    LoggedSetSyncRecord(
+                        clientId: setID.uuidString.lowercased(),
+                        createdAt: 14,
+                        updatedAt: 24,
+                        deletedAt: nil,
+                        serverUpdatedAt: 34,
+                        loggedExerciseClientId: loggedExerciseID.uuidString.lowercased(),
+                        orderIndex: 0,
+                        weight: 185,
+                        reps: 5,
+                        rpe: nil,
+                        kindRaw: "working",
+                        isCompleted: true,
+                        completedAt: 190,
+                        notes: "",
+                        healthLinkID: nil,
+                        sourceLoggedSetID: nil
+                    )
+                ],
+                cursors: SyncChangeCursors(
+                    userSettings: 0,
+                    exercises: 31,
+                    workoutSessions: 32,
+                    loggedExercises: 33,
+                    loggedSets: 34
+                ),
+                hasMore: SyncHasMore(userSettings: false, exercises: false)
+            )
+        ]
+
+        let result = try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
+
+        XCTAssertFalse(result.hasIncompleteRemotePull)
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        XCTAssertNotNil(exercises.first { $0.id == firstRemoteBenchID })
+        XCTAssertNotNil(exercises.first { $0.id == secondRemoteBenchID })
+        let loggedExercise = try XCTUnwrap(context.fetch(FetchDescriptor<LoggedExercise>()).first { $0.id == loggedExerciseID })
+        XCTAssertEqual(loggedExercise.exercise?.id, firstRemoteBenchID)
+        XCTAssertEqual(loggedExercise.sortedSets.map(\.id), [setID])
+    }
+
+    func testRunMergesOwnerlessDuplicateSeedExerciseIntoOwnerScopedSeedOnClaim() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let owner = "issuer|owner_a"
+
+        // Canonical owner-scoped seed: claimed and synced on a prior sign-in.
+        let canonicalID = UUID(uuidString: "00000000-0000-0000-0000-000000006201")!
+        let canonical = Exercise(
+            id: canonicalID,
+            seedIdentifier: "back-squat",
+            name: "Back Squat",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Quads",
+            isSeeded: true,
+            syncOwnerTokenIdentifier: owner
+        )
+        context.insert(canonical)
+
+        // Ownerless duplicate seed produced by signed-out re-seeding.
+        let duplicateID = UUID(uuidString: "00000000-0000-0000-0000-000000006202")!
+        let duplicate = Exercise(
+            id: duplicateID,
+            seedIdentifier: "back-squat",
+            name: "Back Squat",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Quads",
+            isSeeded: true
+        )
+        context.insert(duplicate)
+
+        // Completed workout created while signed out, referencing the ownerless duplicate.
+        let sessionID = UUID(uuidString: "00000000-0000-0000-0000-000000006203")!
+        let loggedExerciseID = UUID(uuidString: "00000000-0000-0000-0000-000000006204")!
+        let setID = UUID(uuidString: "00000000-0000-0000-0000-000000006205")!
+        let session = WorkoutSession(
+            id: sessionID,
+            title: "Signed Out Squats",
+            startedAt: Date(timeIntervalSince1970: 100),
+            endedAt: Date(timeIntervalSince1970: 200),
+            durationSeconds: 100,
+            status: .completed,
+            source: .blank
+        )
+        let loggedExercise = LoggedExercise(
+            id: loggedExerciseID,
+            orderIndex: 0,
+            exercise: duplicate
+        )
+        let set = LoggedSet(
+            id: setID,
+            orderIndex: 0,
+            weight: 225,
+            reps: 5,
+            isCompleted: true
+        )
+        loggedExercise.session = session
+        set.loggedExercise = loggedExercise
+        session.loggedExercises.append(loggedExercise)
+        loggedExercise.sets.append(set)
+        context.insert(session)
+        context.insert(loggedExercise)
+        context.insert(set)
+
+        let recorder = SyncOutboxRecorder()
+        try recorder.recordCreate(entityKind: .workoutSession, entityID: sessionID, ownerTokenIdentifier: nil, context: context, now: Date(timeIntervalSince1970: 201))
+        try recorder.recordCreate(entityKind: .loggedExercise, entityID: loggedExerciseID, ownerTokenIdentifier: nil, context: context, now: Date(timeIntervalSince1970: 202))
+        try recorder.recordCreate(entityKind: .loggedSet, entityID: setID, ownerTokenIdentifier: nil, context: context, now: Date(timeIntervalSince1970: 203))
+
+        // Owner already bootstrapped on a prior sign-in.
+        let state = SyncCursorState(
+            ownerTokenIdentifier: owner,
+            hasBootstrappedSettingsExercises: true,
+            hasBootstrappedWorkoutGraph: true
+        )
+        context.insert(state)
+        try context.save()
+
+        let client = FakeSyncClient()
+        let result = try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
+
+        XCTAssertFalse(result.hasIncompleteRemotePull)
+
+        // The logged exercise is repointed to the canonical owner-scoped seed locally.
+        let mergedLoggedExercise = try XCTUnwrap(
+            context.fetch(FetchDescriptor<LoggedExercise>()).first { $0.id == loggedExerciseID }
+        )
+        XCTAssertEqual(mergedLoggedExercise.exercise?.id, canonicalID)
+
+        // The stranded ownerless duplicate is removed; the canonical survives.
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        XCTAssertNil(exercises.first { $0.id == duplicateID })
+        XCTAssertNotNil(exercises.first { $0.id == canonicalID })
+
+        // The pushed logged exercise references the canonical id (which exists remotely),
+        // not the ownerless duplicate id (which Convex would reject).
+        let pushedLoggedExercise = try XCTUnwrap(client.upsertedLoggedExercises.first {
+            $0.clientId == loggedExerciseID.uuidString.lowercased()
+        })
+        XCTAssertEqual(pushedLoggedExercise.exerciseClientId, canonicalID.uuidString.lowercased())
+    }
+
+    func testRunMergesSignedOutSeedExerciseEditsIntoOwnerScopedSeed() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let owner = "issuer|owner_a"
+
+        // Canonical owner-scoped seed: synced on a prior sign-in, original fields.
+        let canonicalID = UUID(uuidString: "00000000-0000-0000-0000-000000006301")!
+        let canonical = Exercise(
+            id: canonicalID,
+            seedIdentifier: "back-squat",
+            name: "Back Squat",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Quads",
+            isSeeded: true,
+            syncOwnerTokenIdentifier: owner,
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 100)
+        )
+        context.insert(canonical)
+
+        // Ownerless duplicate edited while signed out: newer updatedAt, changed name + notes.
+        let duplicateID = UUID(uuidString: "00000000-0000-0000-0000-000000006302")!
+        let duplicate = Exercise(
+            id: duplicateID,
+            seedIdentifier: "back-squat",
+            name: "Back Squat (Belt)",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Quads",
+            notes: "Use lifting belt",
+            isSeeded: true,
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 500)
+        )
+        context.insert(duplicate)
+
+        let recorder = SyncOutboxRecorder()
+        try recorder.recordUpdate(entityKind: .exercise, entityID: duplicateID, ownerTokenIdentifier: nil, context: context, now: Date(timeIntervalSince1970: 500))
+
+        let state = SyncCursorState(
+            ownerTokenIdentifier: owner,
+            hasBootstrappedSettingsExercises: true,
+            hasBootstrappedWorkoutGraph: true
+        )
+        context.insert(state)
+        try context.save()
+
+        let client = FakeSyncClient()
+        _ = try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
+
+        // Duplicate removed; canonical retains the signed-out edits (last-write-wins).
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        XCTAssertNil(exercises.first { $0.id == duplicateID })
+        let mergedCanonical = try XCTUnwrap(exercises.first { $0.id == canonicalID })
+        XCTAssertEqual(mergedCanonical.name, "Back Squat (Belt)")
+        XCTAssertEqual(mergedCanonical.notes, "Use lifting belt")
+
+        // The merged fields are pushed under the canonical id.
+        let pushedExercise = try XCTUnwrap(client.upsertedExercises.first {
+            $0.clientId == canonicalID.uuidString.lowercased()
+        })
+        XCTAssertEqual(pushedExercise.name, "Back Squat (Belt)")
+    }
+
+    func testRunKeepsCanonicalSeedFieldsWhenDuplicateIsOlder() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let owner = "issuer|owner_a"
+
+        // Canonical owner-scoped seed edited more recently than the ownerless duplicate.
+        let canonicalID = UUID(uuidString: "00000000-0000-0000-0000-000000006401")!
+        let canonical = Exercise(
+            id: canonicalID,
+            seedIdentifier: "back-squat",
+            name: "Back Squat (Owner)",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Quads",
+            isSeeded: true,
+            syncOwnerTokenIdentifier: owner,
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 500)
+        )
+        context.insert(canonical)
+
+        let duplicateID = UUID(uuidString: "00000000-0000-0000-0000-000000006402")!
+        let duplicate = Exercise(
+            id: duplicateID,
+            seedIdentifier: "back-squat",
+            name: "Back Squat (Stale)",
+            category: .strength,
+            equipment: .barbell,
+            primaryMuscle: "Quads",
+            isSeeded: true,
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 200)
+        )
+        context.insert(duplicate)
+
+        let state = SyncCursorState(
+            ownerTokenIdentifier: owner,
+            hasBootstrappedSettingsExercises: true,
+            hasBootstrappedWorkoutGraph: true
+        )
+        context.insert(state)
+        try context.save()
+
+        let client = FakeSyncClient()
+        _ = try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
+
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        XCTAssertNil(exercises.first { $0.id == duplicateID })
+        let mergedCanonical = try XCTUnwrap(exercises.first { $0.id == canonicalID })
+        XCTAssertEqual(mergedCanonical.name, "Back Squat (Owner)")
+    }
+
+    func testRunPreservesCanonicalSeedFieldsForUneditedNewerDuplicate() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let owner = "issuer|owner_a"
+
+        // Canonical owner-scoped seed carrying a previously-synced custom edit (older stamp).
+        let canonicalID = UUID(uuidString: "00000000-0000-0000-0000-000000006501")!
+        let canonical = Exercise(
+            id: canonicalID,
+            seedIdentifier: "calf-raise",
+            name: "Standing Calf Raise",
+            category: .strength,
+            equipment: .machine,
+            primaryMuscle: "Calves",
+            notes: "Pause at the top",
+            isSeeded: true,
+            syncOwnerTokenIdentifier: owner,
+            createdAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 100)
+        )
+        context.insert(canonical)
+
+        // Fresh ownerless duplicate from signed-out re-seeding: newer updatedAt purely from
+        // creation, but never edited (no outbox entry). It must not overwrite the canonical.
+        let duplicateID = UUID(uuidString: "00000000-0000-0000-0000-000000006502")!
+        let duplicate = Exercise(
+            id: duplicateID,
+            seedIdentifier: "calf-raise",
+            name: "Calf Raise",
+            category: .strength,
+            equipment: .machine,
+            primaryMuscle: "Calves",
+            isSeeded: true,
+            createdAt: Date(timeIntervalSince1970: 500),
+            updatedAt: Date(timeIntervalSince1970: 500)
+        )
+        context.insert(duplicate)
+
+        let state = SyncCursorState(
+            ownerTokenIdentifier: owner,
+            hasBootstrappedSettingsExercises: true,
+            hasBootstrappedWorkoutGraph: true
+        )
+        context.insert(state)
+        try context.save()
+
+        let client = FakeSyncClient()
+        _ = try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
+
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        XCTAssertNil(exercises.first { $0.id == duplicateID })
+        let mergedCanonical = try XCTUnwrap(exercises.first { $0.id == canonicalID })
+        XCTAssertEqual(mergedCanonical.name, "Standing Calf Raise")
+        XCTAssertEqual(mergedCanonical.notes, "Pause at the top")
+    }
+
     func testPullCascadesRemoteWorkoutSessionTombstoneToLocalChildren() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
