@@ -88,7 +88,7 @@ struct StartWorkoutView: View {
         }
     }
 
-    private func startWorkout(fromPast session: WorkoutSession) {
+    private func startWorkout(fromPast session: WorkoutSession) -> String? {
         do {
             _ = try activeWorkoutEngine.startWorkout(
                 fromPast: session,
@@ -97,8 +97,11 @@ struct StartWorkoutView: View {
             )
             selectedPastWorkoutSession = nil
             navigationState.selectedTab = .workout
+            return nil
         } catch {
-            activeWorkoutEngine.lastErrorMessage = error.localizedDescription
+            let message = error.localizedDescription
+            activeWorkoutEngine.lastErrorMessage = message
+            return message
         }
     }
 }
@@ -106,7 +109,8 @@ struct StartWorkoutView: View {
 private struct StartFromPastWorkoutSheet: View {
     @Environment(\.dismiss) private var dismiss
     let session: WorkoutSession
-    let onConfirm: () -> Void
+    let onConfirm: () -> String?
+    @State private var actionError: StartWorkoutActionError?
 
     private var metrics: WorkoutMetrics {
         WorkoutMetrics(session: session)
@@ -130,7 +134,7 @@ private struct StartFromPastWorkoutSheet: View {
                     .minimumScaleFactor(0.85)
                     .accessibilityIdentifier("StartFromPastWorkoutSheetTitle")
 
-                Text("This creates a new workout by copying this completed one. Exercises and set types are copied; weights, reps, and notes stay blank with past values shown as reference.")
+                Text("Creates a new workout from this one. Exercises and set types are copied; weights and reps start blank, with past values shown as reference.")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center)
@@ -139,12 +143,17 @@ private struct StartFromPastWorkoutSheet: View {
             }
 
             HStack(spacing: 10) {
-                summaryCard(value: "\(WorkoutHistoryRow.exerciseCount(for: session))", label: "Exercises")
-                summaryCard(value: "\(metrics.totalSetCount)", label: "Sets")
+                MetricSummaryCard(title: "Exercises", value: "\(session.visibleExerciseCount)")
+                MetricSummaryCard(title: "Sets", value: "\(metrics.totalSetCount)")
             }
 
             Button {
-                onConfirm()
+                if let message = onConfirm() {
+                    actionError = StartWorkoutActionError(
+                        title: "Couldn't Start Workout",
+                        message: message
+                    )
+                }
             } label: {
                 Text("Create New Workout")
                     .font(.headline)
@@ -167,22 +176,18 @@ private struct StartFromPastWorkoutSheet: View {
         .presentationDetents([.height(430)])
         .presentationCornerRadius(36)
         .presentationDragIndicator(.visible)
+        .alert(item: $actionError) { actionError in
+            Alert(
+                title: Text(actionError.title),
+                message: Text(actionError.message),
+                dismissButton: .cancel(Text("OK"))
+            )
+        }
     }
 
-    private func summaryCard(value: String, label: String) -> some View {
-        VStack(spacing: 4) {
-            Text(value)
-                .font(.title3.weight(.bold))
-                .foregroundStyle(AppTheme.textPrimary)
-            Text(label)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(AppTheme.textSecondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .background(
-            AppTheme.surfaceMuted,
-            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-        )
+    private struct StartWorkoutActionError: Identifiable {
+        let id = UUID()
+        let title: String
+        let message: String
     }
 }

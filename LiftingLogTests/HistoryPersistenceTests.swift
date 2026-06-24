@@ -117,7 +117,7 @@ final class HistoryPersistenceTests: XCTestCase {
         try context.save()
 
         XCTAssertTrue(relationshipDeletedExercise.isDeleted)
-        XCTAssertEqual(WorkoutHistoryRow.exerciseCount(for: session), 1)
+        XCTAssertEqual(session.visibleExerciseCount, 1)
     }
 
     func testDeletingCompletedWorkoutTombstonesSessionLoggedExercisesAndSets() throws {

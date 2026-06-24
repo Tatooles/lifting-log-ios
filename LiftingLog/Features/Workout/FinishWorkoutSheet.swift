@@ -35,9 +35,9 @@ struct FinishWorkoutSheet: View {
             .padding(.top, 24)
 
             HStack(spacing: 10) {
-                summaryCard(title: "Duration", value: AppTheme.formatDuration(metrics.durationSeconds))
-                summaryCard(title: "Sets Done", value: "\(metrics.completedSetCount)/\(metrics.totalSetCount)")
-                summaryCard(
+                MetricSummaryCard(title: "Duration", value: AppTheme.formatDuration(metrics.durationSeconds))
+                MetricSummaryCard(title: "Sets Done", value: "\(metrics.completedSetCount)/\(metrics.totalSetCount)")
+                MetricSummaryCard(
                     title: "Volume (\(weightUnit.fieldLabel))",
                     value: WorkoutFormatters.volume(canonicalPounds: metrics.completedVolume, unit: weightUnit)
                 )
@@ -113,23 +113,5 @@ struct FinishWorkoutSheet: View {
         let id = UUID()
         let title: String
         let message: String
-    }
-
-    private func summaryCard(title: String, value: String) -> some View {
-        VStack(spacing: 4) {
-            Text(value)
-                .font(.title3.weight(.bold))
-                .foregroundStyle(AppTheme.textPrimary)
-                .minimumScaleFactor(0.7)
-            Text(title)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(AppTheme.textSecondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .background(
-            AppTheme.surfaceMuted,
-            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-        )
     }
 }
