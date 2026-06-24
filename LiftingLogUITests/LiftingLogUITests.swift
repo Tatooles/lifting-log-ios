@@ -285,6 +285,7 @@ final class LiftingLogUITests: XCTestCase {
         app.buttons["WorkoutTab"].tap()
         XCTAssertTrue(app.buttons["PastWorkoutButton-0"].waitForExistence(timeout: 3))
         app.buttons["PastWorkoutButton-0"].tap()
+        confirmStartFromPastWorkout(in: app)
 
         XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
         XCTAssertEqual(app.textFields["WorkoutTitle"].value as? String, "Past Push")
@@ -298,6 +299,32 @@ final class LiftingLogUITests: XCTestCase {
         XCTAssertEqual(app.textFields["SetRepsField-0-0"].value as? String, "5")
         XCTAssertTrue(app.buttons["SetCompletionButton-0-0"].exists)
         XCTAssertEqual(app.buttons["SetCompletionButton-0-0"].label, "Mark set complete")
+    }
+
+    @MainActor
+    func testStartingFromPastWorkoutRequiresConfirmationBeforeCreatingWorkout() {
+        let app = makeApp()
+        app.launch()
+
+        createCompletedBenchWorkout(in: app, title: "Past Push")
+
+        app.buttons["WorkoutTab"].tap()
+        XCTAssertTrue(app.buttons["PastWorkoutButton-0"].waitForExistence(timeout: 3))
+        app.buttons["PastWorkoutButton-0"].tap()
+
+        XCTAssertTrue(app.staticTexts["StartFromPastWorkoutSheetTitle"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["StartFromPastWorkoutExplanation"].exists)
+        XCTAssertFalse(app.textFields["WorkoutTitle"].exists)
+
+        app.buttons["StartFromPastWorkoutCancelButton"].tap()
+        XCTAssertTrue(app.staticTexts["StartWorkoutTitle"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.textFields["WorkoutTitle"].exists)
+
+        app.buttons["PastWorkoutButton-0"].tap()
+        confirmStartFromPastWorkout(in: app)
+
+        XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
+        XCTAssertEqual(app.textFields["WorkoutTitle"].value as? String, "Past Push")
     }
 
     @MainActor
@@ -694,6 +721,12 @@ final class LiftingLogUITests: XCTestCase {
                 return
             }
         }
+    }
+
+    @MainActor
+    private func confirmStartFromPastWorkout(in app: XCUIApplication) {
+        XCTAssertTrue(app.buttons["StartFromPastWorkoutConfirmButton"].waitForExistence(timeout: 3))
+        app.buttons["StartFromPastWorkoutConfirmButton"].tap()
     }
 
     @MainActor

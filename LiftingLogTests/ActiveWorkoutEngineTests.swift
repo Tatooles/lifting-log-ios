@@ -157,6 +157,32 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertTrue(existingActive.loggedExercises.isEmpty)
     }
 
+    func testStartingFromPastRejectsSessionOutsideCurrentOwnerScope() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let ownerBSession = WorkoutSession(
+            title: "Owner B Push",
+            startedAt: Date(timeIntervalSince1970: 100),
+            status: .completed,
+            source: .blank,
+            syncOwnerTokenIdentifier: "issuer|owner_b"
+        )
+        context.insert(ownerBSession)
+        try context.save()
+
+        let engine = ActiveWorkoutEngine()
+        XCTAssertThrowsError(
+            try engine.startWorkout(
+                fromPast: ownerBSession,
+                ownerTokenIdentifier: "issuer|owner_a",
+                context: context
+            )
+        ) { error in
+            XCTAssertEqual(error as? ActiveWorkoutEngineError, .pastWorkoutUnavailable)
+        }
+        XCTAssertTrue(try activeSessions(in: context).isEmpty)
+    }
+
     func testAddingExerciseAppendsOrderIndexAndFirstSet() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

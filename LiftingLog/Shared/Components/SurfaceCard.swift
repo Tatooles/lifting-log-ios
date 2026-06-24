@@ -36,3 +36,27 @@ struct SurfaceCard<Content: View>: View {
             .containerShape(shape)
     }
 }
+
+struct MetricSummaryCard: View {
+    let title: String
+    let value: String
+    var minimumScaleFactor: CGFloat = 0.7
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.title3.weight(.bold))
+                .foregroundStyle(AppTheme.textPrimary)
+                .minimumScaleFactor(minimumScaleFactor)
+            Text(title)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(AppTheme.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(
+            AppTheme.surfaceMuted,
+            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+        )
+    }
+}

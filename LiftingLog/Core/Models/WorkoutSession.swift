@@ -86,6 +86,10 @@ final class WorkoutSession: Identifiable {
             .sorted { $0.orderIndex < $1.orderIndex }
     }
 
+    var visibleExerciseCount: Int {
+        sortedLoggedExercises.count
+    }
+
     static func visibleCompletedSessions(
         from sessions: [WorkoutSession],
         ownerTokenIdentifier: String? = nil
