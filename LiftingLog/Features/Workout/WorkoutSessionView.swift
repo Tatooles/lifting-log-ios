@@ -30,7 +30,9 @@ struct WorkoutSessionView: View {
     private let contentBottomPadding: CGFloat = 120
 
     var body: some View {
-        let previousSetsByExerciseID = previousSetsByExerciseID
+        let sortedLoggedExercises = session.sortedLoggedExercises
+        let canReorderExercises = sortedLoggedExercises.count >= 2
+        let previousSetsByExerciseID = previousSetsByExerciseID(for: sortedLoggedExercises)
 
         ScrollViewReader { scrollProxy in
             ScrollView(showsIndicators: false) {
@@ -48,7 +50,7 @@ struct WorkoutSessionView: View {
                     }
                     .padding(.horizontal, 4)
 
-                    ForEach(Array(session.sortedLoggedExercises.enumerated()), id: \.element.id) { exerciseIndex, loggedExercise in
+                    ForEach(Array(sortedLoggedExercises.enumerated()), id: \.element.id) { exerciseIndex, loggedExercise in
                         ExerciseCardView(
                             loggedExercise: loggedExercise,
                             exerciseIndex: exerciseIndex,
@@ -56,7 +58,11 @@ struct WorkoutSessionView: View {
                             isCollapsed: isCollapsedBinding(for: loggedExercise),
                             focusedField: $focusedField,
                             previousSets: previousSetsByExerciseID[loggedExercise.id] ?? [],
+                            canReorder: canReorderExercises,
                             viewHistory: { selectedHistoryExercise = loggedExercise },
+                            onReorderExercises: {
+                                isReorderExercisesPresented = true
+                            },
                             onEditRPE: { set in
                                 focusedField = .setReps(set.id)
                                 rpeEditingSourceField = .setReps(set.id)
@@ -136,12 +142,8 @@ struct WorkoutSessionView: View {
                         elapsedSeconds: metrics.durationSeconds,
                         completedSets: metrics.completedSetCount,
                         totalSets: metrics.totalSetCount,
-                        canReorderExercises: session.sortedLoggedExercises.count >= 2,
                         onFinish: {
                             isFinishSheetPresented = true
-                        },
-                        onReorderExercises: {
-                            isReorderExercisesPresented = true
                         }
                     )
                 }
@@ -317,9 +319,9 @@ struct WorkoutSessionView: View {
         WorkoutFocusNavigator.focusOrder(for: session, collapsedExerciseIDs: collapsedExerciseIDs)
     }
 
-    private var previousSetsByExerciseID: [UUID: [PreviousSetPerformance]] {
+    private func previousSetsByExerciseID(for loggedExercises: [LoggedExercise]) -> [UUID: [PreviousSetPerformance]] {
         PreviousSetPerformance.lastCompletedSetsByExerciseID(
-            for: session.sortedLoggedExercises,
+            for: loggedExercises,
             in: sessions,
             ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier,
             sourceSessionID: session.source == .pastWorkout ? session.sourceSessionID : nil

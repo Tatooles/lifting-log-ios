@@ -4,9 +4,7 @@ struct WorkoutHeaderView: View {
     let elapsedSeconds: Int
     let completedSets: Int
     let totalSets: Int
-    let canReorderExercises: Bool
     let onFinish: () -> Void
-    let onReorderExercises: () -> Void
 
     private var progressValue: Double {
         guard totalSets > 0 else { return 0 }
@@ -46,29 +44,29 @@ struct WorkoutHeaderView: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("\(completedSets) of \(totalSets) sets completed")
 
-                Menu {
-                    Button {
-                        onFinish()
-                    } label: {
-                        Label("Finish Workout", systemImage: "checkmark.circle")
-                    }
+                Button(action: onFinish) {
+                    ViewThatFits(in: .horizontal) {
+                        Label {
+                            Text("Finish")
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                        } icon: {
+                            Image(systemName: "checkmark.circle.fill")
+                        }
+                        .font(.subheadline.weight(.semibold))
 
-                    Button {
-                        onReorderExercises()
-                    } label: {
-                        Label("Reorder Exercises", systemImage: "arrow.up.arrow.down")
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.body.weight(.semibold))
                     }
-                    .disabled(!canReorderExercises)
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Circle())
+                    .foregroundStyle(AppTheme.accentBright)
+                    .padding(.horizontal, 12)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Capsule())
                 }
-                .glassEffect(.regular.interactive(), in: .circle)
-                .accessibilityLabel("Workout options")
-                .accessibilityIdentifier("WorkoutOptionsButton")
+                .buttonStyle(.plain)
+                .glassEffect(.regular.interactive(), in: .capsule)
+                .accessibilityLabel("Finish workout")
+                .accessibilityIdentifier("FinishWorkoutButton")
             }
         }
         .padding(.horizontal, AppTheme.shellPadding)
