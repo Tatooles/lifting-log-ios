@@ -10,7 +10,9 @@ struct ExerciseCardView: View {
     @Binding var isCollapsed: Bool
     var focusedField: FocusState<WorkoutField?>.Binding
     let previousSets: [PreviousSetPerformance]
+    let canReorder: Bool
     let viewHistory: () -> Void
+    let onReorderExercises: () -> Void
     let onEditRPE: (LoggedSet) -> Void
     @State private var showsRemoveConfirmation = false
     @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
@@ -22,7 +24,9 @@ struct ExerciseCardView: View {
         isCollapsed: Binding<Bool>,
         focusedField: FocusState<WorkoutField?>.Binding,
         previousSets: [PreviousSetPerformance],
+        canReorder: Bool,
         viewHistory: @escaping () -> Void,
+        onReorderExercises: @escaping () -> Void,
         onEditRPE: @escaping (LoggedSet) -> Void
     ) {
         self.loggedExercise = loggedExercise
@@ -31,7 +35,9 @@ struct ExerciseCardView: View {
         self._isCollapsed = isCollapsed
         self.focusedField = focusedField
         self.previousSets = previousSets
+        self.canReorder = canReorder
         self.viewHistory = viewHistory
+        self.onReorderExercises = onReorderExercises
         self.onEditRPE = onEditRPE
     }
 
@@ -93,6 +99,13 @@ struct ExerciseCardView: View {
                             Label("View History", systemImage: "clock.arrow.circlepath")
                         }
                         .accessibilityIdentifier("ExerciseHistoryButton-\(exerciseIndex)")
+
+                        if canReorder {
+                            Button(action: onReorderExercises) {
+                                Label("Reorder Exercises", systemImage: "arrow.up.arrow.down")
+                            }
+                            .accessibilityIdentifier("ReorderExercisesButton-\(exerciseIndex)")
+                        }
 
                         Button(role: .destructive) {
                             showsRemoveConfirmation = true

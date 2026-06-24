@@ -90,7 +90,7 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
-    func testWorkoutOptionsDisablesReorderWithOneExercise() {
+    func testExerciseMenuHidesReorderWithOneExercise() {
         let app = makeApp()
         app.launch()
 
@@ -99,10 +99,10 @@ final class LiftingLogUITests: XCTestCase {
         addBenchPress(in: app)
         dismissKeyboardIfNeeded(in: app)
 
-        openWorkoutOptions(in: app)
-        let reorderButton = app.buttons["Reorder Exercises"]
-        XCTAssertTrue(reorderButton.waitForExistence(timeout: 3))
-        XCTAssertFalse(reorderButton.isEnabled)
+        XCTAssertFalse(app.buttons["WorkoutOptionsButton"].exists)
+        app.buttons["ExerciseMenuButton-0"].tap()
+        XCTAssertTrue(app.buttons["ExerciseHistoryButton-0"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["ReorderExercisesButton-0"].exists)
     }
 
     @MainActor
@@ -127,8 +127,8 @@ final class LiftingLogUITests: XCTestCase {
             in: app
         )
 
-        openWorkoutOptions(in: app)
-        let reorderButton = app.buttons["Reorder Exercises"]
+        app.buttons["ExerciseMenuButton-0"].tap()
+        let reorderButton = app.buttons["ReorderExercisesButton-0"]
         XCTAssertTrue(reorderButton.waitForExistence(timeout: 3))
         reorderButton.tap()
 
@@ -684,16 +684,8 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
-    private func openWorkoutOptions(in app: XCUIApplication) {
-        let optionsButton = app.buttons["WorkoutOptionsButton"]
-        XCTAssertTrue(optionsButton.waitForExistence(timeout: 3))
-        optionsButton.tap()
-    }
-
-    @MainActor
     private func openFinishWorkoutSheet(in app: XCUIApplication) {
-        openWorkoutOptions(in: app)
-        let finishButton = app.buttons["Finish Workout"]
+        let finishButton = app.buttons["FinishWorkoutButton"]
         XCTAssertTrue(finishButton.waitForExistence(timeout: 3))
         for _ in 0..<2 {
             finishButton.tap()
