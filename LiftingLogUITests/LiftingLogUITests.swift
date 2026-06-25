@@ -252,14 +252,18 @@ final class LiftingLogUITests: XCTestCase {
         replaceText(in: app.textFields["CompletedWorkoutDurationMinutesField"], with: "45")
         replaceText(in: app.textFields["CompletedWorkoutNotesField"], with: "Post edit notes")
         dismissKeyboardIfNeeded(in: app)
-        replaceText(in: app.textFields["HistorySetWeightField-0-0"], with: "205")
+        replaceText(in: app.textFields["HistorySetWeightField-0-0"], with: "205.")
+        XCTAssertEqual(app.textFields["HistorySetWeightField-0-0"].value as? String, "205.")
+        app.textFields["HistorySetWeightField-0-0"].typeText("5")
         replaceText(in: app.textFields["HistorySetRepsField-0-0"], with: "6")
         dismissKeyboardIfNeeded(in: app)
 
         app.buttons["AddHistorySetButton-0"].tap()
         replaceText(in: app.textFields["HistorySetWeightField-0-1"], with: "135")
         replaceText(in: app.textFields["HistorySetRepsField-0-1"], with: "8")
-        replaceText(in: app.textFields["HistorySetRPEField-0-1"], with: "7")
+        replaceText(in: app.textFields["HistorySetRPEField-0-1"], with: "7.")
+        XCTAssertEqual(app.textFields["HistorySetRPEField-0-1"].value as? String, "7.")
+        app.textFields["HistorySetRPEField-0-1"].typeText("5")
         app.buttons["HistorySetCompletionButton-0-1"].tap()
         dismissKeyboardIfNeeded(in: app)
 
@@ -268,15 +272,15 @@ final class LiftingLogUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Edited Push"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Post edit notes"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["45:00"].exists)
-        XCTAssertTrue(app.staticTexts["205 x 6 @ 8 · Done"].exists)
-        XCTAssertTrue(app.staticTexts["135 x 8 @ 7 · Done"].exists)
+        XCTAssertTrue(app.staticTexts["205.5 x 6 @ 8 · Done"].exists)
+        XCTAssertTrue(app.staticTexts["135 x 8 @ 7.5 · Done"].exists)
 
         app.navigationBars.buttons.element(boundBy: 0).tap()
         app.segmentedControls["HistoryModePicker"].buttons["Exercises"].tap()
         XCTAssertTrue(app.buttons["ExerciseHistoryButton-0"].waitForExistence(timeout: 3))
         app.buttons["ExerciseHistoryButton-0"].tap()
-        XCTAssertTrue(app.staticTexts["205 x 6 @ 8"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["135 x 8 @ 7"].exists)
+        XCTAssertTrue(app.staticTexts["205.5 x 6 @ 8"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["135 x 8 @ 7.5"].exists)
     }
 
     @MainActor

@@ -194,6 +194,7 @@ private struct CompletedWorkoutEditView: View {
     private let initialDurationMinutesText: String
     @State private var draft: CompletedWorkoutEditDraft
     @State private var durationMinutesText: String
+    @State private var numberInputTexts: [CompletedWorkoutEditFocusedField: WorkoutNumberInputText] = [:]
     @State private var errorMessage: String?
     @State private var removalCandidate: CompletedWorkoutSetRemovalCandidate?
     @FocusState private var focusedField: CompletedWorkoutEditFocusedField?
@@ -276,6 +277,16 @@ private struct CompletedWorkoutEditView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(errorMessage ?? "Try saving again.")
+            }
+            .onChange(of: focusedField) { previousField, newField in
+                guard let previousField, previousField != newField else { return }
+
+                switch previousField {
+                case .setWeight, .setRPE:
+                    numberInputTexts[previousField]?.endEditing()
+                case .title, .duration, .notes, .setReps:
+                    break
+                }
             }
         }
     }
@@ -434,12 +445,16 @@ private struct CompletedWorkoutEditView: View {
     }
 
     private func weightBinding(exerciseIndex: Int, setIndex: Int) -> Binding<String> {
-        Binding(
+        let focusTarget = CompletedWorkoutEditFocusedField.setWeight(exerciseIndex, setIndex)
+
+        return Binding(
             get: {
                 let canonicalWeight = draft.exercises[exerciseIndex].sets[setIndex].weight
-                return weightUnit.displayWeight(fromCanonicalPounds: canonicalWeight).map(WorkoutFormatters.number) ?? ""
+                let displayWeight = weightUnit.displayWeight(fromCanonicalPounds: canonicalWeight)
+                return numberInputTexts[focusTarget, default: WorkoutNumberInputText()].displayText(for: displayWeight)
             },
             set: { value in
+                numberInputTexts[focusTarget, default: WorkoutNumberInputText()].updateDraft(value)
                 let displayWeight = WorkoutFormatters.parseNumber(value)
                 draft.exercises[exerciseIndex].sets[setIndex].weight = weightUnit.canonicalWeight(fromDisplayWeight: displayWeight)
             }
@@ -447,7 +462,7 @@ private struct CompletedWorkoutEditView: View {
     }
 
     private func repsBinding(exerciseIndex: Int, setIndex: Int) -> Binding<String> {
-        Binding(
+        return Binding(
             get: { draft.exercises[exerciseIndex].sets[setIndex].reps.map(String.init) ?? "" },
             set: { value in
                 draft.exercises[exerciseIndex].sets[setIndex].reps = Int(value)
@@ -456,9 +471,15 @@ private struct CompletedWorkoutEditView: View {
     }
 
     private func rpeBinding(exerciseIndex: Int, setIndex: Int) -> Binding<String> {
-        Binding(
-            get: { draft.exercises[exerciseIndex].sets[setIndex].rpe.map(WorkoutFormatters.number) ?? "" },
+        let focusTarget = CompletedWorkoutEditFocusedField.setRPE(exerciseIndex, setIndex)
+
+        return Binding(
+            get: {
+                let rpe = draft.exercises[exerciseIndex].sets[setIndex].rpe
+                return numberInputTexts[focusTarget, default: WorkoutNumberInputText()].displayText(for: rpe)
+            },
             set: { value in
+                numberInputTexts[focusTarget, default: WorkoutNumberInputText()].updateDraft(value)
                 draft.exercises[exerciseIndex].sets[setIndex].rpe = WorkoutFormatters.parseNumber(value)
             }
         )
@@ -497,6 +518,8 @@ private struct CompletedWorkoutEditView: View {
     }
 
     private func save() {
+        focusedField = nil
+
         let trimmedTitle = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
         draft.title = trimmedTitle.isEmpty ? "Workout" : trimmedTitle
 
