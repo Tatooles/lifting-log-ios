@@ -91,6 +91,7 @@
 		9D6A7FE2F77B0E1109BDE735 /* WorkoutMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A67B2675FB5B64B2EB4B3AE /* WorkoutMetrics.swift */; };
 		9E7E2E04A42C2616A03BEF1E /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 907D701D12B60C22962A18E0 /* HistoryView.swift */; };
 		9F1ACF18D163FF02449FCFFC /* SyncOutboxEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 556B8CEDBF71BD51E38F3B96 /* SyncOutboxEntry.swift */; };
+		A0B1D5B2A6A54D79B7F41727 /* OwnerlessWorkoutGraphBootstrapPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 831A10209C824D4FA6F09E9C /* OwnerlessWorkoutGraphBootstrapPolicy.swift */; };
 		A14AFF70B2B12D584578C7C7 /* WorkoutSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = E15A81769B47CC89E5AD1E1E /* WorkoutSource.swift */; };
 		A1D628C4A3D9E41121206525 /* ConvexSyncArgumentMapperTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B4112D21A0F00E2B36B057 /* ConvexSyncArgumentMapperTests.swift */; };
 		A361DB46C578E9FA96B2A9CB /* SetCompletionPreviousFillPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EF30C91D83564A6B9591409 /* SetCompletionPreviousFillPolicyTests.swift */; };
@@ -228,6 +229,7 @@
 		7E308754BFB49270FFC0B2A2 /* ClerkJWTIdentityResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClerkJWTIdentityResolver.swift; sourceTree = "<group>"; };
 		805C0F557DC6F53CA0E9AF2C /* DeveloperDiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperDiagnosticsView.swift; sourceTree = "<group>"; };
 		812E14546F80B4664B72FBE7 /* SwiftDataTestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataTestSupport.swift; sourceTree = "<group>"; };
+		831A10209C824D4FA6F09E9C /* OwnerlessWorkoutGraphBootstrapPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnerlessWorkoutGraphBootstrapPolicy.swift; sourceTree = "<group>"; };
 		82F365233DC4F84483CF48B7 /* Exercise.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Exercise.swift; sourceTree = "<group>"; };
 		893947730151ABA8C00DCFEF /* SyncConflictResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncConflictResolverTests.swift; sourceTree = "<group>"; };
 		8B8805837A29F53CAFABF4B1 /* WorkoutTemplate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutTemplate.swift; sourceTree = "<group>"; };
@@ -447,6 +449,7 @@
 				E2DF24671651F0149914C0A4 /* ConvexSyncClient.swift */,
 				D9E0A101658215ADF7C3800F /* SyncClient.swift */,
 				DAC203632A8DF4053A3EFC16 /* SyncConflictResolver.swift */,
+				831A10209C824D4FA6F09E9C /* OwnerlessWorkoutGraphBootstrapPolicy.swift */,
 				0153F62DF52FBFC529DE48B4 /* SyncCoordinator.swift */,
 				96ACF44FBCEDD37929CF1D53 /* SyncCursorState.swift */,
 				53A0AC2A67CDFE8BE93F6F99 /* SyncEntityKind.swift */,
@@ -870,6 +873,7 @@
 				3ED94241B48E627EAF382A60 /* SyncClient.swift in Sources */,
 				5C18C6001D9DC438F89DA206 /* SyncConflictResolver.swift in Sources */,
 				9AA3396E81F6B3F541F35112 /* SyncCoordinator.swift in Sources */,
+				A0B1D5B2A6A54D79B7F41727 /* OwnerlessWorkoutGraphBootstrapPolicy.swift in Sources */,
 				1F50FA4D4E8F6003BFF4633C /* SyncCursorState.swift in Sources */,
 				EDEB026D5AB17390F4CB6BC6 /* SyncEntityKind.swift in Sources */,
 				88B1B7551216CCB3364B766C /* SyncOperation.swift in Sources */,

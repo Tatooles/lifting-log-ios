@@ -1137,6 +1137,44 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         XCTAssertTrue(try fetchEntries(context).isEmpty)
     }
 
+    func testEditingOwnerlessCompletedWorkoutRejectsBootstrapWhenAnotherOwnerHasLocalSyncState() throws {
+        let ownerA = "issuer|owner_a"
+        let ownerB = "issuer|owner_b"
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        context.insert(SyncCursorState(
+            ownerTokenIdentifier: ownerB,
+            userSettingsCursor: 1,
+            exercisesCursor: 1,
+            workoutSessionsCursor: 1,
+            loggedExercisesCursor: 1,
+            loggedSetsCursor: 1,
+            hasBootstrappedSettingsExercises: true,
+            hasBootstrappedWorkoutGraph: true
+        ))
+        let session = makeCompletedWorkout(context: context)
+        try context.save()
+
+        var draft = CompletedWorkoutEditDraft(session: session)
+        draft.title = "Should not save"
+        draft.exercises[0].sets[0].weight = 225
+
+        XCTAssertThrowsError(try WorkoutHistoryMutationService().saveCompletedWorkoutEdit(
+            draft,
+            for: session,
+            ownerTokenIdentifier: ownerA,
+            context: context,
+            now: Date(timeIntervalSince1970: 2_000)
+        )) { error in
+            XCTAssertEqual(error as? WorkoutHistoryMutationError, .ownerlessBootstrapBlocked)
+        }
+
+        XCTAssertNil(session.syncOwnerTokenIdentifier)
+        XCTAssertEqual(session.title, "Push")
+        XCTAssertEqual(session.sortedLoggedExercises[0].sortedSets[0].weight, 185)
+        XCTAssertTrue(try fetchEntries(context).isEmpty)
+    }
+
     func testSignedInEditOfOwnerlessCompletedWorkoutStampsOwnerForSetSyncReplay() async throws {
         let owner = "issuer|owner_a"
         let container = try SwiftDataTestSupport.makeInMemoryContainer()

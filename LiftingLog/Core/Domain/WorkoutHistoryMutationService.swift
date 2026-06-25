@@ -4,6 +4,7 @@ import SwiftData
 enum WorkoutHistoryMutationError: LocalizedError, Equatable {
     case cannotEditWorkout
     case ownerMismatch
+    case ownerlessBootstrapBlocked
     case invalidDuration
     case missingLoggedExercise
     case missingLoggedSet
@@ -14,6 +15,8 @@ enum WorkoutHistoryMutationError: LocalizedError, Equatable {
             return "Only completed workouts can be edited."
         case .ownerMismatch:
             return "This workout belongs to a different signed-in account."
+        case .ownerlessBootstrapBlocked:
+            return "This workout cannot be safely claimed for the current account."
         case .invalidDuration:
             return "Enter a valid duration in minutes."
         case .missingLoggedExercise:
@@ -140,6 +143,20 @@ struct WorkoutHistoryMutationService {
         var didChange = false
         var didChangeSessionFields = false
 
+        let normalizedDurationSeconds = max(0, draft.durationSeconds)
+        let willChangeSessionFields = session.title != draft.title ||
+            session.notes != draft.notes ||
+            session.effectiveDurationSeconds() != normalizedDurationSeconds
+
+        if willChangeSessionFields {
+            try claimOwnerlessWorkoutGraphIfNeeded(
+                session,
+                ownerTokenIdentifier: ownerTokenIdentifier,
+                context: context,
+                now: now
+            )
+        }
+
         if session.title != draft.title {
             session.title = draft.title
             didChangeSessionFields = true
@@ -150,7 +167,6 @@ struct WorkoutHistoryMutationService {
             didChangeSessionFields = true
         }
 
-        let normalizedDurationSeconds = max(0, draft.durationSeconds)
         if session.effectiveDurationSeconds() != normalizedDurationSeconds {
             session.durationSeconds = normalizedDurationSeconds
             session.endedAt = session.startedAt.addingTimeInterval(TimeInterval(normalizedDurationSeconds))
@@ -158,12 +174,6 @@ struct WorkoutHistoryMutationService {
         }
 
         if didChangeSessionFields {
-            try claimOwnerlessWorkoutGraphIfNeeded(
-                session,
-                ownerTokenIdentifier: ownerTokenIdentifier,
-                context: context,
-                now: now
-            )
             session.updatedAt = now
             try recorder.recordUpdate(
                 entityKind: .workoutSession,
@@ -214,13 +224,14 @@ struct WorkoutHistoryMutationService {
                         now: now
                     )
                     didChange = true
-                } else if apply(setDraft, to: set, now: now) {
+                } else if hasChanges(setDraft, for: set) {
                     try claimOwnerlessWorkoutGraphIfNeeded(
                         session,
                         ownerTokenIdentifier: ownerTokenIdentifier,
                         context: context,
                         now: now
                     )
+                    _ = apply(setDraft, to: set, now: now)
                     try recorder.recordUpdate(
                         entityKind: .loggedSet,
                         entityID: set.id,
@@ -232,13 +243,14 @@ struct WorkoutHistoryMutationService {
                 }
             }
 
-            if try reindexVisibleSets(for: loggedExercise, ownerTokenIdentifier: ownerTokenIdentifier, context: context, now: now) {
+            if setsNeedReindex(for: loggedExercise) {
                 try claimOwnerlessWorkoutGraphIfNeeded(
                     session,
                     ownerTokenIdentifier: ownerTokenIdentifier,
                     context: context,
                     now: now
                 )
+                _ = try reindexVisibleSets(for: loggedExercise, ownerTokenIdentifier: ownerTokenIdentifier, context: context, now: now)
                 didChange = true
             }
 
@@ -339,6 +351,13 @@ struct WorkoutHistoryMutationService {
         now: Date
     ) throws {
         guard let ownerTokenIdentifier, session.syncOwnerTokenIdentifier == nil else { return }
+        guard try OwnerlessWorkoutGraphBootstrapPolicy.canBootstrap(
+            ownerTokenIdentifier: ownerTokenIdentifier,
+            context: context
+        ) else {
+            throw WorkoutHistoryMutationError.ownerlessBootstrapBlocked
+        }
+
         session.syncOwnerTokenIdentifier = ownerTokenIdentifier
         try recorder.recordCreate(
             entityKind: .workoutSession,
@@ -365,6 +384,15 @@ struct WorkoutHistoryMutationService {
                 )
             }
         }
+    }
+
+    private func hasChanges(_ draft: CompletedWorkoutEditSetDraft, for set: LoggedSet) -> Bool {
+        !Self.weightsAreEqual(set.weight, draft.weight) ||
+            set.reps != draft.reps ||
+            !Self.weightsAreEqual(set.rpe, draft.rpe) ||
+            set.kind != draft.kind ||
+            set.isCompleted != draft.isCompleted ||
+            set.notes != draft.notes
     }
 
     private func apply(_ draft: CompletedWorkoutEditSetDraft, to set: LoggedSet, now: Date) -> Bool {
@@ -404,6 +432,12 @@ struct WorkoutHistoryMutationService {
         guard didChange else { return false }
         set.updatedAt = now
         return true
+    }
+
+    private func setsNeedReindex(for loggedExercise: LoggedExercise) -> Bool {
+        loggedExercise.sortedSets.enumerated().contains { index, set in
+            set.orderIndex != index
+        }
     }
 
     private func reindexVisibleSets(
