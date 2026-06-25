@@ -75,7 +75,7 @@ jobs:
         run: |
           xcodebuild -resolvePackageDependencies \
             -project LiftingLog.xcodeproj \
-            -scheme LiftingLog \
+            -scheme LiftingLogUnitTests \
             -derivedDataPath "${IOS_DERIVED_DATA_PATH}"
 
       - name: Run LiftingLog unit tests

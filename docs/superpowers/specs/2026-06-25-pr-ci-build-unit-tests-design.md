@@ -113,7 +113,7 @@ The iOS artifact upload step should run with a failure condition so the `.xcresu
 
 Before opening the PR:
 
-- Run the local iOS unit-test command with `-only-testing:LiftingLogTests` and confirm it does not run `LiftingLogUITests`.
+- Run the local iOS unit-test command with the `LiftingLogUnitTests` scheme and confirm it does not run or build `LiftingLogUITests`.
 - Run `pnpm run convex:test`.
 - Run `pnpm run convex:typecheck`.
 - Review the generated workflow syntax for valid triggers, job names, and artifact upload conditions.
