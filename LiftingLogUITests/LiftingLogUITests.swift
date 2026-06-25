@@ -249,7 +249,7 @@ final class LiftingLogUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Edit Workout"].waitForExistence(timeout: 3))
 
         replaceText(in: app.textFields["CompletedWorkoutTitleField"], with: "Edited Push")
-        replaceText(in: app.textFields["CompletedWorkoutDurationMinutesField"], with: "45")
+        setCompletedWorkoutDuration(minutes: 45, in: app)
         replaceText(in: app.textFields["CompletedWorkoutNotesField"], with: "Post edit notes")
         dismissKeyboardIfNeeded(in: app)
         replaceText(in: app.textFields["HistorySetWeightField-0-0"], with: "205.")
@@ -777,6 +777,29 @@ final class LiftingLogUITests: XCTestCase {
     private func confirmStartFromPastWorkout(in app: XCUIApplication) {
         XCTAssertTrue(app.buttons["StartFromPastWorkoutConfirmButton"].waitForExistence(timeout: 3))
         app.buttons["StartFromPastWorkoutConfirmButton"].tap()
+    }
+
+    @MainActor
+    private func setCompletedWorkoutDuration(minutes: Int, in app: XCUIApplication) {
+        let durationButton = app.buttons["CompletedWorkoutDurationButton"]
+        XCTAssertTrue(durationButton.waitForExistence(timeout: 3))
+        durationButton.tap()
+
+        XCTAssertTrue(app.navigationBars["Duration"].waitForExistence(timeout: 3))
+        let fiveMinuteIncrementButton = app.buttons["DurationMinutesIncrementFiveButton"]
+        XCTAssertTrue(fiveMinuteIncrementButton.waitForExistence(timeout: 3))
+        for _ in 0..<(minutes / 5) {
+            fiveMinuteIncrementButton.tap()
+        }
+
+        let minuteIncrementButton = app.buttons["DurationMinutesIncrementButton"]
+        XCTAssertTrue(minuteIncrementButton.waitForExistence(timeout: 3))
+        for _ in 0..<(minutes % 5) {
+            minuteIncrementButton.tap()
+        }
+        XCTAssertTrue(app.staticTexts["CompletedWorkoutDurationPreview"].label.contains("\(minutes) min"))
+        app.buttons["DoneDurationEditButton"].tap()
+        XCTAssertTrue(durationButton.waitForExistence(timeout: 3))
     }
 
     @MainActor
