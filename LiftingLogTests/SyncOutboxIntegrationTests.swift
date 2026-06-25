@@ -1045,6 +1045,16 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         }
     }
 
+    func testCompletedWorkoutDurationInputRejectsOverflowingMinutes() throws {
+        XCTAssertThrowsError(try CompletedWorkoutDurationInput.durationSeconds(
+            from: String(Int.max),
+            initialMinutesText: "54",
+            initialDurationSeconds: 3_247
+        )) { error in
+            XCTAssertEqual(error as? WorkoutHistoryMutationError, .invalidDuration)
+        }
+    }
+
     func testCompletedWorkoutEditRejectsOwnerMismatchWithoutMutating() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

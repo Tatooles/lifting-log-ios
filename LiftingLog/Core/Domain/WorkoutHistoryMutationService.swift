@@ -53,7 +53,7 @@ enum CompletedWorkoutDurationInput {
             return max(0, initialDurationSeconds)
         }
 
-        guard let minutes = Int(normalizedText), minutes >= 0 else {
+        guard let minutes = Int(normalizedText), minutes >= 0, minutes <= Int.max / 60 else {
             throw WorkoutHistoryMutationError.invalidDuration
         }
 
