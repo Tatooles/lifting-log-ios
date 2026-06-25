@@ -16,6 +16,10 @@ Native SwiftUI workout logging app for iPhone with a SwiftData-backed offline wo
 - `xcodebuild test -project LiftingLog.xcodeproj -scheme LiftingLog -destination platform=iOS\ Simulator,name=iPhone\ 17,OS=26.0 -only-testing:LiftingLogTests -derivedDataPath /private/tmp/codex-ios-app-derived-data`
 - `xcodebuild test -project LiftingLog.xcodeproj -scheme LiftingLog -destination platform=iOS\ Simulator,name=iPhone\ 17,OS=26.0 -only-testing:LiftingLogUITests -derivedDataPath /private/tmp/codex-ios-app-derived-data`
 
+## Release Notes
+
+- Xcode Cloud owns TestFlight build numbers. See `docs/release/build-numbering.md`.
+
 ## Convex Setup
 
 Convex auth requires the Clerk JWT issuer domain to be configured on each Convex deployment. For the current development Clerk instance, set:
