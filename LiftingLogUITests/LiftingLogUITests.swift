@@ -201,7 +201,7 @@ final class LiftingLogUITests: XCTestCase {
         XCTAssertTrue(app.buttons["WorkoutHistoryButton-0"].waitForExistence(timeout: 3))
         app.buttons["WorkoutHistoryButton-0"].tap()
         XCTAssertTrue(app.staticTexts["Bench Press"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["Done"].exists)
+        XCTAssertTrue(app.staticTexts["185 x 5 @ 8 · Done"].exists)
 
         app.navigationBars.buttons.element(boundBy: 0).tap()
         app.segmentedControls["HistoryModePicker"].buttons["Exercises"].tap()
@@ -231,6 +231,52 @@ final class LiftingLogUITests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["HistoryTitle"].waitForExistence(timeout: 3))
         XCTAssertFalse(app.buttons["WorkoutHistoryButton-0"].waitForExistence(timeout: 1))
+    }
+
+    @MainActor
+    func testEditingCompletedWorkoutUpdatesHistoryDetailAndExerciseHistory() {
+        let app = makeApp()
+        app.launch()
+
+        createCompletedBenchWorkout(in: app, title: "Editable Push")
+
+        app.buttons["HistoryTab"].tap()
+        XCTAssertTrue(app.buttons["WorkoutHistoryButton-0"].waitForExistence(timeout: 3))
+        app.buttons["WorkoutHistoryButton-0"].tap()
+
+        XCTAssertTrue(app.buttons["EditWorkoutButton"].waitForExistence(timeout: 3))
+        app.buttons["EditWorkoutButton"].tap()
+        XCTAssertTrue(app.navigationBars["Edit Workout"].waitForExistence(timeout: 3))
+
+        replaceText(in: app.textFields["CompletedWorkoutTitleField"], with: "Edited Push")
+        replaceText(in: app.textFields["CompletedWorkoutDurationMinutesField"], with: "45")
+        replaceText(in: app.textFields["CompletedWorkoutNotesField"], with: "Post edit notes")
+        dismissKeyboardIfNeeded(in: app)
+        replaceText(in: app.textFields["HistorySetWeightField-0-0"], with: "205")
+        replaceText(in: app.textFields["HistorySetRepsField-0-0"], with: "6")
+        dismissKeyboardIfNeeded(in: app)
+
+        app.buttons["AddHistorySetButton-0"].tap()
+        replaceText(in: app.textFields["HistorySetWeightField-0-1"], with: "135")
+        replaceText(in: app.textFields["HistorySetRepsField-0-1"], with: "8")
+        replaceText(in: app.textFields["HistorySetRPEField-0-1"], with: "7")
+        app.buttons["HistorySetCompletionButton-0-1"].tap()
+        dismissKeyboardIfNeeded(in: app)
+
+        app.buttons["SaveCompletedWorkoutEditButton"].tap()
+
+        XCTAssertTrue(app.navigationBars["Edited Push"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Post edit notes"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["45:00"].exists)
+        XCTAssertTrue(app.staticTexts["205 x 6 @ 8 · Done"].exists)
+        XCTAssertTrue(app.staticTexts["135 x 8 @ 7 · Done"].exists)
+
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.segmentedControls["HistoryModePicker"].buttons["Exercises"].tap()
+        XCTAssertTrue(app.buttons["ExerciseHistoryButton-0"].waitForExistence(timeout: 3))
+        app.buttons["ExerciseHistoryButton-0"].tap()
+        XCTAssertTrue(app.staticTexts["205 x 6 @ 8"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["135 x 8 @ 7"].exists)
     }
 
     @MainActor
