@@ -175,7 +175,7 @@ struct WorkoutHistoryMutationService {
 
         if didChangeSessionFields {
             session.updatedAt = now
-            try recorder.recordUpdate(
+            try recordUpdateIfOwned(
                 entityKind: .workoutSession,
                 entityID: session.id,
                 ownerTokenIdentifier: ownerTokenIdentifier,
@@ -216,7 +216,7 @@ struct WorkoutHistoryMutationService {
                         now: now
                     )
                     set.markDeleted(now: now)
-                    try recorder.recordDelete(
+                    try recordDeleteIfOwned(
                         entityKind: .loggedSet,
                         entityID: set.id,
                         ownerTokenIdentifier: ownerTokenIdentifier,
@@ -232,7 +232,7 @@ struct WorkoutHistoryMutationService {
                         now: now
                     )
                     _ = apply(setDraft, to: set, now: now)
-                    try recorder.recordUpdate(
+                    try recordUpdateIfOwned(
                         entityKind: .loggedSet,
                         entityID: set.id,
                         ownerTokenIdentifier: ownerTokenIdentifier,
@@ -278,7 +278,7 @@ struct WorkoutHistoryMutationService {
                 set.loggedExercise = loggedExercise
                 context.insert(set)
                 loggedExercise.sets.append(set)
-                try recorder.recordCreate(
+                try recordCreateIfOwned(
                     entityKind: .loggedSet,
                     entityID: set.id,
                     ownerTokenIdentifier: ownerTokenIdentifier,
@@ -450,7 +450,7 @@ struct WorkoutHistoryMutationService {
         for (index, set) in loggedExercise.sortedSets.enumerated() where set.orderIndex != index {
             set.orderIndex = index
             set.updatedAt = now
-            try recorder.recordUpdate(
+            try recordUpdateIfOwned(
                 entityKind: .loggedSet,
                 entityID: set.id,
                 ownerTokenIdentifier: ownerTokenIdentifier,
@@ -460,6 +460,57 @@ struct WorkoutHistoryMutationService {
             didChange = true
         }
         return didChange
+    }
+
+    private func recordCreateIfOwned(
+        entityKind: SyncEntityKind,
+        entityID: UUID,
+        ownerTokenIdentifier: String?,
+        context: ModelContext,
+        now: Date
+    ) throws {
+        guard let ownerTokenIdentifier else { return }
+        try recorder.recordCreate(
+            entityKind: entityKind,
+            entityID: entityID,
+            ownerTokenIdentifier: ownerTokenIdentifier,
+            context: context,
+            now: now
+        )
+    }
+
+    private func recordUpdateIfOwned(
+        entityKind: SyncEntityKind,
+        entityID: UUID,
+        ownerTokenIdentifier: String?,
+        context: ModelContext,
+        now: Date
+    ) throws {
+        guard let ownerTokenIdentifier else { return }
+        try recorder.recordUpdate(
+            entityKind: entityKind,
+            entityID: entityID,
+            ownerTokenIdentifier: ownerTokenIdentifier,
+            context: context,
+            now: now
+        )
+    }
+
+    private func recordDeleteIfOwned(
+        entityKind: SyncEntityKind,
+        entityID: UUID,
+        ownerTokenIdentifier: String?,
+        context: ModelContext,
+        now: Date
+    ) throws {
+        guard let ownerTokenIdentifier else { return }
+        try recorder.recordDelete(
+            entityKind: entityKind,
+            entityID: entityID,
+            ownerTokenIdentifier: ownerTokenIdentifier,
+            context: context,
+            now: now
+        )
     }
 
     private func isEmptyNewSet(_ draft: CompletedWorkoutEditSetDraft) -> Bool {
