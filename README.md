@@ -16,6 +16,24 @@ Native SwiftUI workout logging app for iPhone with a SwiftData-backed offline wo
 - `xcodebuild test -project LiftingLog.xcodeproj -scheme LiftingLog -destination platform=iOS\ Simulator,name=iPhone\ 17,OS=26.0 -only-testing:LiftingLogTests -derivedDataPath /private/tmp/codex-ios-app-derived-data`
 - `xcodebuild test -project LiftingLog.xcodeproj -scheme LiftingLog -destination platform=iOS\ Simulator,name=iPhone\ 17,OS=26.0 -only-testing:LiftingLogUITests -derivedDataPath /private/tmp/codex-ios-app-derived-data`
 
+## CI
+
+Pull requests and pushes to `main` run two GitHub Actions checks:
+
+- `ios-unit-tests`: builds the `LiftingLog` scheme and runs only `LiftingLogTests`.
+- `convex-checks`: runs Convex Vitest coverage and Convex typecheck.
+
+The iOS job intentionally excludes `LiftingLogUITests` from the required PR gate. If `ios-unit-tests` fails, first inspect the GitHub Actions log. The failed workflow run also uploads a `LiftingLogTests-xcresult` artifact containing the `.xcresult` bundle and test log for local Xcode inspection.
+
+Local equivalents:
+
+```sh
+xcodebuild test -project LiftingLog.xcodeproj -scheme LiftingLog -destination platform=iOS\ Simulator,name=iPhone\ 17,OS=26.5 -only-testing:LiftingLogTests -derivedDataPath /private/tmp/codex-ios-app-derived-data
+pnpm install --frozen-lockfile
+pnpm run convex:test
+pnpm run convex:typecheck
+```
+
 ## Convex Setup
 
 Convex auth requires the Clerk JWT issuer domain to be configured on each Convex deployment. For the current development Clerk instance, set:
