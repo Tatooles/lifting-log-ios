@@ -67,6 +67,38 @@ final class AppInitializationOrderTests: XCTestCase {
         )
     }
 
+    func testForcedSignedOutUITestModeSkipsRestoredAuthSyncStartup() throws {
+        let appSource = try sourceFileContents("LiftingLog/App/LiftingLogApp.swift")
+
+        XCTAssertTrue(
+            appSource.contains("let uiTestForcesSignedOutAuth: Bool"),
+            "App startup should store the forced signed-out UI test mode once from launch arguments."
+        )
+        XCTAssertTrue(
+            appSource.contains("\"--uitest-force-signed-out-auth\""),
+            "Forced signed-out UI tests need an app-level launch argument, not only a profile-card display override."
+        )
+        XCTAssertTrue(
+            appSource.contains("if uiTestForcesSignedOutAuth"),
+            "Forced signed-out UI tests must skip restored Clerk/Convex sync startup."
+        )
+
+        let syncOwnerOffset = try XCTUnwrap(appSource.range(of: "if let uiTestSyncOwner")).lowerBound
+        let forcedSignedOutOffset = try XCTUnwrap(appSource.range(of: "if uiTestForcesSignedOutAuth")).lowerBound
+        let configureSyncOffset = try XCTUnwrap(appSource.range(of: "configureSyncIfNeeded()")).lowerBound
+
+        XCTAssertLessThan(
+            appSource.distance(from: appSource.startIndex, to: syncOwnerOffset),
+            appSource.distance(from: appSource.startIndex, to: forcedSignedOutOffset),
+            "Explicit sync-owner UI tests should still be able to exercise sync behavior."
+        )
+        XCTAssertLessThan(
+            appSource.distance(from: appSource.startIndex, to: forcedSignedOutOffset),
+            appSource.distance(from: appSource.startIndex, to: configureSyncOffset),
+            "Forced signed-out UI tests should return before normal sync startup can restore auth."
+        )
+    }
+
     private func sourceFileContents(_ relativePath: String) throws -> String {
         let testFileURL = URL(fileURLWithPath: #filePath)
         let projectRootURL = testFileURL

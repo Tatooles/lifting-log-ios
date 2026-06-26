@@ -192,10 +192,8 @@ final class LiftingLogUITests: XCTestCase {
 
     @MainActor
     func testCompletedWorkoutCanBeOpenedFromWorkoutAndExerciseHistory() {
-        let app = makeApp()
+        let app = makeApp(completedBenchWorkoutTitles: ["Push History"])
         app.launch()
-
-        createCompletedBenchWorkout(in: app, title: "Push History")
 
         app.buttons["HistoryTab"].tap()
         XCTAssertTrue(app.buttons["WorkoutHistoryButton-0"].waitForExistence(timeout: 3))
@@ -213,10 +211,8 @@ final class LiftingLogUITests: XCTestCase {
 
     @MainActor
     func testDeletingCompletedWorkoutRemovesItFromHistory() {
-        let app = makeApp()
+        let app = makeApp(completedBenchWorkoutTitles: ["Delete Me"])
         app.launch()
-
-        createCompletedBenchWorkout(in: app, title: "Delete Me")
 
         app.buttons["HistoryTab"].tap()
         XCTAssertTrue(app.buttons["WorkoutHistoryButton-0"].waitForExistence(timeout: 3))
@@ -277,10 +273,8 @@ final class LiftingLogUITests: XCTestCase {
 
     @MainActor
     func testStartingFromPastWorkoutCopiesSetsAsIncomplete() {
-        let app = makeApp()
+        let app = makeApp(completedBenchWorkoutTitles: ["Past Push"])
         app.launch()
-
-        createCompletedBenchWorkout(in: app, title: "Past Push")
 
         app.buttons["WorkoutTab"].tap()
         XCTAssertTrue(app.buttons["PastWorkoutButton-0"].waitForExistence(timeout: 3))
@@ -303,10 +297,8 @@ final class LiftingLogUITests: XCTestCase {
 
     @MainActor
     func testStartingFromPastWorkoutRequiresConfirmationBeforeCreatingWorkout() {
-        let app = makeApp()
+        let app = makeApp(completedBenchWorkoutTitles: ["Past Push"])
         app.launch()
-
-        createCompletedBenchWorkout(in: app, title: "Past Push")
 
         app.buttons["WorkoutTab"].tap()
         XCTAssertTrue(app.buttons["PastWorkoutButton-0"].waitForExistence(timeout: 3))
@@ -365,10 +357,8 @@ final class LiftingLogUITests: XCTestCase {
 
     @MainActor
     func testSettingsWeightUnitPreferenceRoundsDisplayedWorkoutAndHistoryValues() {
-        let app = makeApp()
+        let app = makeApp(completedBenchWorkoutTitles: ["Metric Display"])
         app.launch()
-
-        createCompletedBenchWorkout(in: app, title: "Metric Display")
 
         app.buttons["ProfileTab"].tap()
         app.buttons["ProfileSettingsLink"].tap()
@@ -688,12 +678,19 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
-    private func makeApp(extraArguments: [String] = []) -> XCUIApplication {
+    private func makeApp(
+        extraArguments: [String] = [],
+        completedBenchWorkoutTitles: [String] = []
+    ) -> XCUIApplication {
         let app = XCUIApplication()
+        let fixtureArguments = completedBenchWorkoutTitles.flatMap {
+            ["--uitest-seed-completed-bench-workout", $0]
+        }
+        let authArguments = completedBenchWorkoutTitles.isEmpty ? [] : ["--uitest-force-signed-out-auth"]
         app.launchArguments = [
             "--uitest-reset-persistent-store",
             "--uitest-in-memory-store",
-        ] + extraArguments
+        ] + fixtureArguments + authArguments + extraArguments
         app.terminate()
         return app
     }

@@ -8,6 +8,7 @@ struct LiftingLogApp: App {
     private let modelContainer: ModelContainer
     private let convexClient: ConvexClientWithAuth<String>
     private let uiTestSyncOwner: String?
+    private let uiTestForcesSignedOutAuth: Bool
     @State private var navigationState = AppNavigationState()
     @State private var activeWorkoutEngine = ActiveWorkoutEngine()
     @State private var syncScheduler = SyncScheduler()
@@ -17,6 +18,7 @@ struct LiftingLogApp: App {
         Clerk.configure(publishableKey: ClerkConfiguration.publishableKey)
         convexClient = ConvexClientFactory.makeAuthenticatedClient()
         let arguments = ProcessInfo.processInfo.arguments
+        uiTestForcesSignedOutAuth = arguments.contains("--uitest-force-signed-out-auth")
         let uiTestSyncOwnerIndex = arguments.firstIndex(of: "--uitest-sync-owner")
         uiTestSyncOwner = uiTestSyncOwnerIndex.flatMap { index -> String? in
             let nextIndex = arguments.index(after: index)
@@ -34,6 +36,13 @@ struct LiftingLogApp: App {
             } else {
                 try SeedDataService.seedIfNeeded(context: container.mainContext, ownerlessScope: .allExisting)
             }
+            #if DEBUG
+            try UITestFixtureSeeder.seedFixtures(
+                from: arguments,
+                ownerTokenIdentifier: uiTestSyncOwner,
+                context: container.mainContext
+            )
+            #endif
             modelContainer = container
         } catch {
             fatalError("Unable to initialize Lifting Log persistence: \(error)")
@@ -68,6 +77,11 @@ struct LiftingLogApp: App {
                             message: "Convex function sync:fetchChanges failed for token \(uiTestSyncOwner)"
                         )
                     }
+                    return
+                }
+                if uiTestForcesSignedOutAuth {
+                    syncScheduler.currentOwnerTokenIdentifier = nil
+                    syncScheduler.seedDefaultsForLocalMode()
                     return
                 }
                 configureSyncIfNeeded()
