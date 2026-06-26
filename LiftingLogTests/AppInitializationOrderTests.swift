@@ -99,6 +99,29 @@ final class AppInitializationOrderTests: XCTestCase {
         )
     }
 
+    func testUITestHelpersForceSignedOutAuthByDefault() throws {
+        let uiTestSource = try sourceFileContents("LiftingLogUITests/LiftingLogUITests.swift")
+
+        XCTAssertTrue(
+            uiTestSource.contains(#"let authArguments = extraArguments.contains("--uitest-force-signed-in-auth")"#)
+                && uiTestSource.contains(#": ["--uitest-force-signed-out-auth"]"#),
+            "Shared UI test app launches should force signed-out auth unless a test explicitly asks for the signed-in override."
+        )
+        XCTAssertTrue(
+            uiTestSource.contains("""
+        app.launchArguments = [
+            "--uitest-reset-persistent-store",
+            "--uitest-force-signed-out-auth",
+        ]
+"""),
+            "Disk-backed reset launches should force signed-out auth so persisted tests cannot restore a real session."
+        )
+        XCTAssertTrue(
+            uiTestSource.contains(#"app.launchArguments = ["--uitest-force-signed-out-auth"]"#),
+            "Disk-backed relaunches should force signed-out auth so relaunch tests cannot restore a real session."
+        )
+    }
+
     private func sourceFileContents(_ relativePath: String) throws -> String {
         let testFileURL = URL(fileURLWithPath: #filePath)
         let projectRootURL = testFileURL

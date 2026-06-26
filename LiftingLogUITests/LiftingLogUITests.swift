@@ -686,7 +686,9 @@ final class LiftingLogUITests: XCTestCase {
         let fixtureArguments = completedBenchWorkoutTitles.flatMap {
             ["--uitest-seed-completed-bench-workout", $0]
         }
-        let authArguments = completedBenchWorkoutTitles.isEmpty ? [] : ["--uitest-force-signed-out-auth"]
+        let authArguments = extraArguments.contains("--uitest-force-signed-in-auth")
+            ? []
+            : ["--uitest-force-signed-out-auth"]
         app.launchArguments = [
             "--uitest-reset-persistent-store",
             "--uitest-in-memory-store",
@@ -698,13 +700,18 @@ final class LiftingLogUITests: XCTestCase {
     @MainActor
     private func makeDiskBackedResetApp() -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["--uitest-reset-persistent-store"]
+        app.launchArguments = [
+            "--uitest-reset-persistent-store",
+            "--uitest-force-signed-out-auth",
+        ]
         return app
     }
 
     @MainActor
     private func makeDiskBackedApp() -> XCUIApplication {
-        XCUIApplication()
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitest-force-signed-out-auth"]
+        return app
     }
 
     @MainActor
