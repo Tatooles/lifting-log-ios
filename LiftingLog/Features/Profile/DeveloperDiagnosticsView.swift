@@ -16,6 +16,24 @@ struct DeveloperDiagnosticsView: View {
 
     var body: some View {
         Form {
+            Section("Build") {
+                diagnosticsRow(
+                    title: "App",
+                    value: AppBuildInfo.current.displayName,
+                    valueIdentifier: "DeveloperDiagnosticsAppName"
+                )
+                diagnosticsRow(
+                    title: "Version",
+                    value: AppBuildInfo.current.versionAndBuild,
+                    valueIdentifier: "DeveloperDiagnosticsAppVersion"
+                )
+                diagnosticsRow(
+                    title: "Bundle ID",
+                    value: AppBuildInfo.current.bundleIdentifier,
+                    valueIdentifier: "DeveloperDiagnosticsBundleIdentifier"
+                )
+            }
+
             Section("Environment") {
                 diagnosticsRow(
                     title: "Mode",
