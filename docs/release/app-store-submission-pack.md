@@ -10,7 +10,7 @@ This document is the operator source of truth for submitting Lifting Log 1.0 to 
 - Pricing: Free
 - Support URL: https://support.liftinglog.app/
 - Privacy Policy URL: https://support.liftinglog.app/privacy
-- Support contact: support@liftinglog.app
+- Support contact: support@thetoolist.dev
 - Copyright: 2026 Kevin Tatooles
 
 ## Description Draft
