@@ -10,6 +10,8 @@ struct SettingsView: View {
     let settings: UserSettings
     let onDataDeletionCompleted: () -> Void
     @State private var alert: SettingsAlert?
+    @State private var copyFeedbackResetTask: Task<Void, Never>?
+    @State private var copyFeedbackState = CopyAppInfoFeedbackState.idle
     @State private var exportFile: ExportFile?
 
     var body: some View {
@@ -54,6 +56,11 @@ struct SettingsView: View {
         .sheet(item: $exportFile) { exportFile in
             ActivityView(activityItems: [exportFile.url])
         }
+        .onDisappear {
+            copyFeedbackResetTask?.cancel()
+            copyFeedbackResetTask = nil
+            copyFeedbackState = .idle
+        }
     }
 
     private var appInfoSection: some View {
@@ -71,9 +78,10 @@ struct SettingsView: View {
             Button {
                 copyAppInfo()
             } label: {
-                Label("Copy App Info", systemImage: "doc.on.doc")
+                Label(copyFeedbackState.title, systemImage: copyFeedbackState.systemImage)
             }
             .accessibilityIdentifier("SettingsCopyAppInfoButton")
+            .animation(.easeInOut(duration: 0.15), value: copyFeedbackState)
         }
     }
 
@@ -103,6 +111,19 @@ struct SettingsView: View {
 
     private func copyAppInfo() {
         UIPasteboard.general.string = AppBuildInfo.current.supportSummary(device: .current)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        showCopyConfirmation()
+    }
+
+    private func showCopyConfirmation() {
+        copyFeedbackResetTask?.cancel()
+        copyFeedbackState = .copied
+        copyFeedbackResetTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            copyFeedbackState = .idle
+            copyFeedbackResetTask = nil
+        }
     }
 
     private func showSaveFailure(_ error: Error) {
@@ -171,5 +192,28 @@ struct SettingsView: View {
                 }
             }
         )
+    }
+}
+
+enum CopyAppInfoFeedbackState: Equatable {
+    case idle
+    case copied
+
+    var title: String {
+        switch self {
+        case .idle:
+            "Copy App Info"
+        case .copied:
+            "Copied"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .idle:
+            "doc.on.doc"
+        case .copied:
+            "checkmark"
+        }
     }
 }
