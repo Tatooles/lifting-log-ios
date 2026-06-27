@@ -285,6 +285,37 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
+    func testRemovingFocusedNewCompletedWorkoutSetDoesNotCrash() {
+        let app = makeApp()
+        app.launch()
+
+        createCompletedBenchWorkout(in: app, title: "Focused Draft Remove")
+
+        app.buttons["HistoryTab"].tap()
+        XCTAssertTrue(app.buttons["WorkoutHistoryButton-0"].waitForExistence(timeout: 3))
+        app.buttons["WorkoutHistoryButton-0"].tap()
+
+        XCTAssertTrue(app.buttons["EditWorkoutButton"].waitForExistence(timeout: 3))
+        app.buttons["EditWorkoutButton"].tap()
+        XCTAssertTrue(app.navigationBars["Edit Workout"].waitForExistence(timeout: 3))
+
+        app.buttons["AddHistorySetButton-0"].tap()
+        XCTAssertTrue(app.textFields["HistorySetWeightField-0-1"].waitForExistence(timeout: 3))
+        replaceText(in: app.textFields["HistorySetWeightField-0-1"], with: "135")
+        replaceText(in: app.textFields["HistorySetRepsField-0-1"], with: "8")
+        replaceText(in: app.textFields["HistorySetRPEField-0-1"], with: "7.5")
+
+        app.buttons["RemoveHistorySetButton-0-1"].tap()
+        let removeButton = app.alerts.buttons["Remove"]
+        XCTAssertTrue(removeButton.waitForExistence(timeout: 3))
+        removeButton.tap()
+
+        XCTAssertTrue(app.navigationBars["Edit Workout"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.textFields["HistorySetWeightField-0-1"].waitForExistence(timeout: 1))
+        XCTAssertTrue(app.textFields["HistorySetWeightField-0-0"].exists)
+    }
+
+    @MainActor
     func testSignedOutCompletedWorkoutEditPersistsThroughSignedInRelaunch() {
         let app = makeDiskBackedResetApp(extraArguments: ["--uitest-force-signed-out-auth"])
         app.launch()

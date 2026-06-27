@@ -229,69 +229,76 @@ struct CompletedWorkoutEditView: View {
         }
     }
 
+    @ViewBuilder
     private func setEditor(exerciseIndex: Int, setIndex: Int, visibleIndex: Int) -> some View {
-        HStack(spacing: 10) {
-            Text("\(visibleIndex + 1)")
-                .font(.subheadline.weight(.semibold).monospacedDigit())
-                .foregroundStyle(AppTheme.textTertiary)
-                .frame(width: 18)
+        if draftSetExists(exerciseIndex: exerciseIndex, setIndex: setIndex) {
+            let isCompleted = draft.exercises[exerciseIndex].sets[setIndex].isCompleted
 
-            WorkoutNumericTextField(
-                placeholder: weightUnit.fieldPlaceholder,
-                text: weightBinding(exerciseIndex: exerciseIndex, setIndex: setIndex),
-                keyboard: .decimalPad,
-                focusTarget: .setWeight(exerciseIndex, setIndex),
-                focusedField: $focusedField,
-                accessibilityIdentifier: "HistorySetWeightField-\(exerciseIndex)-\(visibleIndex)"
-            )
+            HStack(spacing: 10) {
+                Text("\(visibleIndex + 1)")
+                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(AppTheme.textTertiary)
+                    .frame(width: 18)
 
-            WorkoutNumericTextField(
-                placeholder: "REPS",
-                text: repsBinding(exerciseIndex: exerciseIndex, setIndex: setIndex),
-                keyboard: .numberPad,
-                focusTarget: .setReps(exerciseIndex, setIndex),
-                focusedField: $focusedField,
-                accessibilityIdentifier: "HistorySetRepsField-\(exerciseIndex)-\(visibleIndex)"
-            )
-
-            WorkoutNumericTextField(
-                placeholder: "RPE",
-                text: rpeBinding(exerciseIndex: exerciseIndex, setIndex: setIndex),
-                keyboard: .decimalPad,
-                focusTarget: .setRPE(exerciseIndex, setIndex),
-                focusedField: $focusedField,
-                accessibilityIdentifier: "HistorySetRPEField-\(exerciseIndex)-\(visibleIndex)"
-            )
-
-            Button {
-                draft.exercises[exerciseIndex].sets[setIndex].isCompleted.toggle()
-            } label: {
-                Image(systemName: draft.exercises[exerciseIndex].sets[setIndex].isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.title2)
-                    .foregroundStyle(draft.exercises[exerciseIndex].sets[setIndex].isCompleted ? AppTheme.accentBright : AppTheme.textTertiary)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(draft.exercises[exerciseIndex].sets[setIndex].isCompleted ? "Mark set incomplete" : "Mark set complete")
-            .accessibilityIdentifier("HistorySetCompletionButton-\(exerciseIndex)-\(visibleIndex)")
-
-            Button(role: .destructive) {
-                removalCandidate = CompletedWorkoutSetRemovalCandidate(
-                    exerciseIndex: exerciseIndex,
-                    setIndex: setIndex,
-                    displayNumber: visibleIndex + 1
+                WorkoutNumericTextField(
+                    placeholder: weightUnit.fieldPlaceholder,
+                    text: weightBinding(exerciseIndex: exerciseIndex, setIndex: setIndex),
+                    keyboard: .decimalPad,
+                    focusTarget: .setWeight(exerciseIndex, setIndex),
+                    focusedField: $focusedField,
+                    accessibilityIdentifier: "HistorySetWeightField-\(exerciseIndex)-\(visibleIndex)"
                 )
-            } label: {
-                Image(systemName: "trash")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(AppTheme.accentBright)
-                    .frame(width: 34, height: 44)
-                    .contentShape(Rectangle())
+
+                WorkoutNumericTextField(
+                    placeholder: "REPS",
+                    text: repsBinding(exerciseIndex: exerciseIndex, setIndex: setIndex),
+                    keyboard: .numberPad,
+                    focusTarget: .setReps(exerciseIndex, setIndex),
+                    focusedField: $focusedField,
+                    accessibilityIdentifier: "HistorySetRepsField-\(exerciseIndex)-\(visibleIndex)"
+                )
+
+                WorkoutNumericTextField(
+                    placeholder: "RPE",
+                    text: rpeBinding(exerciseIndex: exerciseIndex, setIndex: setIndex),
+                    keyboard: .decimalPad,
+                    focusTarget: .setRPE(exerciseIndex, setIndex),
+                    focusedField: $focusedField,
+                    accessibilityIdentifier: "HistorySetRPEField-\(exerciseIndex)-\(visibleIndex)"
+                )
+
+                Button {
+                    updateDraftSet(exerciseIndex: exerciseIndex, setIndex: setIndex) { set in
+                        set.isCompleted.toggle()
+                    }
+                } label: {
+                    Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
+                        .font(.title2)
+                        .foregroundStyle(isCompleted ? AppTheme.accentBright : AppTheme.textTertiary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isCompleted ? "Mark set incomplete" : "Mark set complete")
+                .accessibilityIdentifier("HistorySetCompletionButton-\(exerciseIndex)-\(visibleIndex)")
+
+                Button(role: .destructive) {
+                    removalCandidate = CompletedWorkoutSetRemovalCandidate(
+                        exerciseIndex: exerciseIndex,
+                        setIndex: setIndex,
+                        displayNumber: visibleIndex + 1
+                    )
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(AppTheme.accentBright)
+                        .frame(width: 34, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove set")
+                .accessibilityIdentifier("RemoveHistorySetButton-\(exerciseIndex)-\(visibleIndex)")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Remove set")
-            .accessibilityIdentifier("RemoveHistorySetButton-\(exerciseIndex)-\(visibleIndex)")
         }
     }
 
@@ -309,23 +316,33 @@ struct CompletedWorkoutEditView: View {
 
         return Binding(
             get: {
+                guard draftSetExists(exerciseIndex: exerciseIndex, setIndex: setIndex) else {
+                    return numberInputTexts[focusTarget]?.displayText(for: nil) ?? ""
+                }
                 let canonicalWeight = draft.exercises[exerciseIndex].sets[setIndex].weight
                 let displayWeight = weightUnit.displayWeight(fromCanonicalPounds: canonicalWeight)
                 return numberInputTexts[focusTarget, default: WorkoutNumberInputText()].displayText(for: displayWeight)
             },
             set: { value in
-                numberInputTexts[focusTarget, default: WorkoutNumberInputText()].updateDraft(value)
-                let displayWeight = WorkoutFormatters.parseNumber(value)
-                draft.exercises[exerciseIndex].sets[setIndex].weight = weightUnit.canonicalWeight(fromDisplayWeight: displayWeight)
+                updateDraftSet(exerciseIndex: exerciseIndex, setIndex: setIndex) { set in
+                    numberInputTexts[focusTarget, default: WorkoutNumberInputText()].updateDraft(value)
+                    let displayWeight = WorkoutFormatters.parseNumber(value)
+                    set.weight = weightUnit.canonicalWeight(fromDisplayWeight: displayWeight)
+                }
             }
         )
     }
 
     private func repsBinding(exerciseIndex: Int, setIndex: Int) -> Binding<String> {
         Binding(
-            get: { draft.exercises[exerciseIndex].sets[setIndex].reps.map(String.init) ?? "" },
+            get: {
+                guard draftSetExists(exerciseIndex: exerciseIndex, setIndex: setIndex) else { return "" }
+                return draft.exercises[exerciseIndex].sets[setIndex].reps.map(String.init) ?? ""
+            },
             set: { value in
-                draft.exercises[exerciseIndex].sets[setIndex].reps = Int(value)
+                updateDraftSet(exerciseIndex: exerciseIndex, setIndex: setIndex) { set in
+                    set.reps = Int(value)
+                }
             }
         )
     }
@@ -335,14 +352,33 @@ struct CompletedWorkoutEditView: View {
 
         return Binding(
             get: {
+                guard draftSetExists(exerciseIndex: exerciseIndex, setIndex: setIndex) else {
+                    return numberInputTexts[focusTarget]?.displayText(for: nil) ?? ""
+                }
                 let rpe = draft.exercises[exerciseIndex].sets[setIndex].rpe
                 return numberInputTexts[focusTarget, default: WorkoutNumberInputText()].displayText(for: rpe)
             },
             set: { value in
-                numberInputTexts[focusTarget, default: WorkoutNumberInputText()].updateDraft(value)
-                draft.exercises[exerciseIndex].sets[setIndex].rpe = WorkoutFormatters.parseNumber(value)
+                updateDraftSet(exerciseIndex: exerciseIndex, setIndex: setIndex) { set in
+                    numberInputTexts[focusTarget, default: WorkoutNumberInputText()].updateDraft(value)
+                    set.rpe = WorkoutFormatters.parseNumber(value)
+                }
             }
         )
+    }
+
+    private func draftSetExists(exerciseIndex: Int, setIndex: Int) -> Bool {
+        draft.exercises.indices.contains(exerciseIndex)
+            && draft.exercises[exerciseIndex].sets.indices.contains(setIndex)
+    }
+
+    private func updateDraftSet(
+        exerciseIndex: Int,
+        setIndex: Int,
+        update: (inout CompletedWorkoutEditSetDraft) -> Void
+    ) {
+        guard draftSetExists(exerciseIndex: exerciseIndex, setIndex: setIndex) else { return }
+        update(&draft.exercises[exerciseIndex].sets[setIndex])
     }
 
     private func visibleSetIndices(for exerciseIndex: Int) -> [Int] {
@@ -364,11 +400,11 @@ struct CompletedWorkoutEditView: View {
         else { return }
 
         if draft.exercises[candidate.exerciseIndex].sets[candidate.setIndex].id == nil {
-            draft.exercises[candidate.exerciseIndex].sets.remove(at: candidate.setIndex)
             rebaseNumberInputTextsAfterRemovingSet(
                 exerciseIndex: candidate.exerciseIndex,
                 removedSetIndex: candidate.setIndex
             )
+            draft.exercises[candidate.exerciseIndex].sets.remove(at: candidate.setIndex)
         } else {
             draft.exercises[candidate.exerciseIndex].sets[candidate.setIndex].isRemoved = true
         }
