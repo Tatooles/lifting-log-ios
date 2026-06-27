@@ -24,7 +24,7 @@ struct WorkoutHistoryRow: View {
                     HStack(spacing: 12) {
                         Label(AppTheme.formatDuration(metrics.durationSeconds), systemImage: "clock")
                         Text("\(session.visibleExerciseCount) exercises")
-                        Text("\(metrics.totalSetCount) sets")
+                        Text("\(metrics.completedSetCount) sets")
                     }
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(AppTheme.textTertiary)

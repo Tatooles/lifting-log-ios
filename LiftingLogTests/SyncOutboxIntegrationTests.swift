@@ -745,6 +745,27 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         }
     }
 
+    func testDeletingOwnedWorkoutHistoryWhileSignedOutRejectsWithoutMutating() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let session = makeCompletedWorkout(context: context, ownerTokenIdentifier: "issuer|owner_a")
+        try context.save()
+
+        XCTAssertThrowsError(try WorkoutHistoryMutationService().deleteWorkoutHistory(
+            session,
+            ownerTokenIdentifier: nil,
+            context: context,
+            now: Date(timeIntervalSince1970: 2_000)
+        )) { error in
+            XCTAssertEqual(error as? WorkoutHistoryMutationError, .ownerMismatch)
+        }
+
+        XCTAssertFalse(session.isDeleted)
+        XCTAssertTrue(session.loggedExercises.allSatisfy { !$0.isDeleted })
+        XCTAssertTrue(session.loggedExercises.flatMap(\.sets).allSatisfy { !$0.isDeleted })
+        XCTAssertTrue(try fetchEntries(context).isEmpty)
+    }
+
     func testDeletingUnattemptedFinishedWorkoutRemovesCreateIntentInsteadOfTombstoning() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
@@ -810,6 +831,515 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         assertEntry(entries, kind: .workoutSession, id: session.id, operation: .delete)
         assertEntry(entries, kind: .loggedExercise, id: loggedExercise.id, operation: .delete)
         assertEntry(entries, kind: .loggedSet, id: set.id, operation: .delete)
+    }
+
+    func testEditingOwnerlessCompletedWorkoutSessionFieldsBootstrapsGraphForSignedInSync() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let startedAt = Date(timeIntervalSince1970: 1_000)
+        let originalUpdatedAt = Date(timeIntervalSince1970: 1_100)
+        let editTime = Date(timeIntervalSince1970: 2_000)
+        let session = makeCompletedWorkout(
+            context: context,
+            title: "Push",
+            startedAt: startedAt,
+            durationSeconds: 3_600,
+            updatedAt: originalUpdatedAt
+        )
+        try context.save()
+
+        var draft = CompletedWorkoutEditDraft(session: session)
+        draft.title = "Push corrected"
+        draft.notes = "Felt better than logged"
+        draft.durationSeconds = 2_700
+
+        try WorkoutHistoryMutationService().saveCompletedWorkoutEdit(
+            draft,
+            for: session,
+            ownerTokenIdentifier: "issuer|owner_a",
+            context: context,
+            now: editTime
+        )
+
+        let entries = try fetchEntries(context)
+        XCTAssertEqual(session.title, "Push corrected")
+        XCTAssertEqual(session.notes, "Felt better than logged")
+        XCTAssertEqual(session.durationSeconds, 2_700)
+        XCTAssertEqual(session.endedAt, startedAt.addingTimeInterval(2_700))
+        XCTAssertEqual(session.updatedAt, editTime)
+        XCTAssertEqual(session.syncOwnerTokenIdentifier, "issuer|owner_a")
+        XCTAssertEqual(entries.count, 4)
+        assertEntry(entries, kind: .workoutSession, id: session.id, operation: .create)
+        assertEntry(entries, kind: .loggedExercise, id: try XCTUnwrap(session.sortedLoggedExercises.first?.id), operation: .create)
+        for set in try XCTUnwrap(session.sortedLoggedExercises.first).sortedSets {
+            assertEntry(entries, kind: .loggedSet, id: set.id, operation: .create)
+        }
+    }
+
+    func testEditingOwnerlessCompletedWorkoutSetBootstrapsGraphForSignedInSync() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let session = makeCompletedWorkout(context: context)
+        let loggedExercise = try XCTUnwrap(session.sortedLoggedExercises.first)
+        let set = try XCTUnwrap(session.sortedLoggedExercises.first?.sortedSets.first)
+        let editTime = Date(timeIntervalSince1970: 2_000)
+        try context.save()
+
+        var draft = CompletedWorkoutEditDraft(session: session)
+        draft.exercises[0].sets[0].weight = 225
+        draft.exercises[0].sets[0].reps = 8
+        draft.exercises[0].sets[0].rpe = 8.5
+        draft.exercises[0].sets[0].kind = .warmup
+        draft.exercises[0].sets[0].isCompleted = false
+        draft.exercises[0].sets[0].notes = "Corrected set"
+
+        try WorkoutHistoryMutationService().saveCompletedWorkoutEdit(
+            draft,
+            for: session,
+            ownerTokenIdentifier: "issuer|owner_a",
+            context: context,
+            now: editTime
+        )
+
+        let entries = try fetchEntries(context)
+        XCTAssertEqual(session.syncOwnerTokenIdentifier, "issuer|owner_a")
+        XCTAssertEqual(set.weight, 225)
+        XCTAssertEqual(set.reps, 8)
+        XCTAssertEqual(set.rpe, 8.5)
+        XCTAssertEqual(set.kind, .warmup)
+        XCTAssertFalse(set.isCompleted)
+        XCTAssertNil(set.completedAt)
+        XCTAssertEqual(set.notes, "Corrected set")
+        XCTAssertEqual(set.updatedAt, editTime)
+        XCTAssertEqual(session.updatedAt, Date(timeIntervalSince1970: 100))
+        XCTAssertEqual(entries.count, 4)
+        assertEntry(entries, kind: .workoutSession, id: session.id, operation: .create)
+        assertEntry(entries, kind: .loggedExercise, id: loggedExercise.id, operation: .create)
+        for visibleSet in loggedExercise.sortedSets {
+            assertEntry(entries, kind: .loggedSet, id: visibleSet.id, operation: .create)
+        }
+    }
+
+    func testEditingOwnedCompletedWorkoutSetRecordsOnlySetUpdate() throws {
+        let owner = "issuer|owner_a"
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let session = makeCompletedWorkout(context: context, ownerTokenIdentifier: owner)
+        let set = try XCTUnwrap(session.sortedLoggedExercises.first?.sortedSets.first)
+        let editTime = Date(timeIntervalSince1970: 2_000)
+        try context.save()
+
+        var draft = CompletedWorkoutEditDraft(session: session)
+        draft.exercises[0].sets[0].weight = 225
+
+        try WorkoutHistoryMutationService().saveCompletedWorkoutEdit(
+            draft,
+            for: session,
+            ownerTokenIdentifier: owner,
+            context: context,
+            now: editTime
+        )
+
+        let entries = try fetchEntries(context)
+        XCTAssertEqual(session.syncOwnerTokenIdentifier, owner)
+        XCTAssertEqual(set.weight, 225)
+        XCTAssertEqual(set.updatedAt, editTime)
+        XCTAssertEqual(entries.count, 1)
+        assertEntry(entries, kind: .loggedSet, id: set.id, operation: .update)
+    }
+
+    func testSignedOutEditingOwnerlessCompletedWorkoutAddsAndRemovesSetsWithoutOutbox() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let session = makeCompletedWorkout(context: context)
+        let loggedExercise = try XCTUnwrap(session.sortedLoggedExercises.first)
+        let tombstonedSet = LoggedSet(orderIndex: 9, weight: 95, reps: 10, isCompleted: true)
+        tombstonedSet.markDeleted(now: Date(timeIntervalSince1970: 150))
+        tombstonedSet.loggedExercise = loggedExercise
+        loggedExercise.sets.append(tombstonedSet)
+        try context.save()
+
+        var draft = CompletedWorkoutEditDraft(session: session)
+        let removedSetID = try XCTUnwrap(draft.exercises[0].sets[0].id)
+        let shiftedSetID = try XCTUnwrap(draft.exercises[0].sets[1].id)
+        draft.exercises[0].sets[0].isRemoved = true
+        draft.exercises[0].sets.append(CompletedWorkoutEditSetDraft(
+            orderIndex: 2,
+            weight: 235,
+            reps: 4,
+            rpe: 9,
+            kind: .working,
+            isCompleted: true,
+            notes: "Added after the fact"
+        ))
+
+        try WorkoutHistoryMutationService().saveCompletedWorkoutEdit(
+            draft,
+            for: session,
+            ownerTokenIdentifier: nil,
+            context: context,
+            now: Date(timeIntervalSince1970: 2_000)
+        )
+
+        let entries = try fetchEntries(context)
+        let allSets = try context.fetch(FetchDescriptor<LoggedSet>())
+        let visibleSets = loggedExercise.sortedSets
+        let removedSetAfterSave = try XCTUnwrap(allSets.first { $0.id == removedSetID })
+        let shiftedSetAfterSave = try XCTUnwrap(allSets.first { $0.id == shiftedSetID })
+        let addedSet = try XCTUnwrap(visibleSets.first { $0.notes == "Added after the fact" })
+        XCTAssertTrue(removedSetAfterSave.isDeleted)
+        XCTAssertEqual(removedSetAfterSave.orderIndex, 0)
+        XCTAssertEqual(shiftedSetAfterSave.orderIndex, 0)
+        XCTAssertEqual(tombstonedSet.orderIndex, 9)
+        XCTAssertEqual(addedSet.orderIndex, 1)
+        XCTAssertEqual(addedSet.weight, 235)
+        XCTAssertEqual(addedSet.reps, 4)
+        XCTAssertEqual(addedSet.rpe, 9)
+        XCTAssertTrue(addedSet.isCompleted)
+        XCTAssertEqual(addedSet.completedAt, Date(timeIntervalSince1970: 2_000))
+        XCTAssertEqual(addedSet.notes, "Added after the fact")
+        XCTAssertNil(session.syncOwnerTokenIdentifier)
+        XCTAssertTrue(entries.isEmpty)
+    }
+
+    func testSignedOutEditingPendingOwnerlessCompletedWorkoutEnqueuesAddedSetForClaim() async throws {
+        let owner = "issuer|owner_a"
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        context.insert(SyncCursorState(
+            ownerTokenIdentifier: owner,
+            userSettingsCursor: 1,
+            exercisesCursor: 1,
+            workoutSessionsCursor: 1,
+            loggedExercisesCursor: 1,
+            loggedSetsCursor: 1,
+            hasBootstrappedSettingsExercises: true,
+            hasBootstrappedWorkoutGraph: true
+        ))
+        let session = makeCompletedWorkout(context: context)
+        let loggedExercise = try XCTUnwrap(session.sortedLoggedExercises.first)
+        try context.save()
+
+        try SyncOutboxRecorder().bootstrapV1SyncableRecords(
+            ownerTokenIdentifier: nil,
+            context: context,
+            now: Date(timeIntervalSince1970: 1_500)
+        )
+        XCTAssertEqual(try fetchEntries(context).count, 4)
+
+        var draft = CompletedWorkoutEditDraft(session: session)
+        draft.exercises[0].sets.append(CompletedWorkoutEditSetDraft(
+            orderIndex: 2,
+            weight: 245,
+            reps: 2,
+            rpe: 9.5,
+            kind: .working,
+            isCompleted: true,
+            notes: "Signed-out added set"
+        ))
+
+        try WorkoutHistoryMutationService().saveCompletedWorkoutEdit(
+            draft,
+            for: session,
+            ownerTokenIdentifier: nil,
+            context: context,
+            now: Date(timeIntervalSince1970: 2_000)
+        )
+
+        let addedSet = try XCTUnwrap(loggedExercise.sortedSets.first { $0.notes == "Signed-out added set" })
+        let entries = try fetchEntries(context)
+        XCTAssertEqual(entries.count, 5)
+        assertEntry(entries, kind: .loggedSet, id: addedSet.id, operation: .create)
+        XCTAssertNil(entries.first { $0.entityKind == .loggedSet && $0.entityID == addedSet.id }?.ownerTokenIdentifier)
+
+        let client = FakeSyncClient()
+        let result = try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
+
+        XCTAssertTrue(result.didPush)
+        XCTAssertEqual(session.syncOwnerTokenIdentifier, owner)
+        let addedPayload = try XCTUnwrap(client.upsertedLoggedSets.first {
+            $0.clientId == addedSet.id.uuidString.lowercased()
+        })
+        XCTAssertEqual(addedPayload.weight, 245)
+        XCTAssertEqual(addedPayload.reps, 2)
+        XCTAssertEqual(addedPayload.rpe, 9.5)
+        XCTAssertTrue(try fetchEntries(context).isEmpty)
+    }
+
+    func testSignedOutEditingOwnerlessCompletedWorkoutDoesNotBypassBootstrapPolicyOnSignIn() async throws {
+        let ownerA = "issuer|owner_a"
+        let ownerB = "issuer|owner_b"
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        context.insert(SyncCursorState(
+            ownerTokenIdentifier: ownerB,
+            userSettingsCursor: 1,
+            exercisesCursor: 1,
+            workoutSessionsCursor: 1,
+            loggedExercisesCursor: 1,
+            loggedSetsCursor: 1,
+            hasBootstrappedSettingsExercises: true,
+            hasBootstrappedWorkoutGraph: true
+        ))
+        let session = makeCompletedWorkout(context: context)
+        let set = try XCTUnwrap(session.sortedLoggedExercises.first?.sortedSets.first)
+        try context.save()
+
+        var draft = CompletedWorkoutEditDraft(session: session)
+        draft.title = "Signed-out edit"
+        draft.exercises[0].sets[0].weight = 225
+
+        try WorkoutHistoryMutationService().saveCompletedWorkoutEdit(
+            draft,
+            for: session,
+            ownerTokenIdentifier: nil,
+            context: context,
+            now: Date(timeIntervalSince1970: 2_000)
+        )
+
+        XCTAssertEqual(session.title, "Signed-out edit")
+        XCTAssertEqual(set.weight, 225)
+        XCTAssertNil(session.syncOwnerTokenIdentifier)
+        XCTAssertTrue(try fetchEntries(context).isEmpty)
+
+        let client = FakeSyncClient()
+        let result = try await SyncCoordinator(client: client).run(ownerTokenIdentifier: ownerA, context: context)
+
+        XCTAssertFalse(result.didPush)
+        XCTAssertNil(session.syncOwnerTokenIdentifier)
+        XCTAssertTrue(try fetchEntries(context).isEmpty)
+        XCTAssertTrue(client.operationLog.isEmpty)
+    }
+
+    func testEditingCompletedWorkoutIgnoresEmptyNewSetDraft() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let session = makeCompletedWorkout(context: context)
+        let loggedExercise = try XCTUnwrap(session.sortedLoggedExercises.first)
+        try context.save()
+
+        var draft = CompletedWorkoutEditDraft(session: session)
+        draft.exercises[0].sets.append(CompletedWorkoutEditSetDraft(orderIndex: 2))
+
+        try WorkoutHistoryMutationService().saveCompletedWorkoutEdit(
+            draft,
+            for: session,
+            ownerTokenIdentifier: nil,
+            context: context,
+            now: Date(timeIntervalSince1970: 2_000)
+        )
+
+        XCTAssertEqual(loggedExercise.sortedSets.count, 2)
+        XCTAssertTrue(try fetchEntries(context).isEmpty)
+    }
+
+    func testNoOpCompletedWorkoutEditDoesNotTouchTimestampsOrOutbox() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let session = makeCompletedWorkout(context: context)
+        let set = try XCTUnwrap(session.sortedLoggedExercises.first?.sortedSets.first)
+        let sessionUpdatedAt = session.updatedAt
+        let setUpdatedAt = set.updatedAt
+        try context.save()
+
+        try WorkoutHistoryMutationService().saveCompletedWorkoutEdit(
+            CompletedWorkoutEditDraft(session: session),
+            for: session,
+            ownerTokenIdentifier: nil,
+            context: context,
+            now: Date(timeIntervalSince1970: 2_000)
+        )
+
+        XCTAssertEqual(session.updatedAt, sessionUpdatedAt)
+        XCTAssertEqual(set.updatedAt, setUpdatedAt)
+        XCTAssertTrue(try fetchEntries(context).isEmpty)
+    }
+
+    func testNoOpCompletedWorkoutEditDoesNotNormalizeLegacyEndedAtDuration() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let startedAt = Date(timeIntervalSince1970: 1_000)
+        let endedAt = startedAt.addingTimeInterval(3_247)
+        let session = makeCompletedWorkout(
+            context: context,
+            startedAt: startedAt,
+            durationSeconds: 0
+        )
+        session.endedAt = endedAt
+        let sessionUpdatedAt = session.updatedAt
+        try context.save()
+
+        try WorkoutHistoryMutationService().saveCompletedWorkoutEdit(
+            CompletedWorkoutEditDraft(session: session),
+            for: session,
+            ownerTokenIdentifier: nil,
+            context: context,
+            now: Date(timeIntervalSince1970: 2_000)
+        )
+
+        XCTAssertEqual(session.durationSeconds, 0)
+        XCTAssertEqual(session.endedAt, endedAt)
+        XCTAssertEqual(session.updatedAt, sessionUpdatedAt)
+        XCTAssertTrue(try fetchEntries(context).isEmpty)
+    }
+
+    func testCompletedWorkoutDurationInputPreservesNonMinuteAlignedSecondsWhenUnchanged() throws {
+        let initialDurationSeconds = 3_247
+        let minutesText = CompletedWorkoutDurationInput.minutesText(for: initialDurationSeconds)
+
+        let resolvedDurationSeconds = try CompletedWorkoutDurationInput.durationSeconds(
+            from: minutesText,
+            initialMinutesText: minutesText,
+            initialDurationSeconds: initialDurationSeconds
+        )
+
+        XCTAssertEqual(minutesText, "54")
+        XCTAssertEqual(resolvedDurationSeconds, initialDurationSeconds)
+    }
+
+    func testCompletedWorkoutDurationInputRejectsBlankDurationWhenChanged() throws {
+        XCTAssertThrowsError(try CompletedWorkoutDurationInput.durationSeconds(
+            from: "",
+            initialMinutesText: "54",
+            initialDurationSeconds: 3_247
+        )) { error in
+            XCTAssertEqual(error as? WorkoutHistoryMutationError, .invalidDuration)
+        }
+    }
+
+    func testCompletedWorkoutDurationInputRejectsOverflowingMinutes() throws {
+        XCTAssertThrowsError(try CompletedWorkoutDurationInput.durationSeconds(
+            from: String(Int.max),
+            initialMinutesText: "54",
+            initialDurationSeconds: 3_247
+        )) { error in
+            XCTAssertEqual(error as? WorkoutHistoryMutationError, .invalidDuration)
+        }
+    }
+
+    func testCompletedWorkoutEditRejectsOwnerMismatchWithoutMutating() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let session = makeCompletedWorkout(context: context, ownerTokenIdentifier: "issuer|owner_a")
+        try context.save()
+
+        var draft = CompletedWorkoutEditDraft(session: session)
+        draft.title = "Should not save"
+
+        XCTAssertThrowsError(try WorkoutHistoryMutationService().saveCompletedWorkoutEdit(
+            draft,
+            for: session,
+            ownerTokenIdentifier: "issuer|owner_b",
+            context: context,
+            now: Date(timeIntervalSince1970: 2_000)
+        ))
+
+        XCTAssertEqual(session.title, "Push")
+        XCTAssertTrue(try fetchEntries(context).isEmpty)
+    }
+
+    func testCompletedWorkoutEditRejectsOwnedWorkoutWhileSignedOut() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let session = makeCompletedWorkout(context: context, ownerTokenIdentifier: "issuer|owner_a")
+        try context.save()
+
+        var draft = CompletedWorkoutEditDraft(session: session)
+        draft.title = "Should not save"
+
+        XCTAssertThrowsError(try WorkoutHistoryMutationService().saveCompletedWorkoutEdit(
+            draft,
+            for: session,
+            ownerTokenIdentifier: nil,
+            context: context,
+            now: Date(timeIntervalSince1970: 2_000)
+        )) { error in
+            XCTAssertEqual(error as? WorkoutHistoryMutationError, .ownerMismatch)
+        }
+
+        XCTAssertEqual(session.title, "Push")
+        XCTAssertEqual(session.syncOwnerTokenIdentifier, "issuer|owner_a")
+        XCTAssertTrue(try fetchEntries(context).isEmpty)
+    }
+
+    func testEditingOwnerlessCompletedWorkoutRejectsBootstrapWhenAnotherOwnerHasLocalSyncState() throws {
+        let ownerA = "issuer|owner_a"
+        let ownerB = "issuer|owner_b"
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        context.insert(SyncCursorState(
+            ownerTokenIdentifier: ownerB,
+            userSettingsCursor: 1,
+            exercisesCursor: 1,
+            workoutSessionsCursor: 1,
+            loggedExercisesCursor: 1,
+            loggedSetsCursor: 1,
+            hasBootstrappedSettingsExercises: true,
+            hasBootstrappedWorkoutGraph: true
+        ))
+        let session = makeCompletedWorkout(context: context)
+        try context.save()
+
+        var draft = CompletedWorkoutEditDraft(session: session)
+        draft.title = "Should not save"
+        draft.exercises[0].sets[0].weight = 225
+
+        XCTAssertThrowsError(try WorkoutHistoryMutationService().saveCompletedWorkoutEdit(
+            draft,
+            for: session,
+            ownerTokenIdentifier: ownerA,
+            context: context,
+            now: Date(timeIntervalSince1970: 2_000)
+        )) { error in
+            XCTAssertEqual(error as? WorkoutHistoryMutationError, .ownerlessBootstrapBlocked)
+        }
+
+        XCTAssertNil(session.syncOwnerTokenIdentifier)
+        XCTAssertEqual(session.title, "Push")
+        XCTAssertEqual(session.sortedLoggedExercises[0].sortedSets[0].weight, 185)
+        XCTAssertTrue(try fetchEntries(context).isEmpty)
+    }
+
+    func testSignedInEditOfOwnerlessCompletedWorkoutStampsOwnerForSetSyncReplay() async throws {
+        let owner = "issuer|owner_a"
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        context.insert(SyncCursorState(
+            ownerTokenIdentifier: owner,
+            userSettingsCursor: 1,
+            exercisesCursor: 1,
+            workoutSessionsCursor: 1,
+            loggedExercisesCursor: 1,
+            loggedSetsCursor: 1,
+            hasBootstrappedSettingsExercises: true,
+            hasBootstrappedWorkoutGraph: true
+        ))
+        let session = makeCompletedWorkout(context: context)
+        try context.save()
+        var draft = CompletedWorkoutEditDraft(session: session)
+        let editedSetID = try XCTUnwrap(draft.exercises[0].sets[0].id)
+        draft.exercises[0].sets[0].weight = 225
+        try WorkoutHistoryMutationService().saveCompletedWorkoutEdit(
+            draft,
+            for: session,
+            ownerTokenIdentifier: owner,
+            context: context,
+            now: Date(timeIntervalSince1970: 2_000)
+        )
+
+        let client = FakeSyncClient()
+        try await SyncCoordinator(client: client).run(ownerTokenIdentifier: owner, context: context)
+
+        XCTAssertEqual(session.syncOwnerTokenIdentifier, owner)
+        XCTAssertEqual(client.operationLog.prefix(2), [
+            "upsertWorkoutSession:\(session.id.uuidString.lowercased())",
+            "upsertLoggedExercise:\(try XCTUnwrap(session.sortedLoggedExercises.first?.id.uuidString.lowercased()))",
+        ])
+        let editedPayload = try XCTUnwrap(client.upsertedLoggedSets.first {
+            $0.clientId == editedSetID.uuidString.lowercased()
+        })
+        XCTAssertEqual(editedPayload.weight, 225)
+        XCTAssertTrue(try fetchEntries(context).isEmpty)
     }
 
     func testSettingsUpdateSyncBootstrapsLargeOwnedWorkoutGraphWithoutFailure() async throws {
@@ -987,6 +1517,56 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         XCTAssertNotNil(entry, "Missing \(kind.rawValue) entry for \(id)", file: file, line: line)
         XCTAssertEqual(entry?.operation, operation, file: file, line: line)
         XCTAssertEqual(entry?.status, .pending, file: file, line: line)
+    }
+
+    private func makeCompletedWorkout(
+        context: ModelContext,
+        title: String = "Push",
+        startedAt: Date = Date(timeIntervalSince1970: 0),
+        durationSeconds: Int = 3_600,
+        updatedAt: Date = Date(timeIntervalSince1970: 100),
+        ownerTokenIdentifier: String? = nil
+    ) -> WorkoutSession {
+        let firstSet = LoggedSet(
+            orderIndex: 0,
+            weight: 185,
+            reps: 5,
+            rpe: 8,
+            isCompleted: true,
+            completedAt: Date(timeIntervalSince1970: 50),
+            notes: "Original first",
+            updatedAt: updatedAt
+        )
+        let secondSet = LoggedSet(
+            orderIndex: 1,
+            weight: 205,
+            reps: 3,
+            rpe: 9,
+            isCompleted: true,
+            completedAt: Date(timeIntervalSince1970: 60),
+            notes: "Original second",
+            updatedAt: updatedAt
+        )
+        let loggedExercise = LoggedExercise(
+            orderIndex: 0,
+            exerciseSnapshotName: "Bench Press",
+            updatedAt: updatedAt,
+            sets: [firstSet, secondSet]
+        )
+        let session = WorkoutSession(
+            title: title,
+            startedAt: startedAt,
+            endedAt: startedAt.addingTimeInterval(TimeInterval(durationSeconds)),
+            durationSeconds: durationSeconds,
+            notes: "Original notes",
+            status: .completed,
+            source: .blank,
+            updatedAt: updatedAt,
+            syncOwnerTokenIdentifier: ownerTokenIdentifier,
+            loggedExercises: [loggedExercise]
+        )
+        context.insert(session)
+        return session
     }
 
     private func waitUntil(

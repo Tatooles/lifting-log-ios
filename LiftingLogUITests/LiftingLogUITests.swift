@@ -199,7 +199,7 @@ final class LiftingLogUITests: XCTestCase {
         XCTAssertTrue(app.buttons["WorkoutHistoryButton-0"].waitForExistence(timeout: 3))
         app.buttons["WorkoutHistoryButton-0"].tap()
         XCTAssertTrue(app.staticTexts["Bench Press"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["Done"].exists)
+        XCTAssertTrue(app.staticTexts["185 x 5 @ 8 · Done"].exists)
 
         app.navigationBars.buttons.element(boundBy: 0).tap()
         app.segmentedControls["HistoryModePicker"].buttons["Exercises"].tap()
@@ -225,8 +225,153 @@ final class LiftingLogUITests: XCTestCase {
         XCTAssertTrue(deleteWorkoutButton.waitForExistence(timeout: 3))
         deleteWorkoutButton.tap()
 
+        XCTAssertTrue(app.alerts["Delete Workout?"].waitForExistence(timeout: 3))
+        app.alerts.buttons["Delete"].tap()
+
         XCTAssertTrue(app.staticTexts["HistoryTitle"].waitForExistence(timeout: 3))
         XCTAssertFalse(app.buttons["WorkoutHistoryButton-0"].waitForExistence(timeout: 1))
+    }
+
+    @MainActor
+    func testEditingCompletedWorkoutUpdatesHistoryDetailAndExerciseHistory() {
+        let app = makeApp()
+        app.launch()
+
+        createCompletedBenchWorkout(in: app, title: "Editable Push")
+
+        app.buttons["HistoryTab"].tap()
+        XCTAssertTrue(app.buttons["WorkoutHistoryButton-0"].waitForExistence(timeout: 3))
+        app.buttons["WorkoutHistoryButton-0"].tap()
+
+        XCTAssertTrue(app.buttons["EditWorkoutButton"].waitForExistence(timeout: 3))
+        app.buttons["EditWorkoutButton"].tap()
+        XCTAssertTrue(app.navigationBars["Edit Workout"].waitForExistence(timeout: 3))
+
+        replaceText(in: app.textFields["CompletedWorkoutTitleField"], with: "Edited Push")
+        setCompletedWorkoutDuration(minutes: 45, in: app)
+        replaceText(in: app.textFields["CompletedWorkoutNotesField"], with: "Post edit notes")
+        dismissKeyboardIfNeeded(in: app)
+        replaceText(in: app.textFields["HistorySetWeightField-0-0"], with: "205.")
+        XCTAssertEqual(app.textFields["HistorySetWeightField-0-0"].value as? String, "205.")
+        app.textFields["HistorySetWeightField-0-0"].typeText("5")
+        replaceText(in: app.textFields["HistorySetRepsField-0-0"], with: "6")
+        dismissKeyboardIfNeeded(in: app)
+
+        assertRemovedDraftHistorySetDoesNotReuseCachedNumberText(in: app)
+
+        replaceText(in: app.textFields["HistorySetWeightField-0-1"], with: "135")
+        replaceText(in: app.textFields["HistorySetRepsField-0-1"], with: "8")
+        replaceText(in: app.textFields["HistorySetRPEField-0-1"], with: "7.")
+        XCTAssertEqual(app.textFields["HistorySetRPEField-0-1"].value as? String, "7.")
+        app.textFields["HistorySetRPEField-0-1"].typeText("5")
+        app.buttons["HistorySetCompletionButton-0-1"].tap()
+        dismissKeyboardIfNeeded(in: app)
+
+        app.buttons["SaveCompletedWorkoutEditButton"].tap()
+
+        XCTAssertTrue(app.navigationBars["Edited Push"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Post edit notes"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["45:00"].exists)
+        XCTAssertTrue(app.staticTexts["205.5 x 6 @ 8 · Done"].exists)
+        XCTAssertTrue(app.staticTexts["135 x 8 @ 7.5 · Done"].exists)
+
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.segmentedControls["HistoryModePicker"].buttons["Exercises"].tap()
+        XCTAssertTrue(app.buttons["ExerciseHistoryButton-0"].waitForExistence(timeout: 3))
+        app.buttons["ExerciseHistoryButton-0"].tap()
+        XCTAssertTrue(app.staticTexts["205.5 x 6 @ 8"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["135 x 8 @ 7.5"].exists)
+    }
+
+    @MainActor
+    func testRemovingFocusedNewCompletedWorkoutSetDoesNotCrash() {
+        let app = makeApp()
+        app.launch()
+
+        createCompletedBenchWorkout(in: app, title: "Focused Draft Remove")
+
+        app.buttons["HistoryTab"].tap()
+        XCTAssertTrue(app.buttons["WorkoutHistoryButton-0"].waitForExistence(timeout: 3))
+        app.buttons["WorkoutHistoryButton-0"].tap()
+
+        XCTAssertTrue(app.buttons["EditWorkoutButton"].waitForExistence(timeout: 3))
+        app.buttons["EditWorkoutButton"].tap()
+        XCTAssertTrue(app.navigationBars["Edit Workout"].waitForExistence(timeout: 3))
+
+        app.buttons["AddHistorySetButton-0"].tap()
+        XCTAssertTrue(app.textFields["HistorySetWeightField-0-1"].waitForExistence(timeout: 3))
+        replaceText(in: app.textFields["HistorySetWeightField-0-1"], with: "135")
+        replaceText(in: app.textFields["HistorySetRepsField-0-1"], with: "8")
+        replaceText(in: app.textFields["HistorySetRPEField-0-1"], with: "7.5")
+
+        app.buttons["RemoveHistorySetButton-0-1"].tap()
+        let removeButton = app.alerts.buttons["Remove"]
+        XCTAssertTrue(removeButton.waitForExistence(timeout: 3))
+        removeButton.tap()
+
+        XCTAssertTrue(app.navigationBars["Edit Workout"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.textFields["HistorySetWeightField-0-1"].waitForExistence(timeout: 1))
+        XCTAssertTrue(app.textFields["HistorySetWeightField-0-0"].exists)
+    }
+
+    @MainActor
+    func testSignedOutCompletedWorkoutEditPersistsThroughSignedInRelaunch() {
+        let app = makeDiskBackedResetApp(extraArguments: ["--uitest-force-signed-out-auth"])
+        app.launch()
+
+        createCompletedBenchWorkout(in: app, title: "Signed Out Editable Push")
+
+        app.buttons["HistoryTab"].tap()
+        XCTAssertTrue(app.buttons["WorkoutHistoryButton-0"].waitForExistence(timeout: 3))
+        app.buttons["WorkoutHistoryButton-0"].tap()
+
+        XCTAssertTrue(app.buttons["EditWorkoutButton"].waitForExistence(timeout: 3))
+        app.buttons["EditWorkoutButton"].tap()
+        XCTAssertTrue(app.navigationBars["Edit Workout"].waitForExistence(timeout: 3))
+
+        replaceText(in: app.textFields["CompletedWorkoutTitleField"], with: "Signed Out Edited Push")
+        dismissKeyboardIfNeeded(in: app)
+        replaceText(in: app.textFields["CompletedWorkoutNotesField"], with: "Edited while signed out")
+        dismissKeyboardIfNeeded(in: app)
+
+        app.buttons["AddHistorySetButton-0"].tap()
+        XCTAssertTrue(app.textFields["HistorySetWeightField-0-1"].waitForExistence(timeout: 3))
+        replaceText(in: app.textFields["HistorySetWeightField-0-1"], with: "135")
+        replaceText(in: app.textFields["HistorySetRepsField-0-1"], with: "8")
+        replaceText(in: app.textFields["HistorySetRPEField-0-1"], with: "7.")
+        XCTAssertEqual(app.textFields["HistorySetRPEField-0-1"].value as? String, "7.")
+        app.textFields["HistorySetRPEField-0-1"].typeText("5")
+        app.buttons["HistorySetCompletionButton-0-1"].tap()
+        dismissKeyboardIfNeeded(in: app)
+
+        app.buttons["SaveCompletedWorkoutEditButton"].tap()
+        XCTAssertTrue(app.navigationBars["Signed Out Edited Push"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Edited while signed out"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["185 x 5 @ 8 · Done"].exists)
+        XCTAssertTrue(app.staticTexts["135 x 8 @ 7.5 · Done"].exists)
+
+        app.terminate()
+
+        let relaunchedApp = makeDiskBackedApp(extraArguments: [
+            "--uitest-sync-owner", "issuer|ui_owner",
+            "--uitest-force-signed-in-auth",
+        ])
+        relaunchedApp.launch()
+        relaunchedApp.buttons["HistoryTab"].tap()
+        XCTAssertTrue(relaunchedApp.buttons["WorkoutHistoryButton-0"].waitForExistence(timeout: 3))
+        relaunchedApp.buttons["WorkoutHistoryButton-0"].tap()
+
+        XCTAssertTrue(relaunchedApp.navigationBars["Signed Out Edited Push"].waitForExistence(timeout: 3))
+        XCTAssertTrue(relaunchedApp.staticTexts["Edited while signed out"].exists)
+        XCTAssertTrue(relaunchedApp.staticTexts["185 x 5 @ 8 · Done"].exists)
+        XCTAssertTrue(relaunchedApp.staticTexts["135 x 8 @ 7.5 · Done"].exists)
+
+        relaunchedApp.navigationBars.buttons.element(boundBy: 0).tap()
+        relaunchedApp.segmentedControls["HistoryModePicker"].buttons["Exercises"].tap()
+        XCTAssertTrue(relaunchedApp.buttons["ExerciseHistoryButton-0"].waitForExistence(timeout: 3))
+        relaunchedApp.buttons["ExerciseHistoryButton-0"].tap()
+        XCTAssertTrue(relaunchedApp.staticTexts["185 x 5 @ 8"].waitForExistence(timeout: 3))
+        XCTAssertTrue(relaunchedApp.staticTexts["135 x 8 @ 7.5"].exists)
     }
 
     @MainActor
@@ -698,19 +843,25 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
-    private func makeDiskBackedResetApp() -> XCUIApplication {
+    private func makeDiskBackedResetApp(extraArguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [
             "--uitest-reset-persistent-store",
             "--uitest-force-signed-out-auth",
-        ]
+        ] + extraArguments
         return app
     }
 
     @MainActor
-    private func makeDiskBackedApp() -> XCUIApplication {
+    private func makeDiskBackedApp(extraArguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["--uitest-force-signed-out-auth"]
+        if extraArguments.isEmpty {
+            app.launchArguments = ["--uitest-force-signed-out-auth"]
+        } else {
+            app.launchArguments = extraArguments.contains("--uitest-force-signed-in-auth")
+                ? extraArguments
+                : ["--uitest-force-signed-out-auth"] + extraArguments
+        }
         return app
     }
 
@@ -731,6 +882,49 @@ final class LiftingLogUITests: XCTestCase {
     private func confirmStartFromPastWorkout(in app: XCUIApplication) {
         XCTAssertTrue(app.buttons["StartFromPastWorkoutConfirmButton"].waitForExistence(timeout: 3))
         app.buttons["StartFromPastWorkoutConfirmButton"].tap()
+    }
+
+    @MainActor
+    private func setCompletedWorkoutDuration(minutes: Int, in app: XCUIApplication) {
+        let durationButton = app.buttons["CompletedWorkoutDurationButton"]
+        XCTAssertTrue(durationButton.waitForExistence(timeout: 3))
+        durationButton.tap()
+
+        XCTAssertTrue(app.navigationBars["Duration"].waitForExistence(timeout: 3))
+        let fiveMinuteIncrementButton = app.buttons["DurationMinutesIncrementFiveButton"]
+        XCTAssertTrue(fiveMinuteIncrementButton.waitForExistence(timeout: 3))
+        for _ in 0..<(minutes / 5) {
+            fiveMinuteIncrementButton.tap()
+        }
+
+        let minuteIncrementButton = app.buttons["DurationMinutesIncrementButton"]
+        XCTAssertTrue(minuteIncrementButton.waitForExistence(timeout: 3))
+        for _ in 0..<(minutes % 5) {
+            minuteIncrementButton.tap()
+        }
+        XCTAssertTrue(app.staticTexts["CompletedWorkoutDurationPreview"].label.contains("\(minutes) min"))
+        app.buttons["DoneDurationEditButton"].tap()
+        XCTAssertTrue(durationButton.waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    private func assertRemovedDraftHistorySetDoesNotReuseCachedNumberText(in app: XCUIApplication) {
+        app.buttons["AddHistorySetButton-0"].tap()
+        let draftWeightField = app.textFields["HistorySetWeightField-0-1"]
+        XCTAssertTrue(draftWeightField.waitForExistence(timeout: 3))
+        replaceText(in: draftWeightField, with: "155.")
+        XCTAssertEqual(draftWeightField.value as? String, "155.")
+        dismissKeyboardIfNeeded(in: app)
+
+        app.buttons["RemoveHistorySetButton-0-1"].tap()
+        let removeButton = app.alerts.buttons["Remove"]
+        XCTAssertTrue(removeButton.waitForExistence(timeout: 3))
+        removeButton.tap()
+
+        app.buttons["AddHistorySetButton-0"].tap()
+        let replacementWeightField = app.textFields["HistorySetWeightField-0-1"]
+        XCTAssertTrue(replacementWeightField.waitForExistence(timeout: 3))
+        XCTAssertEqual(replacementWeightField.value as? String, "LBS")
     }
 
     @MainActor

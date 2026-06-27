@@ -131,29 +131,14 @@ struct SetRowView: View {
         focusTarget: WorkoutField,
         accessibilityIdentifier: String
     ) -> some View {
-        TextField(placeholder, text: text)
-            .keyboardType(keyboard)
-            .multilineTextAlignment(.center)
-            .font(.body.weight(.semibold))
-            .fontDesign(.rounded)
-            .foregroundStyle(AppTheme.textPrimary)
-            .focused(focusedField, equals: focusTarget)
-            .padding(.vertical, 12)
-            .frame(maxWidth: .infinity)
-            .background(
-                AppTheme.fieldFill,
-                in: RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
-                    .strokeBorder(
-                        focusedField.wrappedValue == focusTarget ? AppTheme.accentBright.opacity(0.7) : .clear,
-                        lineWidth: 1.5
-                    )
-            )
-            .animation(.easeOut(duration: 0.15), value: focusedField.wrappedValue == focusTarget)
-            .accessibilityIdentifier(accessibilityIdentifier)
-            .id(focusTarget)
+        WorkoutNumericTextField(
+            placeholder: placeholder,
+            text: text,
+            keyboard: keyboard,
+            focusTarget: focusTarget,
+            focusedField: focusedField,
+            accessibilityIdentifier: accessibilityIdentifier
+        )
     }
 
     private var weightBinding: Binding<String> {
