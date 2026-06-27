@@ -1,29 +1,11 @@
 :root {
-  color-scheme: light dark;
-  --background: #f7f4ef;
-  --surface: #ffffff;
-  --ink: #1c1a17;
-  --secondary: #5a554d;
-  --hairline: #e0dad0;
-  --accent: #3a5a40;
-  --accent-hover: #2c4631;
-  --warning: #8c3a2b;
-  --inset: color-mix(in srgb, var(--surface) 58%, var(--background));
-  --measure: 40rem;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #16140f;
-    --surface: #1d1a14;
-    --ink: #ece7dd;
-    --secondary: #a39d90;
-    --hairline: #2e2a22;
-    --accent: #8fb996;
-    --accent-hover: #a8cdae;
-    --warning: #d98e7e;
-    --inset: color-mix(in srgb, var(--surface) 52%, var(--background));
-  }
+  color-scheme: light;
+  --background: #ffffff;
+  --text: #24292f;
+  --muted: #57606a;
+  --border: #d8dee4;
+  --link: #0969da;
+  --measure: 680px;
 }
 
 * {
@@ -32,244 +14,163 @@
 
 body {
   margin: 0;
-  font-family: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, Charter, ui-serif, serif;
-  font-size: 18px;
-  line-height: 1.65;
-  color: var(--ink);
+  color: var(--text);
   background: var(--background);
-  text-rendering: optimizeLegibility;
-}
-
-.shell {
-  width: min(var(--measure), calc(100% - 40px));
-  margin-inline: auto;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
 
 .site-header {
-  border-bottom: 1px solid var(--hairline);
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
 }
 
-.header-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+.nav {
+  width: min(var(--measure), calc(100% - 40px));
+  min-height: 56px;
+  margin-inline: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   gap: 24px;
-  align-items: end;
-  padding-block: 28px 24px;
+}
+
+.nav-links {
+  display: flex;
+  gap: 20px;
+  align-items: center;
 }
 
 .wordmark {
-  color: var(--ink);
-  font-size: 1.15rem;
-  font-weight: 700;
-  line-height: 1.1;
+  color: var(--text);
+  font-weight: 600;
   text-decoration: none;
 }
 
-.tagline {
-  margin-top: 6px;
-  font-size: 0.9rem;
+.nav a {
+  color: var(--text);
+  font-size: 14px;
+  text-decoration: none;
 }
 
-nav {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  font-size: 0.9rem;
+.nav a:hover,
+.nav a[aria-current="page"] {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
-nav a[aria-current="page"] {
-  color: var(--ink);
-  text-decoration-color: var(--ink);
+.doc {
+  width: min(var(--measure), calc(100% - 40px));
+  margin: 0 auto;
+  padding: 48px 0 88px;
+  background: var(--background);
 }
 
-.page {
-  padding-block: clamp(48px, 8vw, 82px) 44px;
+h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0;
 }
 
-.page-header {
-  padding-bottom: clamp(36px, 7vw, 58px);
+h2 {
+  margin: 40px 0 12px;
+  padding-top: 28px;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0;
 }
 
 p {
   margin: 0;
-  color: var(--secondary);
 }
 
-h1,
-h2 {
-  margin: 0;
-  color: var(--ink);
-  font-weight: 700;
-  line-height: 1.08;
+.updated {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 14px;
 }
 
-h1 {
-  max-width: 14ch;
-  font-size: clamp(2.35rem, 7vw, 3.45rem);
-  letter-spacing: 0;
+.intro {
+  margin-top: 24px;
+  color: var(--text);
 }
 
-h2 {
-  font-size: clamp(1.22rem, 3vw, 1.5rem);
-  letter-spacing: 0;
-}
-
-strong {
-  color: var(--ink);
-}
-
-p + p,
-p + ul,
-ul + p {
-  margin-top: 14px;
+p + p {
+  margin-top: 12px;
 }
 
 ul {
   margin: 0;
-  padding-left: 1.15em;
-  color: var(--secondary);
+  padding-left: 24px;
 }
 
-li + li {
-  margin-top: 10px;
+li {
+  margin: 6px 0;
 }
 
 a {
-  color: var(--accent);
-  text-decoration-thickness: 0.06em;
-  text-underline-offset: 0.18em;
+  color: var(--link);
+  text-decoration: none;
 }
 
 a:hover {
-  color: var(--accent-hover);
+  text-decoration: underline;
 }
 
 a:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 4px;
-}
-
-.eyebrow {
-  margin-bottom: 18px;
-  color: var(--accent);
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 0.72rem;
-  font-weight: 750;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.lede {
-  margin-top: 24px;
-  font-size: clamp(1.02rem, 2.3vw, 1.16rem);
-  line-height: 1.58;
-}
-
-.section,
-.summary {
-  border-top: 1px solid var(--hairline);
-  padding-block: 30px;
-}
-
-.section h2,
-.summary h2 {
-  margin-bottom: 14px;
-}
-
-.contact {
-  padding-top: 34px;
-}
-
-.summary {
-  margin-bottom: 6px;
-  padding: 24px 0 32px;
-}
-
-.summary ul {
-  padding-left: 1em;
-}
-
-.privacy-line {
-  margin-bottom: 12px;
-  color: var(--ink);
-  font-size: 1.08rem;
-  font-weight: 700;
-}
-
-.deletion-note {
-  margin-top: 16px;
-  padding: 18px 20px;
-  border-left: 3px solid var(--warning);
-  background: var(--inset);
-}
-
-.deletion-note p {
-  color: var(--ink);
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
 }
 
 .site-footer {
-  border-top: 1px solid var(--hairline);
+  background: var(--background);
+  border-top: 1px solid var(--border);
 }
 
-.footer-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 20px;
-  align-items: baseline;
-  padding-block: 24px 36px;
-  font-size: 0.9rem;
+.footer-inner {
+  width: min(var(--measure), calc(100% - 40px));
+  margin-inline: auto;
+  padding: 24px 0 36px;
+  color: var(--muted);
+  font-size: 14px;
 }
 
-.site-footer p {
-  font-size: inherit;
+.footer-inner p + a {
+  display: inline-block;
+  margin-top: 8px;
 }
 
 @media (max-width: 560px) {
-  body {
-    font-size: 17px;
+  .doc {
+    padding-top: 36px;
+    padding-bottom: 64px;
   }
 
-  .shell {
-    width: min(var(--measure), calc(100% - 28px));
+  .nav,
+  .doc,
+  .footer-inner {
+    width: min(var(--measure), calc(100% - 32px));
   }
 
-  .header-grid,
-  .footer-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .header-grid {
-    gap: 18px;
-    align-items: start;
-  }
-
-  nav {
-    gap: 18px;
+  .nav {
+    min-height: 52px;
+    gap: 16px;
   }
 
   h1 {
-    max-width: none;
-    font-size: 2.15rem;
-    line-height: 1.12;
+    font-size: 26px;
   }
 
   h2 {
-    font-size: 1.22rem;
-  }
-
-  .lede {
-    font-size: 1rem;
-  }
-}
-
-@supports not (color: color-mix(in srgb, white, black)) {
-  :root {
-    --inset: #ffffff;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --inset: #1d1a14;
-    }
+    margin-top: 36px;
+    padding-top: 24px;
   }
 }
