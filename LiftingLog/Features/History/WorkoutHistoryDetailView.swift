@@ -39,6 +39,16 @@ struct WorkoutHistoryDetailView: View {
                     metricCard(title: "Sets", value: "\(metrics.completedSetCount)")
                 }
 
+                if !allowsHistoryMutation {
+                    SurfaceCard {
+                        Text("Sign in to the matching account to edit or delete this synced workout.")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .accessibilityIdentifier("WorkoutHistoryReadOnlyNotice")
+                }
+
                 if !session.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     SurfaceCard {
                         VStack(alignment: .leading, spacing: 8) {
@@ -99,14 +109,6 @@ struct WorkoutHistoryDetailView: View {
                             )
                     }
                     .buttonStyle(.plain)
-                } else {
-                    SurfaceCard {
-                        Text("Sign in to the matching account to edit or delete this synced workout.")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .accessibilityIdentifier("WorkoutHistoryReadOnlyNotice")
                 }
             }
             .padding(AppTheme.shellPadding)
