@@ -29,6 +29,10 @@ struct WorkoutHistoryDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
+                if !allowsHistoryMutation {
+                    readOnlyNoticeBanner
+                }
+
                 Text(WorkoutFormatters.compactDate(session.startedAt))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary)
@@ -37,16 +41,6 @@ struct WorkoutHistoryDetailView: View {
                     metricCard(title: "Duration", value: AppTheme.formatDuration(metrics.durationSeconds))
                     metricCard(title: "Exercises", value: "\(session.sortedLoggedExercises.count)")
                     metricCard(title: "Sets", value: "\(metrics.completedSetCount)")
-                }
-
-                if !allowsHistoryMutation {
-                    SurfaceCard {
-                        Text("Sign in to the matching account to edit or delete this synced workout.")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .accessibilityIdentifier("WorkoutHistoryReadOnlyNotice")
                 }
 
                 if !session.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -172,6 +166,34 @@ struct WorkoutHistoryDetailView: View {
             modelContext.rollback()
             deleteErrorMessage = error.localizedDescription
         }
+    }
+
+    private var readOnlyNoticeBanner: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "lock.fill")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(AppTheme.accentBright)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Read-only workout")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text("Sign in to the matching account to edit or delete this synced workout.")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(AppTheme.accentBright.opacity(0.4))
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("WorkoutHistoryReadOnlyNotice")
     }
 
     private func metricCard(title: String, value: String) -> some View {
