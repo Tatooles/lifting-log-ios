@@ -39,6 +39,42 @@ final class ClerkConfigurationTests: XCTestCase {
         XCTAssertEqual(buildInfo.settingsVersionText, "Version 1.2 (45)")
     }
 
+    func testAppSourceMetadataFormatsCleanBranchAndCommit() {
+        let metadata = AppSourceMetadata(
+            branch: "codex/copy-app-info-feedback",
+            shortCommit: "1b92aab",
+            hasLocalChanges: false,
+            builtAt: "2026-06-27 16:18:00 -0500",
+            configuration: "Debug"
+        )
+
+        XCTAssertEqual(metadata.sourceDescription, "codex/copy-app-info-feedback @ 1b92aab")
+    }
+
+    func testAppSourceMetadataIncludesLocalChangesWhenDirty() {
+        let metadata = AppSourceMetadata(
+            branch: "codex/copy-app-info-feedback",
+            shortCommit: "1b92aab",
+            hasLocalChanges: true,
+            builtAt: "2026-06-27 16:18:00 -0500",
+            configuration: "Debug"
+        )
+
+        XCTAssertEqual(metadata.sourceDescription, "codex/copy-app-info-feedback @ 1b92aab + local changes")
+    }
+
+    func testAppSourceMetadataCanDescribeUncommittedBuildWithoutCommit() {
+        let metadata = AppSourceMetadata(
+            branch: "codex/copy-app-info-feedback",
+            shortCommit: "",
+            hasLocalChanges: true,
+            builtAt: "2026-06-27 16:18:00 -0500",
+            configuration: "Debug"
+        )
+
+        XCTAssertEqual(metadata.sourceDescription, "codex/copy-app-info-feedback + local changes")
+    }
+
     func testAppBuildInfoSupportSummaryOmitsSensitiveBackendConfiguration() {
         let buildInfo = AppBuildInfo(infoDictionary: [
             "CFBundleDisplayName": "Lifting Log",
@@ -68,6 +104,16 @@ final class ClerkConfigurationTests: XCTestCase {
         XCTAssertFalse(summary.contains("pk_live_sensitive"))
         XCTAssertFalse(summary.contains("clerk.auth.liftinglog.app"))
         XCTAssertFalse(summary.contains("sensible-reindeer-16.convex.cloud"))
+    }
+
+    func testCopyAppInfoFeedbackStateDefaultsToCopyPrompt() {
+        XCTAssertEqual(CopyAppInfoFeedbackState.idle.title, "Copy App Info")
+        XCTAssertEqual(CopyAppInfoFeedbackState.idle.systemImage, "doc.on.doc")
+    }
+
+    func testCopyAppInfoFeedbackStateShowsCopiedConfirmation() {
+        XCTAssertEqual(CopyAppInfoFeedbackState.copied.title, "Copied")
+        XCTAssertEqual(CopyAppInfoFeedbackState.copied.systemImage, "checkmark")
     }
 
     func testAppBundleUsesCanonicalSimulatorPlatformValue() {
