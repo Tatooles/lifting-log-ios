@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
@@ -36,6 +37,8 @@ struct SettingsView: View {
                 links: .issue13Development,
                 onDeletionCompleted: onDataDeletionCompleted
             )
+
+            appInfoSection
         }
         .scrollContentBackground(.hidden)
         .background(AppTheme.subtleBackground.ignoresSafeArea())
@@ -50,6 +53,27 @@ struct SettingsView: View {
         }
         .sheet(item: $exportFile) { exportFile in
             ActivityView(activityItems: [exportFile.url])
+        }
+    }
+
+    private var appInfoSection: some View {
+        Section("App") {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Version")
+                Spacer(minLength: 16)
+                Text(AppBuildInfo.current.settingsVersionText)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.trailing)
+                    .textSelection(.enabled)
+                    .accessibilityIdentifier("SettingsAppVersionValue")
+            }
+
+            Button {
+                copyAppInfo()
+            } label: {
+                Label("Copy App Info", systemImage: "doc.on.doc")
+            }
+            .accessibilityIdentifier("SettingsCopyAppInfoButton")
         }
     }
 
@@ -75,6 +99,10 @@ struct SettingsView: View {
         } catch {
             alert = .exportFailure(error.localizedDescription)
         }
+    }
+
+    private func copyAppInfo() {
+        UIPasteboard.general.string = AppBuildInfo.current.supportSummary(device: .current)
     }
 
     private func showSaveFailure(_ error: Error) {
