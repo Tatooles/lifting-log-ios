@@ -225,6 +225,9 @@ final class LiftingLogUITests: XCTestCase {
         XCTAssertTrue(deleteWorkoutButton.waitForExistence(timeout: 3))
         deleteWorkoutButton.tap()
 
+        XCTAssertTrue(app.alerts["Delete Workout?"].waitForExistence(timeout: 3))
+        app.alerts.buttons["Delete"].tap()
+
         XCTAssertTrue(app.staticTexts["HistoryTitle"].waitForExistence(timeout: 3))
         XCTAssertFalse(app.buttons["WorkoutHistoryButton-0"].waitForExistence(timeout: 1))
     }

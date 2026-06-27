@@ -7,6 +7,7 @@ struct WorkoutHistoryDetailView: View {
     @Environment(SyncScheduler.self) private var syncScheduler
     let session: WorkoutSession
     @State private var deleteErrorMessage: String?
+    @State private var showsDeleteConfirmation = false
     @State private var editPresentation: CompletedWorkoutEditPresentation?
     @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
 
@@ -85,19 +86,7 @@ struct WorkoutHistoryDetailView: View {
 
                 if allowsHistoryMutation {
                     Button(role: .destructive) {
-                        do {
-                            try WorkoutHistoryMutationService().deleteWorkoutHistory(
-                                session,
-                                ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier,
-                                context: modelContext
-                            )
-                            syncScheduler.requestSync()
-                            deleteErrorMessage = nil
-                            dismiss()
-                        } catch {
-                            modelContext.rollback()
-                            deleteErrorMessage = error.localizedDescription
-                        }
+                        showsDeleteConfirmation = true
                     } label: {
                         Text("Delete Workout")
                             .font(.system(size: 16, weight: .bold))
@@ -142,6 +131,14 @@ struct WorkoutHistoryDetailView: View {
                 weightUnit: weightUnit
             )
         }
+        .alert("Delete Workout?", isPresented: $showsDeleteConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                deleteWorkout()
+            }
+        } message: {
+            Text("This removes it from your history. This can't be undone.")
+        }
         .alert(
             "Couldn't Delete Workout",
             isPresented: Binding(
@@ -156,6 +153,22 @@ struct WorkoutHistoryDetailView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(deleteErrorMessage ?? "Try deleting again.")
+        }
+    }
+
+    private func deleteWorkout() {
+        do {
+            try WorkoutHistoryMutationService().deleteWorkoutHistory(
+                session,
+                ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier,
+                context: modelContext
+            )
+            syncScheduler.requestSync()
+            deleteErrorMessage = nil
+            dismiss()
+        } catch {
+            modelContext.rollback()
+            deleteErrorMessage = error.localizedDescription
         }
     }
 
