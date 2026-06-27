@@ -208,4 +208,29 @@ final class SeedDataServiceTests: XCTestCase {
             20
         )
     }
+
+    func testUITestCompletedBenchWorkoutFixtureCreatesStableHistoryData() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+
+        try SeedDataService.seedIfNeeded(context: context)
+        try UITestFixtureSeeder.seedCompletedBenchWorkout(title: "Fixture Push", context: context)
+
+        let sessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let session = try XCTUnwrap(sessions.first { $0.title == "Fixture Push" })
+        XCTAssertEqual(session.status, .completed)
+        XCTAssertEqual(session.durationSeconds, 3_600)
+        XCTAssertEqual(session.syncOwnerTokenIdentifier, nil)
+
+        let exercise = try XCTUnwrap(session.sortedLoggedExercises.first)
+        XCTAssertEqual(exercise.exerciseSnapshotName, "Bench Press")
+        XCTAssertEqual(exercise.snapshotEquipment, .barbell)
+        XCTAssertEqual(exercise.snapshotPrimaryMuscleGroup, .chest)
+
+        let set = try XCTUnwrap(exercise.sortedSets.first)
+        XCTAssertEqual(set.weight, 185)
+        XCTAssertEqual(set.reps, 5)
+        XCTAssertEqual(set.rpe, 8)
+        XCTAssertTrue(set.isCompleted)
+    }
 }

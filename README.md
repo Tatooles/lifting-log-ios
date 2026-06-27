@@ -25,6 +25,8 @@ Pull requests and pushes to `main` run two GitHub Actions checks:
 
 The iOS job intentionally excludes `LiftingLogUITests` from the required PR gate. If `ios-unit-tests` fails, first inspect the GitHub Actions log. The failed workflow run also uploads a `LiftingLogTests-xcresult` artifact containing the `.xcresult` bundle and test log for local Xcode inspection.
 
+The canonical local UI-suite command is the `Run UI tests only` command above. As of issue #63, the expected UI target discovery count is 29 tests; treat a run with fewer discovered or executed tests as partial coverage, not a clean full-suite result. Keep the full UI target out of the required PR gate until it can pass repeated local full-suite runs without known flakes.
+
 Local equivalents:
 
 ```sh

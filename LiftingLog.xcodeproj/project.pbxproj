@@ -137,6 +137,7 @@
 		F756581EB5E0AD28DA98A2F6 /* ActiveWorkoutEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8DC74A08BDCEFEB4B629818 /* ActiveWorkoutEngine.swift */; };
 		F8BD4E8C575892BD5C4EC38D /* ClerkAccountDeleter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02AC6F117480AE6F07CBE2CD /* ClerkAccountDeleter.swift */; };
 		FA6E6027D09F72B85FEA530C /* WorkoutHistoryRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8F2EB75F49B81A93DDF1F05 /* WorkoutHistoryRow.swift */; };
+		0F3C7E8A9B1D4E6F802A5C7D /* UITestFixtureSeeder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A4D6F8092B3C5E7F9012A4B /* UITestFixtureSeeder.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -284,6 +285,7 @@
 		EFD611D025EF1E9C19B5F6B0 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		F167F606F2A5BAF1EE4CF4B4 /* LocalDataResetServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalDataResetServiceTests.swift; sourceTree = "<group>"; };
 		F25C1CBC03FE371C7E528CCC /* SeedDataService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedDataService.swift; sourceTree = "<group>"; };
+		1A4D6F8092B3C5E7F9012A4B /* UITestFixtureSeeder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestFixtureSeeder.swift; sourceTree = "<group>"; };
 		F8DC74A08BDCEFEB4B629818 /* ActiveWorkoutEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveWorkoutEngine.swift; sourceTree = "<group>"; };
 		FAC20AF64287C9C9AE3ED361 /* UserSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserSettings.swift; sourceTree = "<group>"; };
 		FBE8B0348DB03692C2476B98 /* SyncCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncCoordinatorTests.swift; sourceTree = "<group>"; };
@@ -570,6 +572,7 @@
 				9D921BC5CE7C78FB99BC04CF /* LocalDataResetService.swift */,
 				078A7AD1776345881F263669 /* ModelContainerFactory.swift */,
 				F25C1CBC03FE371C7E528CCC /* SeedDataService.swift */,
+				1A4D6F8092B3C5E7F9012A4B /* UITestFixtureSeeder.swift */,
 			);
 			path = Persistence;
 			sourceTree = "<group>";
@@ -860,6 +863,7 @@
 				4E8E9E1E3FF56E8A2B23B1F1 /* StateViews.swift in Sources */,
 				2BCA7BFEB45C2DCC66943507 /* SurfaceCard.swift in Sources */,
 				69690F55300E7C171DB1C9B5 /* SwipeToDeleteRow.swift in Sources */,
+				0F3C7E8A9B1D4E6F802A5C7D /* UITestFixtureSeeder.swift in Sources */,
 				3ED94241B48E627EAF382A60 /* SyncClient.swift in Sources */,
 				5C18C6001D9DC438F89DA206 /* SyncConflictResolver.swift in Sources */,
 				9AA3396E81F6B3F541F35112 /* SyncCoordinator.swift in Sources */,
