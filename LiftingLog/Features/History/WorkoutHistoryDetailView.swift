@@ -21,6 +21,10 @@ struct WorkoutHistoryDetailView: View {
         ).first?.weightUnit ?? .pounds
     }
 
+    private var allowsHistoryMutation: Bool {
+        session.allowsHistoryMutation(ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier)
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -79,32 +83,42 @@ struct WorkoutHistoryDetailView: View {
                     }
                 }
 
-                Button(role: .destructive) {
-                    do {
-                        try WorkoutHistoryMutationService().deleteWorkoutHistory(
-                            session,
-                            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier,
-                            context: modelContext
-                        )
-                        syncScheduler.requestSync()
-                        deleteErrorMessage = nil
-                        dismiss()
-                    } catch {
-                        modelContext.rollback()
-                        deleteErrorMessage = error.localizedDescription
+                if allowsHistoryMutation {
+                    Button(role: .destructive) {
+                        do {
+                            try WorkoutHistoryMutationService().deleteWorkoutHistory(
+                                session,
+                                ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier,
+                                context: modelContext
+                            )
+                            syncScheduler.requestSync()
+                            deleteErrorMessage = nil
+                            dismiss()
+                        } catch {
+                            modelContext.rollback()
+                            deleteErrorMessage = error.localizedDescription
+                        }
+                    } label: {
+                        Text("Delete Workout")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(AppTheme.accentBright)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(AppTheme.accentBright.opacity(0.45))
+                            )
                     }
-                } label: {
-                    Text("Delete Workout")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(AppTheme.accentBright)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(AppTheme.accentBright.opacity(0.45))
-                        )
+                    .buttonStyle(.plain)
+                } else {
+                    SurfaceCard {
+                        Text("Sign in to the matching account to edit or delete this synced workout.")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .accessibilityIdentifier("WorkoutHistoryReadOnlyNotice")
                 }
-                .buttonStyle(.plain)
             }
             .padding(AppTheme.shellPadding)
         }
@@ -112,11 +126,13 @@ struct WorkoutHistoryDetailView: View {
         .navigationTitle(session.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Edit") {
-                    editPresentation = CompletedWorkoutEditPresentation(session: session)
+            if allowsHistoryMutation {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Edit") {
+                        editPresentation = CompletedWorkoutEditPresentation(session: session)
+                    }
+                    .accessibilityIdentifier("EditWorkoutButton")
                 }
-                .accessibilityIdentifier("EditWorkoutButton")
             }
         }
         .sheet(item: $editPresentation) { presentation in

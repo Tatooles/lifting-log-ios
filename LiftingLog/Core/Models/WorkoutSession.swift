@@ -120,6 +120,14 @@ final class WorkoutSession: Identifiable {
         }
     }
 
+    func allowsHistoryMutation(ownerTokenIdentifier: String?) -> Bool {
+        guard let syncOwnerTokenIdentifier else {
+            return true
+        }
+
+        return ownerTokenIdentifier == syncOwnerTokenIdentifier
+    }
+
     func effectiveDurationSeconds(now: Date = .now) -> Int {
         if status == .active {
             return max(0, Int(now.timeIntervalSince(startedAt)))

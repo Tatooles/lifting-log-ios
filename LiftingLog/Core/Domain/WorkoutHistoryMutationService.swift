@@ -314,6 +314,8 @@ struct WorkoutHistoryMutationService {
         context: ModelContext,
         now: Date = .now
     ) throws {
+        try validateEditable(session, ownerTokenIdentifier: ownerTokenIdentifier)
+
         session.syncOwnerTokenIdentifier = ownerTokenIdentifier ?? session.syncOwnerTokenIdentifier
         session.markDeletedCascade(now: now)
         try recorder.recordDelete(
@@ -352,10 +354,8 @@ struct WorkoutHistoryMutationService {
             throw WorkoutHistoryMutationError.cannotEditWorkout
         }
 
-        if let sessionOwner = session.syncOwnerTokenIdentifier {
-            guard let ownerTokenIdentifier, ownerTokenIdentifier == sessionOwner else {
-                throw WorkoutHistoryMutationError.ownerMismatch
-            }
+        guard session.allowsHistoryMutation(ownerTokenIdentifier: ownerTokenIdentifier) else {
+            throw WorkoutHistoryMutationError.ownerMismatch
         }
     }
 

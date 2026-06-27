@@ -98,6 +98,23 @@ final class HistoryPersistenceTests: XCTestCase {
         )
     }
 
+    func testCompletedWorkoutHistoryMutationsRequireMatchingOwnerWhenWorkoutIsOwned() {
+        let ownerlessSession = WorkoutSession(title: "Local", startedAt: .now, status: .completed, source: .blank)
+        let ownedSession = WorkoutSession(
+            title: "Owned",
+            startedAt: .now,
+            status: .completed,
+            source: .blank,
+            syncOwnerTokenIdentifier: "issuer|owner_a"
+        )
+
+        XCTAssertTrue(ownerlessSession.allowsHistoryMutation(ownerTokenIdentifier: nil))
+        XCTAssertTrue(ownerlessSession.allowsHistoryMutation(ownerTokenIdentifier: "issuer|owner_a"))
+        XCTAssertTrue(ownedSession.allowsHistoryMutation(ownerTokenIdentifier: "issuer|owner_a"))
+        XCTAssertFalse(ownedSession.allowsHistoryMutation(ownerTokenIdentifier: nil))
+        XCTAssertFalse(ownedSession.allowsHistoryMutation(ownerTokenIdentifier: "issuer|owner_b"))
+    }
+
     func testWorkoutHistoryRowExerciseCountIgnoresTombstonedLoggedExercises() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

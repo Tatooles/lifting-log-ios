@@ -745,6 +745,27 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         }
     }
 
+    func testDeletingOwnedWorkoutHistoryWhileSignedOutRejectsWithoutMutating() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let session = makeCompletedWorkout(context: context, ownerTokenIdentifier: "issuer|owner_a")
+        try context.save()
+
+        XCTAssertThrowsError(try WorkoutHistoryMutationService().deleteWorkoutHistory(
+            session,
+            ownerTokenIdentifier: nil,
+            context: context,
+            now: Date(timeIntervalSince1970: 2_000)
+        )) { error in
+            XCTAssertEqual(error as? WorkoutHistoryMutationError, .ownerMismatch)
+        }
+
+        XCTAssertFalse(session.isDeleted)
+        XCTAssertTrue(session.loggedExercises.allSatisfy { !$0.isDeleted })
+        XCTAssertTrue(session.loggedExercises.flatMap(\.sets).allSatisfy { !$0.isDeleted })
+        XCTAssertTrue(try fetchEntries(context).isEmpty)
+    }
+
     func testDeletingUnattemptedFinishedWorkoutRemovesCreateIntentInsteadOfTombstoning() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
