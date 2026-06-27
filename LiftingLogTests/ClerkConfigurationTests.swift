@@ -21,6 +21,101 @@ final class ClerkConfigurationTests: XCTestCase {
         XCTAssertNotNil(infoDictionary["CFBundleVersion"])
     }
 
+    func testAppBuildInfoFormatsVersionAndBuildFromInfoDictionary() {
+        let buildInfo = AppBuildInfo(infoDictionary: [
+            "CFBundleDisplayName": "Lifting Log Dev",
+            "CFBundleIdentifier": "com.kevintatooles.LiftingLog.dev",
+            "CFBundleShortVersionString": "1.2",
+            "CFBundleVersion": "45",
+            "LiftingLogEnvironment": "Development",
+        ])
+
+        XCTAssertEqual(buildInfo.displayName, "Lifting Log Dev")
+        XCTAssertEqual(buildInfo.bundleIdentifier, "com.kevintatooles.LiftingLog.dev")
+        XCTAssertEqual(buildInfo.version, "1.2")
+        XCTAssertEqual(buildInfo.buildNumber, "45")
+        XCTAssertEqual(buildInfo.environmentName, "Development")
+        XCTAssertEqual(buildInfo.versionAndBuild, "1.2 (45)")
+        XCTAssertEqual(buildInfo.settingsVersionText, "Version 1.2 (45)")
+    }
+
+    func testAppSourceMetadataFormatsCleanBranchAndCommit() {
+        let metadata = AppSourceMetadata(
+            branch: "codex/copy-app-info-feedback",
+            shortCommit: "1b92aab",
+            hasLocalChanges: false,
+            builtAt: "2026-06-27 16:18:00 -0500",
+            configuration: "Debug"
+        )
+
+        XCTAssertEqual(metadata.sourceDescription, "codex/copy-app-info-feedback @ 1b92aab")
+    }
+
+    func testAppSourceMetadataIncludesLocalChangesWhenDirty() {
+        let metadata = AppSourceMetadata(
+            branch: "codex/copy-app-info-feedback",
+            shortCommit: "1b92aab",
+            hasLocalChanges: true,
+            builtAt: "2026-06-27 16:18:00 -0500",
+            configuration: "Debug"
+        )
+
+        XCTAssertEqual(metadata.sourceDescription, "codex/copy-app-info-feedback @ 1b92aab + local changes")
+    }
+
+    func testAppSourceMetadataCanDescribeUncommittedBuildWithoutCommit() {
+        let metadata = AppSourceMetadata(
+            branch: "codex/copy-app-info-feedback",
+            shortCommit: "",
+            hasLocalChanges: true,
+            builtAt: "2026-06-27 16:18:00 -0500",
+            configuration: "Debug"
+        )
+
+        XCTAssertEqual(metadata.sourceDescription, "codex/copy-app-info-feedback + local changes")
+    }
+
+    func testAppBuildInfoSupportSummaryOmitsSensitiveBackendConfiguration() {
+        let buildInfo = AppBuildInfo(infoDictionary: [
+            "CFBundleDisplayName": "Lifting Log",
+            "CFBundleIdentifier": "com.kevintatooles.LiftingLog",
+            "CFBundleShortVersionString": "1.0",
+            "CFBundleVersion": "123",
+            "LiftingLogEnvironment": "Production",
+            "ClerkPublishableKey": "pk_live_sensitive",
+            "ClerkAssociatedDomain": "webcredentials:clerk.auth.liftinglog.app",
+            "ConvexDeploymentURL": "https://sensible-reindeer-16.convex.cloud",
+        ])
+
+        let summary = buildInfo.supportSummary(
+            device: DeviceSystemInfo(
+                model: "iPhone",
+                systemName: "iOS",
+                systemVersion: "26.0"
+            )
+        )
+
+        XCTAssertTrue(summary.contains("App: Lifting Log"))
+        XCTAssertTrue(summary.contains("Version: 1.0 (123)"))
+        XCTAssertTrue(summary.contains("Environment: Production"))
+        XCTAssertTrue(summary.contains("Bundle ID: com.kevintatooles.LiftingLog"))
+        XCTAssertTrue(summary.contains("Device: iPhone"))
+        XCTAssertTrue(summary.contains("OS: iOS 26.0"))
+        XCTAssertFalse(summary.contains("pk_live_sensitive"))
+        XCTAssertFalse(summary.contains("clerk.auth.liftinglog.app"))
+        XCTAssertFalse(summary.contains("sensible-reindeer-16.convex.cloud"))
+    }
+
+    func testCopyAppInfoFeedbackStateDefaultsToCopyPrompt() {
+        XCTAssertEqual(CopyAppInfoFeedbackState.idle.title, "Copy App Info")
+        XCTAssertEqual(CopyAppInfoFeedbackState.idle.systemImage, "doc.on.doc")
+    }
+
+    func testCopyAppInfoFeedbackStateShowsCopiedConfirmation() {
+        XCTAssertEqual(CopyAppInfoFeedbackState.copied.title, "Copied")
+        XCTAssertEqual(CopyAppInfoFeedbackState.copied.systemImage, "checkmark")
+    }
+
     func testAppBundleUsesCanonicalSimulatorPlatformValue() {
         let supportedPlatforms = Bundle.main.object(forInfoDictionaryKey: "CFBundleSupportedPlatforms") as? [String]
 

@@ -16,6 +16,37 @@ struct DeveloperDiagnosticsView: View {
 
     var body: some View {
         Form {
+            Section("Source") {
+                if let sourceMetadata = AppBuildInfo.current.sourceMetadata {
+                    diagnosticsRow(
+                        title: "Branch",
+                        value: sourceMetadata.branchDisplay,
+                        valueIdentifier: "DeveloperDiagnosticsSourceBranch"
+                    )
+                    diagnosticsRow(
+                        title: "Source",
+                        value: sourceMetadata.sourceDescription,
+                        valueIdentifier: "DeveloperDiagnosticsSourceDescription"
+                    )
+                    diagnosticsRow(
+                        title: "Built",
+                        value: sourceMetadata.builtAtDisplay,
+                        valueIdentifier: "DeveloperDiagnosticsBuiltAt"
+                    )
+                    diagnosticsRow(
+                        title: "Configuration",
+                        value: sourceMetadata.configurationDisplay,
+                        valueIdentifier: "DeveloperDiagnosticsBuildConfiguration"
+                    )
+                } else {
+                    diagnosticsRow(
+                        title: "Source",
+                        value: "Unavailable",
+                        valueIdentifier: "DeveloperDiagnosticsSourceDescription"
+                    )
+                }
+            }
+
             Section("Environment") {
                 diagnosticsRow(
                     title: "Mode",

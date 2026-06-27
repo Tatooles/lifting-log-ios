@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
@@ -9,6 +10,8 @@ struct SettingsView: View {
     let settings: UserSettings
     let onDataDeletionCompleted: () -> Void
     @State private var alert: SettingsAlert?
+    @State private var copyFeedbackResetTask: Task<Void, Never>?
+    @State private var copyFeedbackState = CopyAppInfoFeedbackState.idle
     @State private var exportFile: ExportFile?
 
     var body: some View {
@@ -36,6 +39,8 @@ struct SettingsView: View {
                 links: .release,
                 onDeletionCompleted: onDataDeletionCompleted
             )
+
+            appInfoSection
         }
         .scrollContentBackground(.hidden)
         .background(AppTheme.subtleBackground.ignoresSafeArea())
@@ -50,6 +55,33 @@ struct SettingsView: View {
         }
         .sheet(item: $exportFile) { exportFile in
             ActivityView(activityItems: [exportFile.url])
+        }
+        .onDisappear {
+            copyFeedbackResetTask?.cancel()
+            copyFeedbackResetTask = nil
+            copyFeedbackState = .idle
+        }
+    }
+
+    private var appInfoSection: some View {
+        Section("App") {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Version")
+                Spacer(minLength: 16)
+                Text(AppBuildInfo.current.settingsVersionText)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.trailing)
+                    .textSelection(.enabled)
+                    .accessibilityIdentifier("SettingsAppVersionValue")
+            }
+
+            Button {
+                copyAppInfo()
+            } label: {
+                Label(copyFeedbackState.title, systemImage: copyFeedbackState.systemImage)
+            }
+            .accessibilityIdentifier("SettingsCopyAppInfoButton")
+            .animation(.easeInOut(duration: 0.15), value: copyFeedbackState)
         }
     }
 
@@ -74,6 +106,23 @@ struct SettingsView: View {
             exportFile = ExportFile(url: url)
         } catch {
             alert = .exportFailure(error.localizedDescription)
+        }
+    }
+
+    private func copyAppInfo() {
+        UIPasteboard.general.string = AppBuildInfo.current.supportSummary(device: .current)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        showCopyConfirmation()
+    }
+
+    private func showCopyConfirmation() {
+        copyFeedbackResetTask?.cancel()
+        copyFeedbackState = .copied
+        copyFeedbackResetTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            copyFeedbackState = .idle
+            copyFeedbackResetTask = nil
         }
     }
 
@@ -143,5 +192,28 @@ struct SettingsView: View {
                 }
             }
         )
+    }
+}
+
+enum CopyAppInfoFeedbackState: Equatable {
+    case idle
+    case copied
+
+    var title: String {
+        switch self {
+        case .idle:
+            "Copy App Info"
+        case .copied:
+            "Copied"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .idle:
+            "doc.on.doc"
+        case .copied:
+            "checkmark"
+        }
     }
 }

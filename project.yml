@@ -6,6 +6,7 @@ settings:
     SWIFT_VERSION: 6.0
     IPHONEOS_DEPLOYMENT_TARGET: 26.0
     MARKETING_VERSION: 1.0
+    # Xcode Cloud overrides CFBundleVersion for archive uploads.
     CURRENT_PROJECT_VERSION: 1
 packages:
   Clerk:
@@ -17,6 +18,17 @@ packages:
   ConvexMobile:
     url: https://github.com/get-convex/convex-swift
     from: 0.8.1
+schemes:
+  LiftingLogUnitTests:
+    build:
+      targets:
+        LiftingLog: all
+    test:
+      config: Debug
+      targets:
+        - LiftingLogTests
+    run:
+      config: Debug
 targets:
   LiftingLog:
     type: application
@@ -36,6 +48,51 @@ targets:
         product: ClerkConvex
       - package: ConvexMobile
         product: ConvexMobile
+    postBuildScripts:
+      - name: Write Build Source Metadata
+        basedOnDependencyAnalysis: false
+        script: |
+          set -euo pipefail
+
+          metadata_path="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/BuildSourceMetadata.plist"
+
+          if [ "${CONFIGURATION}" != "Debug" ]; then
+            rm -f "${metadata_path}"
+            exit 0
+          fi
+
+          mkdir -p "$(dirname "${metadata_path}")"
+
+          branch="Unknown"
+          short_commit=""
+          has_local_changes="NO"
+
+          if /usr/bin/git -C "${SRCROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            branch="$(/usr/bin/git -C "${SRCROOT}" symbolic-ref --short HEAD 2>/dev/null || true)"
+            if [ -z "${branch}" ]; then
+              branch="Detached HEAD"
+            fi
+
+            short_commit="$(/usr/bin/git -C "${SRCROOT}" rev-parse --short HEAD 2>/dev/null || true)"
+
+            if ! /usr/bin/git -C "${SRCROOT}" diff --quiet --ignore-submodules -- 2>/dev/null; then
+              has_local_changes="YES"
+            fi
+            if ! /usr/bin/git -C "${SRCROOT}" diff --cached --quiet --ignore-submodules -- 2>/dev/null; then
+              has_local_changes="YES"
+            fi
+            if [ -n "$(/usr/bin/git -C "${SRCROOT}" ls-files --others --exclude-standard 2>/dev/null)" ]; then
+              has_local_changes="YES"
+            fi
+          fi
+
+          rm -f "${metadata_path}"
+          /usr/bin/plutil -create xml1 "${metadata_path}"
+          /usr/bin/plutil -insert Branch -string "${branch}" "${metadata_path}"
+          /usr/bin/plutil -insert ShortCommit -string "${short_commit}" "${metadata_path}"
+          /usr/bin/plutil -insert HasLocalChanges -bool "${has_local_changes}" "${metadata_path}"
+          /usr/bin/plutil -insert BuiltAt -string "$(/bin/date '+%Y-%m-%d %H:%M:%S %z')" "${metadata_path}"
+          /usr/bin/plutil -insert Configuration -string "${CONFIGURATION}" "${metadata_path}"
     settings:
       base:
         PRODUCT_NAME: LiftingLog

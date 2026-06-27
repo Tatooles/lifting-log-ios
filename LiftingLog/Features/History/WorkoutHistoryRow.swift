@@ -23,8 +23,8 @@ struct WorkoutHistoryRow: View {
                         .foregroundStyle(AppTheme.textSecondary)
                     HStack(spacing: 12) {
                         Label(AppTheme.formatDuration(metrics.durationSeconds), systemImage: "clock")
-                        Text("\(Self.exerciseCount(for: session)) exercises")
-                        Text("\(metrics.totalSetCount) sets")
+                        Text("\(session.visibleExerciseCount) exercises")
+                        Text("\(metrics.completedSetCount) sets")
                     }
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(AppTheme.textTertiary)
@@ -37,9 +37,5 @@ struct WorkoutHistoryRow: View {
                     .foregroundStyle(AppTheme.textTertiary)
             }
         }
-    }
-
-    static func exerciseCount(for session: WorkoutSession) -> Int {
-        session.sortedLoggedExercises.count
     }
 }

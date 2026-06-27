@@ -86,6 +86,10 @@ final class WorkoutSession: Identifiable {
             .sorted { $0.orderIndex < $1.orderIndex }
     }
 
+    var visibleExerciseCount: Int {
+        sortedLoggedExercises.count
+    }
+
     static func visibleCompletedSessions(
         from sessions: [WorkoutSession],
         ownerTokenIdentifier: String? = nil
@@ -114,6 +118,14 @@ final class WorkoutSession: Identifiable {
                         || (ownerTokenIdentifier != nil && session.syncOwnerTokenIdentifier == nil)
                 )
         }
+    }
+
+    func allowsHistoryMutation(ownerTokenIdentifier: String?) -> Bool {
+        guard let syncOwnerTokenIdentifier else {
+            return true
+        }
+
+        return ownerTokenIdentifier == syncOwnerTokenIdentifier
     }
 
     func effectiveDurationSeconds(now: Date = .now) -> Int {

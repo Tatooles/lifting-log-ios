@@ -4,11 +4,14 @@ import SwiftData
 
 enum ActiveWorkoutEngineError: LocalizedError, Equatable {
     case invalidExerciseReorder
+    case pastWorkoutUnavailable
 
     var errorDescription: String? {
         switch self {
         case .invalidExerciseReorder:
             return "Workout exercises changed. Review the current order and try again."
+        case .pastWorkoutUnavailable:
+            return "That past workout is no longer available. Choose another workout and try again."
         }
     }
 }
@@ -64,6 +67,14 @@ final class ActiveWorkoutEngine {
         context: ModelContext,
         now: Date = .now
     ) throws -> WorkoutSession {
+        guard try isVisiblePastWorkout(
+            pastSession,
+            ownerTokenIdentifier: ownerTokenIdentifier,
+            context: context
+        ) else {
+            throw ActiveWorkoutEngineError.pastWorkoutUnavailable
+        }
+
         if let active = try currentActiveSession(ownerTokenIdentifier: ownerTokenIdentifier, context: context) {
             activeSessionID = active.id
             return active
@@ -358,6 +369,18 @@ final class ActiveWorkoutEngine {
         }
 
         return activeSessions.first
+    }
+
+    private func isVisiblePastWorkout(
+        _ session: WorkoutSession,
+        ownerTokenIdentifier: String?,
+        context: ModelContext
+    ) throws -> Bool {
+        WorkoutSession.visibleCompletedSessions(
+            from: try context.fetch(FetchDescriptor<WorkoutSession>()),
+            ownerTokenIdentifier: ownerTokenIdentifier
+        )
+        .contains { $0.id == session.id }
     }
 
     private func reindexLoggedExercises(for session: WorkoutSession, now: Date) {
