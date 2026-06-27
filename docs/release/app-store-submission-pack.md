@@ -38,6 +38,7 @@ Local workout data can remain only on the user's device when the user is signed 
 When a user signs in, Lifting Log uses Clerk for authentication and Convex for account-scoped sync. Account-linked data can include:
 
 - Email address or Apple private relay email used for authentication.
+- Name, display name, and any Clerk profile metadata if enabled or provided.
 - Authentication identifiers and session data processed by Clerk.
 - Synced exercises, workout sessions, logged exercises, logged sets, and user settings stored in Convex.
 
@@ -90,6 +91,7 @@ Capture final screenshots after UI stabilizes:
 - Release build uses production Clerk publishable key.
 - Release build uses webcredentials:clerk.auth.liftinglog.app.
 - Release build uses https://sensible-reindeer-16.convex.cloud.
+- App target includes PrivacyInfo.xcprivacy with required-reason API declarations, including UserDefaults usage, and archive/upload validation passes before App Store submission.
 - Final app icon ticket is complete before submission.
 - App Store screenshots are final.
 - Export compliance answer is ready for standard HTTPS encryption use.
