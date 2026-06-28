@@ -22,14 +22,14 @@ enum WorkoutFormatters {
     }
 
     static func number(_ value: Double) -> String {
-        if value.rounded() == value {
-            return String(Int(value))
-        }
+        guard value.isFinite else { return "-" }
+        let isWholeNumber = value.rounded() == value
 
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = !isWholeNumber
         formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 2
+        formatter.maximumFractionDigits = isWholeNumber ? 0 : 2
         return formatter.string(from: NSNumber(value: value)) ?? String(value)
     }
 
@@ -45,10 +45,14 @@ enum WorkoutFormatters {
         formatter.locale = locale
         formatter.numberStyle = .decimal
 
+        let parsedNumber: Double?
         if let number = formatter.number(from: trimmed) {
-            return number.doubleValue
+            parsedNumber = number.doubleValue
+        } else {
+            parsedNumber = Double(trimmed.replacingOccurrences(of: ",", with: "."))
         }
 
-        return Double(trimmed.replacingOccurrences(of: ",", with: "."))
+        guard let parsedNumber, parsedNumber.isFinite else { return nil }
+        return parsedNumber
     }
 }
