@@ -91,6 +91,7 @@ struct FinishWorkoutSheet: View {
             .accessibilityIdentifier("SaveWorkoutButton")
 
             Button("Keep Going") {
+                finalizeWorkoutTitle()
                 dismiss()
             }
             .font(.callout.weight(.medium))
@@ -117,6 +118,11 @@ struct FinishWorkoutSheet: View {
                     focusedField = nil
                 }
                 .accessibilityIdentifier("DismissKeyboardButton")
+            }
+        }
+        .onChange(of: focusedField) { previousField, newField in
+            if previousField == .title, newField != .title {
+                finalizeWorkoutTitle()
             }
         }
         .alert("Discard Workout?", isPresented: $showsDiscardConfirmation) {
@@ -153,6 +159,10 @@ struct FinishWorkoutSheet: View {
 
     private var showsDefaultTitleHint: Bool {
         session.title.trimmingCharacters(in: .whitespacesAndNewlines) == "Workout"
+    }
+
+    private func finalizeWorkoutTitle() {
+        try? engine.finalizeWorkoutTitle(session, context: modelContext)
     }
 
     private struct WorkoutActionError: Identifiable {

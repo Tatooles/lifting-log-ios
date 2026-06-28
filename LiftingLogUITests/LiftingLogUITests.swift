@@ -66,6 +66,31 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
+    func testFinishWorkoutSheetNormalizesBlankTitleBeforeKeepGoing() {
+        let app = makeApp()
+        app.launch()
+
+        app.buttons["StartBlankWorkoutButton"].tap()
+        XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
+
+        openFinishWorkoutSheet(in: app)
+        let finishTitleField = app.textFields["FinishWorkoutTitleField"]
+        XCTAssertTrue(finishTitleField.waitForExistence(timeout: 3))
+        replaceText(in: finishTitleField, with: "")
+
+        let keyboardDoneButton = app.buttons["Done"]
+        XCTAssertTrue(keyboardDoneButton.waitForExistence(timeout: 3))
+        keyboardDoneButton.tap()
+
+        XCTAssertTrue(app.buttons["KeepGoingButton"].waitForExistence(timeout: 3))
+        app.buttons["KeepGoingButton"].tap()
+
+        let activeTitleField = app.textFields["WorkoutTitle"]
+        XCTAssertTrue(activeTitleField.waitForExistence(timeout: 3))
+        XCTAssertEqual(activeTitleField.value as? String, "Workout")
+    }
+
+    @MainActor
     func testTabNavigationAndFinishSheetSmoke() {
         let app = makeApp()
         app.launch()
