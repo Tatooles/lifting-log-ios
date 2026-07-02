@@ -59,8 +59,10 @@ struct SettingsView: View {
                 ActivityView(activityItems: [exportFile.url])
             case .appInfo(let launchPresentation):
                 LaunchExperienceSheet(presentation: launchPresentation) {
-                    completeAppInfoPresentation(launchPresentation)
                     sheetPresentation = nil
+                }
+                .onDisappear {
+                    completeAppInfoPresentation(launchPresentation)
                 }
             }
         }

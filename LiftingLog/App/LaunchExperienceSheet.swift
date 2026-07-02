@@ -30,7 +30,7 @@ struct LaunchExperienceSheet: View {
     private var summary: String {
         switch presentation {
         case .welcome:
-            "Track workouts quickly, keep data on this iPhone, and sign in when you want cloud sync."
+            "Log your lifts in seconds. Everything is saved on this iPhone, with optional cloud sync when you sign in."
         case .whatsNew(let release):
             release.summary
         }
@@ -50,22 +50,22 @@ struct LaunchExperienceSheet: View {
         case .welcome:
             [
                 WhatsNewItem(
-                    id: "offline",
-                    systemImage: "iphone",
-                    title: "Log offline",
-                    detail: "Workouts are saved on this iPhone immediately, even without network."
+                    id: "logging",
+                    systemImage: "bolt.fill",
+                    title: "Fast workout logging",
+                    detail: "Start a workout and log sets in a couple of taps — no network needed."
+                ),
+                WhatsNewItem(
+                    id: "history",
+                    systemImage: "clock.arrow.circlepath",
+                    title: "Your history stays put",
+                    detail: "Every finished workout is saved on this iPhone, even offline."
                 ),
                 WhatsNewItem(
                     id: "sync",
                     systemImage: "icloud",
-                    title: "Sync when signed in",
-                    detail: "Completed workouts, exercises, and settings sync after you sign in."
-                ),
-                WhatsNewItem(
-                    id: "active-workouts",
-                    systemImage: "checkmark.circle",
-                    title: "Finish to sync",
-                    detail: "Active workouts stay local until you finish them."
+                    title: "Optional cloud sync",
+                    detail: "Sign in to back up finished workouts, exercises, and settings."
                 ),
                 WhatsNewItem(
                     id: "data",
@@ -80,47 +80,54 @@ struct LaunchExperienceSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Image(systemName: "figure.strengthtraining.traditional")
-                            .font(.system(size: 44, weight: .semibold))
-                            .foregroundStyle(AppTheme.accentBright)
-                            .accessibilityHidden(true)
+        ScrollView {
+            VStack(spacing: 28) {
+                VStack(spacing: 12) {
+                    Image(systemName: "figure.strengthtraining.traditional")
+                        .font(.system(size: 52, weight: .semibold))
+                        .foregroundStyle(AppTheme.accentBright)
+                        .accessibilityHidden(true)
 
-                        Text(title)
-                            .font(.largeTitle.weight(.bold))
-                            .foregroundStyle(AppTheme.textPrimary)
-                            .accessibilityIdentifier("LaunchExperienceTitle")
+                    Text(title)
+                        .font(.largeTitle.weight(.bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .multilineTextAlignment(.center)
+                        .accessibilityIdentifier("LaunchExperienceTitle")
 
-                        Text(summary)
-                            .font(.body)
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityIdentifier("LaunchExperienceSummary")
-                    }
+                    Text(summary)
+                        .font(.body)
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("LaunchExperienceSummary")
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 48)
 
-                    VStack(alignment: .leading, spacing: 16) {
-                        ForEach(items) { item in
-                            LaunchExperienceItemRow(item: item)
-                        }
+                VStack(alignment: .leading, spacing: 20) {
+                    ForEach(items) { item in
+                        LaunchExperienceItemRow(item: item)
                     }
                 }
-                .padding(AppTheme.shellPadding)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .background(AppTheme.subtleBackground.ignoresSafeArea())
-            .safeAreaInset(edge: .bottom) {
-                Button(buttonTitle, action: primaryAction)
-                    .buttonStyle(.glassProminent)
-                    .tint(AppTheme.accentBright)
-                    .frame(maxWidth: .infinity)
-                    .padding(AppTheme.shellPadding)
-                    .background(.regularMaterial)
-                    .accessibilityIdentifier("LaunchExperiencePrimaryButton")
-            }
+            .padding(.horizontal, AppTheme.shellPadding + 8)
+            .padding(.bottom, AppTheme.shellPadding)
         }
-        .interactiveDismissDisabled()
+        .background(AppTheme.subtleBackground.ignoresSafeArea())
+        .safeAreaInset(edge: .bottom) {
+            Button(action: primaryAction) {
+                Text(buttonTitle)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glassProminent)
+            .controlSize(.large)
+            .tint(AppTheme.accentBright)
+            .padding(.horizontal, AppTheme.shellPadding + 8)
+            .padding(.vertical, AppTheme.shellPadding)
+            .accessibilityIdentifier("LaunchExperiencePrimaryButton")
+        }
+        .interactiveDismissDisabled(presentation == .welcome)
     }
 }
 

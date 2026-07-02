@@ -125,7 +125,15 @@ struct AppShellView: View {
         }
         .sheet(item: $launchPresentation) { presentation in
             LaunchExperienceSheet(presentation: presentation) {
-                completeLaunchPresentation(presentation)
+                switch presentation {
+                case .welcome:
+                    completeLaunchPresentation(presentation)
+                case .whatsNew:
+                    launchPresentation = nil
+                }
+            }
+            .onDisappear {
+                markWhatsNewSeenIfNeeded(presentation)
             }
         }
         .task {
@@ -159,6 +167,14 @@ struct AppShellView: View {
         }
 
         launchPresentation = nil
+    }
+
+    private func markWhatsNewSeenIfNeeded(_ presentation: LaunchExperiencePresentation) {
+        guard case .whatsNew(let release) = presentation else {
+            return
+        }
+
+        firstRunStore.markWhatsNewSeen(version: release.version)
     }
 
     private func dismissGlobalSyncFailureBanner() {

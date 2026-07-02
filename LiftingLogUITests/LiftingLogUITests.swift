@@ -120,9 +120,9 @@ final class LiftingLogUITests: XCTestCase {
 
         XCTAssertTrue(firstLaunch.staticTexts["LaunchExperienceTitle"].waitForExistence(timeout: 3))
         XCTAssertTrue(firstLaunch.staticTexts["Welcome to LiftingLog"].exists)
-        XCTAssertTrue(firstLaunch.staticTexts["Log offline"].exists)
-        XCTAssertTrue(firstLaunch.staticTexts["Sync when signed in"].exists)
-        XCTAssertTrue(firstLaunch.staticTexts["Finish to sync"].exists)
+        XCTAssertTrue(firstLaunch.staticTexts["Fast workout logging"].exists)
+        XCTAssertTrue(firstLaunch.staticTexts["Your history stays put"].exists)
+        XCTAssertTrue(firstLaunch.staticTexts["Optional cloud sync"].exists)
         XCTAssertTrue(firstLaunch.staticTexts["Control your data"].exists)
 
         firstLaunch.buttons["LaunchExperiencePrimaryButton"].tap()
@@ -155,7 +155,7 @@ final class LiftingLogUITests: XCTestCase {
         whatsNewButton.tap()
 
         XCTAssertTrue(app.staticTexts["LaunchExperienceTitle"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["Welcome to LiftingLog"].exists)
+        XCTAssertTrue(app.staticTexts["What's New in LiftingLog"].exists)
         XCTAssertTrue(app.staticTexts["Cloud sync"].exists)
     }
 

@@ -120,7 +120,7 @@ final class AppInitializationOrderTests: XCTestCase {
         )
         XCTAssertTrue(
             uiTestSource.contains("""
-        app.launchArguments = [
+        var launchArguments = [
             "--uitest-reset-persistent-store",
             "--uitest-force-signed-out-auth",
         ]
@@ -128,7 +128,11 @@ final class AppInitializationOrderTests: XCTestCase {
             "Disk-backed reset launches should force signed-out auth so persisted tests cannot restore a real session."
         )
         XCTAssertTrue(
-            uiTestSource.contains(#"app.launchArguments = ["--uitest-force-signed-out-auth"]"#),
+            uiTestSource.contains("""
+        if extraArguments.isEmpty {
+            launchArguments = ["--uitest-force-signed-out-auth"]
+        } else {
+"""),
             "Disk-backed relaunches should force signed-out auth so relaunch tests cannot restore a real session."
         )
     }
