@@ -6,7 +6,9 @@ struct AppShellView: View {
     @Environment(SyncScheduler.self) private var syncScheduler
     @Bindable var navigationState: AppNavigationState
     @Bindable var activeWorkoutEngine: ActiveWorkoutEngine
+    private let firstRunStore = FirstRunExperienceStore()
     @State private var dismissedSyncFailureSignature: String?
+    @State private var launchPresentation: LaunchExperiencePresentation?
     @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
     @Query(sort: \SyncOutboxEntry.updatedAt, order: .reverse) private var outboxEntries: [SyncOutboxEntry]
 
@@ -121,12 +123,58 @@ struct AppShellView: View {
                 .padding(.bottom, 8)
             }
         }
+        .sheet(item: $launchPresentation) { presentation in
+            LaunchExperienceSheet(presentation: presentation) {
+                switch presentation {
+                case .welcome:
+                    completeLaunchPresentation(presentation)
+                case .whatsNew:
+                    launchPresentation = nil
+                }
+            }
+            .onDisappear {
+                markWhatsNewSeenIfNeeded(presentation)
+            }
+        }
         .task {
+            presentLaunchExperienceIfNeeded()
             activeWorkoutEngine.loadActiveSession(
                 ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier,
                 context: modelContext
             )
         }
+    }
+
+    private func presentLaunchExperienceIfNeeded() {
+        guard launchPresentation == nil else {
+            return
+        }
+
+        let release = WhatsNewContent.current()
+        if firstRunStore.shouldShowWelcome() {
+            launchPresentation = .welcome
+        } else if firstRunStore.shouldShowWhatsNew(for: release) {
+            launchPresentation = .whatsNew(release)
+        }
+    }
+
+    private func completeLaunchPresentation(_ presentation: LaunchExperiencePresentation) {
+        switch presentation {
+        case .welcome:
+            firstRunStore.markWelcomeSeen(currentWhatsNewVersion: WhatsNewContent.current().version)
+        case .whatsNew(let release):
+            firstRunStore.markWhatsNewSeen(version: release.version)
+        }
+
+        launchPresentation = nil
+    }
+
+    private func markWhatsNewSeenIfNeeded(_ presentation: LaunchExperiencePresentation) {
+        guard case .whatsNew(let release) = presentation else {
+            return
+        }
+
+        firstRunStore.markWhatsNewSeen(version: release.version)
     }
 
     private func dismissGlobalSyncFailureBanner() {
