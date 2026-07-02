@@ -19,7 +19,7 @@ enum WhatsNewContent {
     static func current(buildInfo: AppBuildInfo = .current) -> WhatsNewRelease {
         WhatsNewRelease(
             version: buildInfo.version,
-            title: "What's New in the Lifting Log",
+            title: "What's new in the Lifting Log",
             summary: "The first release of the Lifting Log: fast workout logging, a safe local history, and optional cloud sync.",
             items: [
                 WhatsNewItem(

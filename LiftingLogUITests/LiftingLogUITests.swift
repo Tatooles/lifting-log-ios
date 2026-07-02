@@ -155,7 +155,7 @@ final class LiftingLogUITests: XCTestCase {
         whatsNewButton.tap()
 
         XCTAssertTrue(app.staticTexts["LaunchExperienceTitle"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["What's New in the Lifting Log"].exists)
+        XCTAssertTrue(app.staticTexts["What's new in the Lifting Log"].exists)
         XCTAssertTrue(app.staticTexts["Cloud sync"].exists)
     }
 
