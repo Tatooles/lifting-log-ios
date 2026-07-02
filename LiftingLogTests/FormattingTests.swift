@@ -69,6 +69,18 @@ final class FormattingTests: XCTestCase {
         XCTAssertEqual(WorkoutFormatters.number(102.058), "102.06")
     }
 
+    func testNumberFormatterDisplaysLargeWholeNumberWithoutTrapping() {
+        let value = Double("999999999999999999999999")!
+
+        XCTAssertEqual(WorkoutFormatters.number(value), "1000000000000000000000000")
+    }
+
+    func testNumberParserRejectsNonFiniteValues() {
+        let overflowingInput = String(repeating: "9", count: 400)
+
+        XCTAssertNil(WorkoutFormatters.parseNumber(overflowingInput, locale: Locale(identifier: "en_US_POSIX")))
+    }
+
     func testVolumeFormatterDisplaysCanonicalPoundVolumeInSelectedUnit() {
         let canonicalVolume = MeasurementUnit.kilograms.canonicalWeight(fromDisplayWeight: 100)! * 5
 
