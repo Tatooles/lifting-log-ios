@@ -52,6 +52,44 @@ pnpm exec convex dev --once
 
 Do not rely on a backend fallback for this value. Staging and production deployments should set their own Clerk issuer domain before deploying Convex functions.
 
+### Production Convex reference
+
+Release builds point at the production Convex deployment:
+
+```sh
+https://sensible-reindeer-16.convex.cloud
+```
+
+Use this section when preparing an App Store release candidate or troubleshooting production auth/sync. Routine app changes do not require running the full production smoke every time.
+
+The production Clerk JWT template should be configured for Convex:
+
+- JWT issuer: `https://clerk.auth.liftinglog.app`
+- JWT audience: `convex`
+
+Configure or verify the production Convex deployment with the matching issuer domain:
+
+```sh
+pnpm exec convex env --prod set CLERK_JWT_ISSUER_DOMAIN 'https://clerk.auth.liftinglog.app'
+pnpm exec convex env --prod get CLERK_JWT_ISSUER_DOMAIN
+```
+
+Deploy the current Convex functions to production:
+
+```sh
+pnpm exec convex deploy
+pnpm exec convex function-spec --prod
+```
+
+For RC validation or production auth/sync troubleshooting, run a focused production smoke:
+
+1. Sign in with the production Clerk account flow from a Release or TestFlight build.
+2. Confirm Settings shows Sync Status: Up to date.
+3. Exercise the release smoke flow that needs Convex auth, such as account deletion.
+4. If a direct `authSmoke:me` check is needed, run it from a Debug build temporarily pointed at the production Clerk and Convex values because Developer Diagnostics is Debug-only.
+
+Record smoke-test evidence on the relevant release issue when the check is part of release validation.
+
 ## Agent / MCP Workflow
 
 This repo includes `.xcodebuildmcp/config.yaml` for agents that use XcodeBuildMCP.
