@@ -18,6 +18,8 @@ struct LiftingLogApp: App {
         Clerk.configure(publishableKey: ClerkConfiguration.publishableKey)
         convexClient = ConvexClientFactory.makeAuthenticatedClient()
         let arguments = ProcessInfo.processInfo.arguments
+        FirstRunExperienceStore.resetForUITestingIfRequested(arguments: arguments)
+        FirstRunExperienceStore.markSeenForUITestingIfRequested(arguments: arguments)
         uiTestForcesSignedOutAuth = arguments.contains("--uitest-force-signed-out-auth")
         let uiTestSyncOwnerIndex = arguments.firstIndex(of: "--uitest-sync-owner")
         uiTestSyncOwner = uiTestSyncOwnerIndex.flatMap { index -> String? in

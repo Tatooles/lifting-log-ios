@@ -114,6 +114,52 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
+    func testFirstRunWelcomeAppearsOnce() {
+        let firstLaunch = makeDiskBackedResetApp(extraArguments: ["--uitest-reset-first-run-experience"])
+        firstLaunch.launch()
+
+        XCTAssertTrue(firstLaunch.staticTexts["LaunchExperienceTitle"].waitForExistence(timeout: 3))
+        XCTAssertTrue(firstLaunch.staticTexts["Welcome to the Lifting Log"].exists)
+        XCTAssertTrue(firstLaunch.staticTexts["Fast workout logging"].exists)
+        XCTAssertTrue(firstLaunch.staticTexts["Your history stays put"].exists)
+        XCTAssertTrue(firstLaunch.staticTexts["Optional cloud sync"].exists)
+        XCTAssertTrue(firstLaunch.staticTexts["Control your data"].exists)
+
+        firstLaunch.buttons["LaunchExperiencePrimaryButton"].tap()
+        XCTAssertFalse(firstLaunch.staticTexts["LaunchExperienceTitle"].waitForExistence(timeout: 1))
+        firstLaunch.terminate()
+
+        let secondLaunch = makeDiskBackedApp(skipsFirstRunExperience: false)
+        secondLaunch.launch()
+
+        XCTAssertFalse(secondLaunch.staticTexts["Welcome to the Lifting Log"].waitForExistence(timeout: 1))
+        XCTAssertTrue(secondLaunch.staticTexts["StartWorkoutTitle"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    func testSettingsCanOpenWhatsNew() {
+        let app = makeApp()
+        app.launch()
+
+        app.buttons["ProfileTab"].tap()
+        XCTAssertTrue(app.staticTexts["ProfileTitle"].waitForExistence(timeout: 3))
+        app.buttons["ProfileSettingsLink"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
+
+        let whatsNewButton = app.buttons["SettingsWhatsNewButton"]
+        for _ in 0..<5 where !whatsNewButton.isHittable {
+            app.swipeUp()
+        }
+        XCTAssertTrue(whatsNewButton.exists)
+        XCTAssertTrue(whatsNewButton.isHittable)
+        whatsNewButton.tap()
+
+        XCTAssertTrue(app.staticTexts["LaunchExperienceTitle"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["What's new in the Lifting Log"].exists)
+        XCTAssertTrue(app.staticTexts["Cloud sync"].exists)
+    }
+
+    @MainActor
     func testAddingExerciseAndSetMovesFocusAndKeyboardCanBeDismissed() {
         let app = makeApp()
         app.launch()
@@ -912,10 +958,15 @@ final class LiftingLogUITests: XCTestCase {
         let authArguments = extraArguments.contains("--uitest-force-signed-in-auth")
             ? []
             : ["--uitest-force-signed-out-auth"]
-        app.launchArguments = [
+        var launchArguments = [
             "--uitest-reset-persistent-store",
             "--uitest-in-memory-store",
-        ] + fixtureArguments + authArguments + extraArguments
+        ] + fixtureArguments + authArguments
+        if !extraArguments.contains("--uitest-reset-first-run-experience") {
+            launchArguments.append("--uitest-skip-first-run-experience")
+        }
+        launchArguments += extraArguments
+        app.launchArguments = launchArguments
         app.terminate()
         return app
     }
@@ -923,23 +974,36 @@ final class LiftingLogUITests: XCTestCase {
     @MainActor
     private func makeDiskBackedResetApp(extraArguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = [
+        var launchArguments = [
             "--uitest-reset-persistent-store",
             "--uitest-force-signed-out-auth",
-        ] + extraArguments
+        ]
+        if !extraArguments.contains("--uitest-reset-first-run-experience") {
+            launchArguments.append("--uitest-skip-first-run-experience")
+        }
+        launchArguments += extraArguments
+        app.launchArguments = launchArguments
         return app
     }
 
     @MainActor
-    private func makeDiskBackedApp(extraArguments: [String] = []) -> XCUIApplication {
+    private func makeDiskBackedApp(
+        extraArguments: [String] = [],
+        skipsFirstRunExperience: Bool = true
+    ) -> XCUIApplication {
         let app = XCUIApplication()
+        var launchArguments: [String]
         if extraArguments.isEmpty {
-            app.launchArguments = ["--uitest-force-signed-out-auth"]
+            launchArguments = ["--uitest-force-signed-out-auth"]
         } else {
-            app.launchArguments = extraArguments.contains("--uitest-force-signed-in-auth")
+            launchArguments = extraArguments.contains("--uitest-force-signed-in-auth")
                 ? extraArguments
                 : ["--uitest-force-signed-out-auth"] + extraArguments
         }
+        if skipsFirstRunExperience && !extraArguments.contains("--uitest-reset-first-run-experience") {
+            launchArguments.append("--uitest-skip-first-run-experience")
+        }
+        app.launchArguments = launchArguments
         return app
     }
 

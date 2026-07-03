@@ -12,7 +12,7 @@ struct SettingsView: View {
     @State private var alert: SettingsAlert?
     @State private var copyFeedbackResetTask: Task<Void, Never>?
     @State private var copyFeedbackState = CopyAppInfoFeedbackState.idle
-    @State private var exportFile: ExportFile?
+    @State private var sheetPresentation: SettingsSheetPresentation?
 
     var body: some View {
         Form {
@@ -53,8 +53,18 @@ struct SettingsView: View {
                 dismissButton: .cancel(Text("OK"))
             )
         }
-        .sheet(item: $exportFile) { exportFile in
-            ActivityView(activityItems: [exportFile.url])
+        .sheet(item: $sheetPresentation) { presentation in
+            switch presentation {
+            case .export(let exportFile):
+                ActivityView(activityItems: [exportFile.url])
+            case .appInfo(let launchPresentation):
+                LaunchExperienceSheet(presentation: launchPresentation) {
+                    sheetPresentation = nil
+                }
+                .onDisappear {
+                    completeAppInfoPresentation(launchPresentation)
+                }
+            }
         }
         .onDisappear {
             copyFeedbackResetTask?.cancel()
@@ -74,6 +84,13 @@ struct SettingsView: View {
                     .textSelection(.enabled)
                     .accessibilityIdentifier("SettingsAppVersionValue")
             }
+
+            Button {
+                sheetPresentation = .appInfo(.whatsNew(WhatsNewContent.current()))
+            } label: {
+                Label("What's New", systemImage: "sparkles")
+            }
+            .accessibilityIdentifier("SettingsWhatsNewButton")
 
             Button {
                 copyAppInfo()
@@ -103,7 +120,7 @@ struct SettingsView: View {
                 ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
             )
             let url = try WorkoutExportFileWriter().write(csv: csv)
-            exportFile = ExportFile(url: url)
+            sheetPresentation = .export(ExportFile(url: url))
         } catch {
             alert = .exportFailure(error.localizedDescription)
         }
@@ -113,6 +130,12 @@ struct SettingsView: View {
         UIPasteboard.general.string = AppBuildInfo.current.supportSummary(device: .current)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         showCopyConfirmation()
+    }
+
+    private func completeAppInfoPresentation(_ presentation: LaunchExperiencePresentation) {
+        if case .whatsNew(let release) = presentation {
+            FirstRunExperienceStore().markWhatsNewSeen(version: release.version)
+        }
     }
 
     private func showCopyConfirmation() {
@@ -133,6 +156,20 @@ struct SettingsView: View {
     private struct ExportFile: Identifiable {
         let id = UUID()
         let url: URL
+    }
+
+    private enum SettingsSheetPresentation: Identifiable {
+        case export(ExportFile)
+        case appInfo(LaunchExperiencePresentation)
+
+        var id: String {
+            switch self {
+            case .export(let exportFile):
+                "export-\(exportFile.id.uuidString)"
+            case .appInfo(let presentation):
+                "app-info-\(presentation.id)"
+            }
+        }
     }
 
     private struct SettingsAlert: Identifiable {
