@@ -3,19 +3,18 @@ import SwiftUI
 
 struct ExerciseCardView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(SyncScheduler.self) private var syncScheduler
     let loggedExercise: LoggedExercise
     let exerciseIndex: Int
     @Bindable var engine: ActiveWorkoutEngine
     @Binding var isCollapsed: Bool
     var focusedField: FocusState<WorkoutField?>.Binding
+    let weightUnit: MeasurementUnit
     let previousSets: [PreviousSetPerformance]
     let canReorder: Bool
     let viewHistory: () -> Void
     let onReorderExercises: () -> Void
     let onEditRPE: (LoggedSet) -> Void
     @State private var showsRemoveConfirmation = false
-    @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
 
     init(
         loggedExercise: LoggedExercise,
@@ -23,6 +22,7 @@ struct ExerciseCardView: View {
         engine: ActiveWorkoutEngine,
         isCollapsed: Binding<Bool>,
         focusedField: FocusState<WorkoutField?>.Binding,
+        weightUnit: MeasurementUnit,
         previousSets: [PreviousSetPerformance],
         canReorder: Bool,
         viewHistory: @escaping () -> Void,
@@ -34,18 +34,12 @@ struct ExerciseCardView: View {
         self.engine = engine
         self._isCollapsed = isCollapsed
         self.focusedField = focusedField
+        self.weightUnit = weightUnit
         self.previousSets = previousSets
         self.canReorder = canReorder
         self.viewHistory = viewHistory
         self.onReorderExercises = onReorderExercises
         self.onEditRPE = onEditRPE
-    }
-
-    private var weightUnit: MeasurementUnit {
-        UserSettings.visibleSettingsRecords(
-            from: settingsRecords,
-            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
-        ).first?.weightUnit ?? .pounds
     }
 
     var body: some View {
@@ -155,36 +149,14 @@ struct ExerciseCardView: View {
                         }
                         .padding(.horizontal, 16)
 
-                        TextField(
-                            "Exercise notes...",
-                            text: Binding(
-                                get: { loggedExercise.notes },
-                                set: { try? engine.updateExerciseNotes($0, loggedExercise: loggedExercise, context: modelContext) }
-                            ),
-                            axis: .vertical
-                        )
-                        .font(.body)
-                        .foregroundStyle(AppTheme.textPrimary)
-                        .focused(focusedField, equals: .exerciseNotes(loggedExercise.id))
-                        .padding(14)
-                        .frame(minHeight: 88, alignment: .topLeading)
-                        .background(
-                            AppTheme.fieldFill,
-                            in: RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
-                                .strokeBorder(
-                                    focusedField.wrappedValue == .exerciseNotes(loggedExercise.id)
-                                        ? AppTheme.accentBright.opacity(0.7)
-                                        : .clear,
-                                    lineWidth: 1.5
-                                )
-                        )
-                        .animation(.easeOut(duration: 0.15), value: focusedField.wrappedValue == .exerciseNotes(loggedExercise.id))
-                        .padding(.horizontal, 16)
-                        .accessibilityIdentifier("ExerciseNotesField-\(exerciseIndex)")
-                        .id(WorkoutField.exerciseNotes(loggedExercise.id))
+                        ExerciseNotesDraftField(
+                            notes: loggedExercise.notes,
+                            exerciseID: loggedExercise.id,
+                            exerciseIndex: exerciseIndex,
+                            focusedField: focusedField
+                        ) { draft in
+                            try? engine.updateExerciseNotes(draft, loggedExercise: loggedExercise, context: modelContext)
+                        }
 
                         if let referenceNotes {
                             VStack(alignment: .leading, spacing: 6) {
@@ -222,5 +194,66 @@ struct ExerciseCardView: View {
         let visibleSets = loggedExercise.sortedSets
         let completed = visibleSets.filter(\.isCompleted).count
         return WorkoutExerciseProgress(completed: completed, total: visibleSets.count)
+    }
+}
+
+/// Owns the exercise-notes draft so keystrokes re-render only this leaf, not
+/// the whole card. Commits (one model write + save) when focus leaves the
+/// field or the field disappears (e.g. the card collapses mid-edit).
+private struct ExerciseNotesDraftField: View {
+    let notes: String
+    let exerciseID: UUID
+    let exerciseIndex: Int
+    var focusedField: FocusState<WorkoutField?>.Binding
+    let commit: (String) -> Void
+    @State private var draft: String?
+
+    private var focusTarget: WorkoutField {
+        .exerciseNotes(exerciseID)
+    }
+
+    var body: some View {
+        TextField(
+            "Exercise notes...",
+            text: Binding(
+                get: { draft ?? notes },
+                set: { draft = $0 }
+            ),
+            axis: .vertical
+        )
+        .font(.body)
+        .foregroundStyle(AppTheme.textPrimary)
+        .focused(focusedField, equals: focusTarget)
+        .padding(14)
+        .frame(minHeight: 88, alignment: .topLeading)
+        .background(
+            AppTheme.fieldFill,
+            in: RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
+                .strokeBorder(
+                    focusedField.wrappedValue == focusTarget ? AppTheme.accentBright.opacity(0.7) : .clear,
+                    lineWidth: 1.5
+                )
+        )
+        .animation(.easeOut(duration: 0.15), value: focusedField.wrappedValue == focusTarget)
+        .padding(.horizontal, 16)
+        .accessibilityIdentifier("ExerciseNotesField-\(exerciseIndex)")
+        .id(focusTarget)
+        .onChange(of: focusedField.wrappedValue) { previousField, newField in
+            if previousField == focusTarget, newField != focusTarget {
+                commitIfNeeded()
+            }
+        }
+        .onDisappear {
+            commitIfNeeded()
+        }
+    }
+
+    private func commitIfNeeded() {
+        guard let draft else { return }
+        commit(draft)
+        self.draft = nil
     }
 }

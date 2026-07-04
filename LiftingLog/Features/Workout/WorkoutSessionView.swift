@@ -11,6 +11,7 @@ enum WorkoutField: Hashable {
 
 struct WorkoutSessionView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(SyncScheduler.self) private var syncScheduler
     let session: WorkoutSession
     @Bindable var engine: ActiveWorkoutEngine
@@ -23,28 +24,35 @@ struct WorkoutSessionView: View {
     @State private var pendingScrollTarget: UUID?
     @State private var recentlyAddedExerciseID: UUID?
     @State private var collapsedExerciseIDs: Set<UUID> = []
+    @State private var cachedPreviousSets: [UUID: [PreviousSetPerformance]] = [:]
     @State private var rpeEditingSetID: UUID?
     @State private var rpeEditingSourceField: WorkoutField?
     @FocusState private var focusedField: WorkoutField?
     @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
+    @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
     private let contentBottomPadding: CGFloat = 120
+
+    private var weightUnit: MeasurementUnit {
+        UserSettings.visibleSettingsRecords(
+            from: settingsRecords,
+            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
+        ).first?.weightUnit ?? .pounds
+    }
 
     var body: some View {
         let sortedLoggedExercises = session.sortedLoggedExercises
         let canReorderExercises = sortedLoggedExercises.count >= 2
-        let previousSetsByExerciseID = previousSetsByExerciseID(for: sortedLoggedExercises)
 
         ScrollViewReader { scrollProxy in
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 14) {
                     VStack(alignment: .leading, spacing: 8) {
-                        WorkoutTitleField(
-                            placeholder: "Workout Name",
-                            text: workoutTitleBinding,
-                            focusTarget: .workoutTitle,
-                            focusedField: $focusedField,
-                            accessibilityIdentifier: "WorkoutTitle"
-                        )
+                        WorkoutTitleDraftField(
+                            title: session.title,
+                            focusedField: $focusedField
+                        ) { draft in
+                            try? engine.commitWorkoutTitle(draft, session: session, context: modelContext)
+                        }
 
                         Text(AppTheme.formatDate(session.startedAt))
                             .font(.subheadline.weight(.medium))
@@ -60,7 +68,8 @@ struct WorkoutSessionView: View {
                             engine: engine,
                             isCollapsed: isCollapsedBinding(for: loggedExercise),
                             focusedField: $focusedField,
-                            previousSets: previousSetsByExerciseID[loggedExercise.id] ?? [],
+                            weightUnit: weightUnit,
+                            previousSets: cachedPreviousSets[loggedExercise.id] ?? [],
                             canReorder: canReorderExercises,
                             viewHistory: { selectedHistoryExercise = loggedExercise },
                             onReorderExercises: {
@@ -88,50 +97,12 @@ struct WorkoutSessionView: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("AddExerciseButton")
 
-                    SurfaceCard {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("WORKOUT NOTES")
-                                .font(.caption2.weight(.bold))
-                                .tracking(1.8)
-                                .foregroundStyle(AppTheme.textSecondary)
-                            TextField(
-                                "How did this session feel? Any notes for next time...",
-                                text: workoutNotesBinding,
-                                axis: .vertical
-                            )
-                            .font(.subheadline)
-                            .foregroundStyle(AppTheme.textPrimary)
-                            .lineLimit(4...6)
-                            .focused($focusedField, equals: .workoutNotes)
-                            .padding(12)
-                            .background(
-                                AppTheme.fieldFill,
-                                in: RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
-                                    .strokeBorder(
-                                        focusedField == .workoutNotes ? AppTheme.accentBright.opacity(0.7) : .clear,
-                                        lineWidth: 1.5
-                                    )
-                            )
-                            .animation(.easeOut(duration: 0.15), value: focusedField == .workoutNotes)
-                            .id(WorkoutField.workoutNotes)
-
-                            if let referenceNotes {
-                                Divider()
-                                    .padding(.vertical, 4)
-
-                                Text("LAST TIME")
-                                    .font(.caption2.weight(.bold))
-                                    .tracking(1.4)
-                                    .foregroundStyle(AppTheme.textTertiary)
-                                Text(referenceNotes)
-                                    .font(.footnote)
-                                    .foregroundStyle(AppTheme.textSecondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
+                    WorkoutNotesDraftCard(
+                        notes: session.notes,
+                        referenceNotes: referenceNotes,
+                        focusedField: $focusedField
+                    ) { draft in
+                        try? engine.updateWorkoutNotes(draft, session: session, context: modelContext)
                     }
                 }
                 .padding(.horizontal, AppTheme.shellPadding)
@@ -146,9 +117,22 @@ struct WorkoutSessionView: View {
                         completedSets: metrics.completedSetCount,
                         totalSets: metrics.totalSetCount,
                         onFinish: {
+                            // Flush any in-progress field edit through the
+                            // commit path before the finish sheet reads the model.
+                            focusedField = nil
                             isFinishSheetPresented = true
                         }
                     )
+                }
+            }
+            .onChange(of: previousSetsCacheKey, initial: true) { _, _ in
+                cachedPreviousSets = previousSetsByExerciseID(for: session.sortedLoggedExercises)
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                // Resigning focus routes pending drafts through the normal
+                // commit path before the app is backgrounded or suspended.
+                if newPhase != .active, focusedField != nil {
+                    focusedField = nil
                 }
             }
             .onChange(of: isAddExercisePresented) { _, isPresented in
@@ -175,10 +159,6 @@ struct WorkoutSessionView: View {
                 if RPEEditingFocusPolicy.shouldReset(editingSetID: rpeEditingSetID, newFocusedField: newField) {
                     rpeEditingSetID = nil
                     rpeEditingSourceField = nil
-                }
-
-                if previousField == .workoutTitle, newField != .workoutTitle {
-                    try? engine.finalizeWorkoutTitle(session, context: modelContext)
                 }
 
                 if let newField {
@@ -295,24 +275,6 @@ struct WorkoutSessionView: View {
         }
     }
 
-    private var workoutTitleBinding: Binding<String> {
-        Binding(
-            get: { session.title },
-            set: { newValue in
-                try? engine.updateWorkoutTitle(newValue, session: session, context: modelContext)
-            }
-        )
-    }
-
-    private var workoutNotesBinding: Binding<String> {
-        Binding(
-            get: { session.notes },
-            set: { newValue in
-                try? engine.updateWorkoutNotes(newValue, session: session, context: modelContext)
-            }
-        )
-    }
-
     private var referenceNotes: String? {
         let trimmed = session.referenceNotes?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? nil : trimmed
@@ -320,6 +282,17 @@ struct WorkoutSessionView: View {
 
     private var focusOrder: [WorkoutField] {
         WorkoutFocusNavigator.focusOrder(for: session, collapsedExerciseIDs: collapsedExerciseIDs)
+    }
+
+    // The lookup scans completed history, so it is cached in @State and
+    // recomputed only when its inputs change (see CacheKey) rather than on
+    // every body evaluation.
+    private var previousSetsCacheKey: PreviousSetPerformance.CacheKey {
+        PreviousSetPerformance.CacheKey(
+            session: session,
+            sessions: sessions,
+            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
+        )
     }
 
     private func previousSetsByExerciseID(for loggedExercises: [LoggedExercise]) -> [UUID: [PreviousSetPerformance]] {
@@ -389,6 +362,103 @@ struct WorkoutSessionView: View {
     }
 
     private static let focusRevealAnchor = UnitPoint(x: 0.5, y: 0.72)
+}
+
+/// Owns the title draft so keystrokes re-render only this leaf, never the
+/// whole form. Commits (one model write + save) when focus leaves the field.
+private struct WorkoutTitleDraftField: View {
+    let title: String
+    var focusedField: FocusState<WorkoutField?>.Binding
+    let commit: (String) -> Void
+    @State private var draft: String?
+
+    var body: some View {
+        WorkoutTitleField(
+            placeholder: "Workout Name",
+            text: Binding(
+                get: { draft ?? title },
+                set: { draft = $0 }
+            ),
+            focusTarget: .workoutTitle,
+            focusedField: focusedField,
+            accessibilityIdentifier: "WorkoutTitle"
+        )
+        .onChange(of: focusedField.wrappedValue) { previousField, newField in
+            if previousField == .workoutTitle, newField != .workoutTitle {
+                commit(draft ?? title)
+                draft = nil
+            }
+        }
+    }
+}
+
+/// Owns the workout-notes draft; same leaf-scoped commit-on-focus-loss
+/// contract as WorkoutTitleDraftField.
+private struct WorkoutNotesDraftCard: View {
+    let notes: String
+    let referenceNotes: String?
+    var focusedField: FocusState<WorkoutField?>.Binding
+    let commit: (String) -> Void
+    @State private var draft: String?
+
+    var body: some View {
+        SurfaceCard {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("WORKOUT NOTES")
+                    .font(.caption2.weight(.bold))
+                    .tracking(1.8)
+                    .foregroundStyle(AppTheme.textSecondary)
+                TextField(
+                    "How did this session feel? Any notes for next time...",
+                    text: Binding(
+                        get: { draft ?? notes },
+                        set: { draft = $0 }
+                    ),
+                    axis: .vertical
+                )
+                .font(.subheadline)
+                .foregroundStyle(AppTheme.textPrimary)
+                .lineLimit(4...6)
+                .focused(focusedField, equals: .workoutNotes)
+                .padding(12)
+                .background(
+                    AppTheme.fieldFill,
+                    in: RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
+                        .strokeBorder(
+                            focusedField.wrappedValue == .workoutNotes ? AppTheme.accentBright.opacity(0.7) : .clear,
+                            lineWidth: 1.5
+                        )
+                )
+                .animation(.easeOut(duration: 0.15), value: focusedField.wrappedValue == .workoutNotes)
+                .id(WorkoutField.workoutNotes)
+
+                if let referenceNotes {
+                    Divider()
+                        .padding(.vertical, 4)
+
+                    Text("LAST TIME")
+                        .font(.caption2.weight(.bold))
+                        .tracking(1.4)
+                        .foregroundStyle(AppTheme.textTertiary)
+                    Text(referenceNotes)
+                        .font(.footnote)
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .onChange(of: focusedField.wrappedValue) { previousField, newField in
+            if previousField == .workoutNotes, newField != .workoutNotes {
+                if let draft {
+                    commit(draft)
+                }
+                draft = nil
+            }
+        }
+    }
 }
 
 enum RPEEditingFocusPolicy {

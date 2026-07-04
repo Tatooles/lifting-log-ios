@@ -12,6 +12,7 @@ struct SetRowView: View {
     let previous: PreviousSetPerformance?
     let onEditRPE: (LoggedSet) -> Void
     @State private var weightInputText = WorkoutNumberInputText()
+    @State private var repsDraft: String?
 
     var body: some View {
         SwipeToDeleteRow(
@@ -58,10 +59,41 @@ struct SetRowView: View {
             .accessibilityIdentifier("SetCompletionButton-\(exerciseIndex)-\(index)")
         }
         .onChange(of: focusedField.wrappedValue) { previousField, newField in
-            if previousField == .setWeight(set.id), newField != .setWeight(set.id) {
-                weightInputText.endEditing()
+            let ownFields: [WorkoutField] = [.setWeight(set.id), .setReps(set.id)]
+            if let previousField, ownFields.contains(previousField), previousField != newField {
+                commitDraftsIfNeeded()
             }
         }
+        .onDisappear {
+            // Rows can leave the tree mid-edit (collapse, delete, finish); the
+            // focus-change commit no longer fires for them, so flush here.
+            commitDraftsIfNeeded()
+        }
+    }
+
+    /// Typing stages values in view-local drafts; this is the single point that
+    /// writes them to the model and saves. Runs on focus leave, completion, and
+    /// row disappearance — never per keystroke.
+    private func commitDraftsIfNeeded() {
+        guard weightInputText.draftText != nil || repsDraft != nil else { return }
+
+        let weight: Double?
+        if let draft = weightInputText.draftText {
+            weight = weightUnit.canonicalWeight(fromDisplayWeight: WorkoutFormatters.parseNumber(draft))
+        } else {
+            weight = set.weight
+        }
+
+        let reps: Int?
+        if let repsDraft {
+            reps = Int(repsDraft)
+        } else {
+            reps = set.reps
+        }
+
+        weightInputText.endEditing()
+        repsDraft = nil
+        try? engine.updateSet(set, weight: weight, reps: reps, rpe: set.rpe, context: modelContext)
     }
 
     private var previousColumn: some View {
@@ -154,16 +186,13 @@ struct SetRowView: View {
                 }
 
                 weightInputText.updateDraft(value)
-                let displayWeight = WorkoutFormatters.parseNumber(value)
-                let canonicalWeight = weightUnit.canonicalWeight(fromDisplayWeight: displayWeight)
-                try? engine.updateSet(set, weight: canonicalWeight, reps: set.reps, rpe: set.rpe, context: modelContext)
             }
         )
     }
 
     private var repsBinding: Binding<String> {
         Binding(
-            get: { set.reps.map(String.init) ?? "" },
+            get: { repsDraft ?? set.reps.map(String.init) ?? "" },
             set: { value in
                 if CompletionEmptyWriteGuard.shouldIgnoreEmptyWrite(
                     value: value,
@@ -172,12 +201,15 @@ struct SetRowView: View {
                     return
                 }
 
-                try? engine.updateSet(set, weight: set.weight, reps: Int(value), rpe: set.rpe, context: modelContext)
+                repsDraft = value
             }
         )
     }
 
     private func completeButtonTapped() {
+        // The fill policy below reads committed model values, so pending drafts
+        // must land first (the focus-change commit only fires on a later update).
+        commitDraftsIfNeeded()
         clearFocusedFieldForThisSet()
         if SetCompletionPreviousFillPolicy.shouldFillBeforeCompletion(
             isCompleted: set.isCompleted,
@@ -193,7 +225,9 @@ struct SetRowView: View {
     }
 
     private func fillFromPrevious(_ previous: PreviousSetPerformance) {
-        weightInputText.endEditing()
+        // Commit rather than drop drafts: fillSetFromPrevious only fills fields
+        // that are still nil, so a typed-but-uncommitted value must win.
+        commitDraftsIfNeeded()
         try? engine.fillSetFromPrevious(set, previous: previous, context: modelContext)
     }
 
@@ -218,6 +252,10 @@ enum SetCompletionPreviousFillPolicy {
 
 struct WorkoutNumberInputText {
     private var draft: String?
+
+    var draftText: String? {
+        draft
+    }
 
     mutating func updateDraft(_ value: String) {
         draft = value

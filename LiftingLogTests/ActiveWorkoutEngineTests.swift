@@ -472,27 +472,42 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         XCTAssertNil(set.completedAt)
     }
 
-    func testUpdatingWorkoutTitleAllowsEmptyDraftWhileEditing() throws {
-        let container = try SwiftDataTestSupport.makeInMemoryContainer()
-        let context = container.mainContext
-        let engine = ActiveWorkoutEngine()
-        let session = try engine.startBlankWorkout(context: context)
-
-        try engine.updateWorkoutTitle("", session: session, context: context)
-
-        XCTAssertEqual(session.title, "")
-    }
-
     func testFinalizingWorkoutTitleAppliesDefaultForBlankDraft() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
         let engine = ActiveWorkoutEngine()
         let session = try engine.startBlankWorkout(context: context)
-        try engine.updateWorkoutTitle("   ", session: session, context: context)
+        session.title = "   "
 
         try engine.finalizeWorkoutTitle(session, context: context)
 
         XCTAssertEqual(session.title, "Workout")
+    }
+
+    func testCommittingWorkoutTitleAppliesTrimmedTitleInOneSave() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let engine = ActiveWorkoutEngine()
+        let session = try engine.startBlankWorkout(context: context, now: Date(timeIntervalSince1970: 100))
+        let updatedAtBeforeCommit = session.updatedAt
+
+        try engine.commitWorkoutTitle("  Push Day  ", session: session, context: context)
+
+        XCTAssertEqual(session.title, "Push Day")
+        XCTAssertGreaterThan(session.updatedAt, updatedAtBeforeCommit)
+        XCTAssertFalse(context.hasChanges)
+    }
+
+    func testCommittingBlankWorkoutTitleFallsBackToDefault() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let engine = ActiveWorkoutEngine()
+        let session = try engine.startBlankWorkout(context: context)
+
+        try engine.commitWorkoutTitle("   ", session: session, context: context)
+
+        XCTAssertEqual(session.title, "Workout")
+        XCTAssertFalse(context.hasChanges)
     }
 
     func testFinishingMovesSessionOutOfActiveStateAndIntoHistory() throws {
@@ -500,7 +515,7 @@ final class ActiveWorkoutEngineTests: XCTestCase {
         let context = container.mainContext
         let engine = ActiveWorkoutEngine()
         let session = try engine.startBlankWorkout(context: context, now: Date(timeIntervalSince1970: 100))
-        try engine.updateWorkoutTitle("", session: session, context: context)
+        session.title = ""
 
         try engine.finishWorkout(session, context: context, now: Date(timeIntervalSince1970: 220))
 

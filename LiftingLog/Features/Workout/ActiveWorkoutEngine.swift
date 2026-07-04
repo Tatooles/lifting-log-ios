@@ -260,16 +260,18 @@ final class ActiveWorkoutEngine {
         try context.save()
     }
 
-    func updateWorkoutTitle(_ title: String, session: WorkoutSession, context: ModelContext) throws {
-        session.title = title
-        session.touch()
-        try context.save()
-    }
-
     func finalizeWorkoutTitle(_ session: WorkoutSession, context: ModelContext) throws {
         applyFinalWorkoutTitle(to: session)
         session.touch()
         try context.save()
+    }
+
+    /// Applies a draft title in a single commit. Text fields hold keystrokes in
+    /// view-local drafts and call this on focus loss; nothing in the workout
+    /// form may write + save per keystroke.
+    func commitWorkoutTitle(_ title: String, session: WorkoutSession, context: ModelContext) throws {
+        session.title = title
+        try finalizeWorkoutTitle(session, context: context)
     }
 
     func updateWorkoutNotes(_ notes: String, session: WorkoutSession, context: ModelContext) throws {
