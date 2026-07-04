@@ -95,6 +95,11 @@ targets:
           /usr/bin/plutil -insert Configuration -string "${CONFIGURATION}" "${metadata_path}"
     settings:
       base:
+        # The Write Build Source Metadata script reads .git and writes into the
+        # app bundle, neither of which user script sandboxing permits.
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        # dSYMs in Debug too, so Instruments can symbolicate profiling traces.
+        DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
         PRODUCT_NAME: LiftingLog
         PRODUCT_BUNDLE_IDENTIFIER: com.kevintatooles.LiftingLog.dev
         CODE_SIGN_ENTITLEMENTS: LiftingLog/LiftingLog.entitlements
