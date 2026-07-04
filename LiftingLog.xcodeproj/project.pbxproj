@@ -128,6 +128,7 @@
 		D6734D7425D9F70ACF365AD4 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFD611D025EF1E9C19B5F6B0 /* SettingsView.swift */; };
 		D85855E4C38E1E9A0B0A4067 /* WorkoutFocusNavigatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D41DF9D24F54196760629B7 /* WorkoutFocusNavigatorTests.swift */; };
 		D8F385412A10FBC50F1E253B /* SeedDataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F25C1CBC03FE371C7E528CCC /* SeedDataService.swift */; };
+		DACB1CCE6E7F3F4B76D1306E /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 3E06526A8964294D675C26DD /* AppIcon.icon */; };
 		DBA90A4A1D568C8CC4CAF4AF /* SyncConflictResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 893947730151ABA8C00DCFEF /* SyncConflictResolverTests.swift */; };
 		DECE9DCEC80F4E126DF7ABA4 /* ConvexConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 725ED241191390A7E4C1A6A1 /* ConvexConfiguration.swift */; };
 		E041A66B804ADDAC027E53F9 /* ExerciseCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = C49456C7E43AE7F75A3AC9FA /* ExerciseCategory.swift */; };
@@ -210,6 +211,7 @@
 		3CF412631A23A0921531136C /* ExerciseHistorySummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseHistorySummary.swift; sourceTree = "<group>"; };
 		3D2BF5923F4DD9880CF55687 /* AccountDeletionCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountDeletionCoordinatorTests.swift; sourceTree = "<group>"; };
 		3DB3484AD2211A8F31EC4FC1 /* LiftingLog.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LiftingLog.entitlements; sourceTree = "<group>"; };
+		3E06526A8964294D675C26DD /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		3F2C94F445734EFFD8A865F4 /* SyncFailureNoticePresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncFailureNoticePresentationTests.swift; sourceTree = "<group>"; };
 		440384EEC9EC6785B3D846A2 /* WorkoutExportFileWriterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutExportFileWriterTests.swift; sourceTree = "<group>"; };
 		45C4D9744D95F3023BC8AC26 /* SyncScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncScheduler.swift; sourceTree = "<group>"; };
@@ -383,6 +385,7 @@
 		40808DB2FCF33594546A0328 /* LiftingLog */ = {
 			isa = PBXGroup;
 			children = (
+				3E06526A8964294D675C26DD /* AppIcon.icon */,
 				D5788B8F028D630B08D1917A /* Assets.xcassets */,
 				16DA0E25F88D6F44862C43F7 /* Info.plist */,
 				3DB3484AD2211A8F31EC4FC1 /* LiftingLog.entitlements */,
@@ -779,6 +782,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DACB1CCE6E7F3F4B76D1306E /* AppIcon.icon in Resources */,
 				C9FE24E5C43C2ADDC754B5E0 /* Assets.xcassets in Resources */,
 				CDFC8CB5216B711BDB3443CC /* PrivacyInfo.xcprivacy in Resources */,
 			);
