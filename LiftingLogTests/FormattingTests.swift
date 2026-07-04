@@ -50,6 +50,16 @@ final class FormattingTests: XCTestCase {
         XCTAssertEqual(input.displayText(for: 8), "8.")
     }
 
+    func testDecimalWorkoutInputExposesPendingDraftText() {
+        var input = WorkoutNumberInputText()
+
+        XCTAssertNil(input.draftText)
+        input.updateDraft("8.5")
+        XCTAssertEqual(input.draftText, "8.5")
+        input.endEditing()
+        XCTAssertNil(input.draftText)
+    }
+
     func testDecimalWorkoutInputUsesFormattedModelValueAfterEditingEnds() {
         var input = WorkoutNumberInputText()
 

@@ -1082,6 +1082,186 @@ final class PreviousSetPerformanceTests: XCTestCase {
         XCTAssertEqual(previous.displayText(weightUnit: .pounds), "- × 8")
     }
 
+    func testCacheKeyIgnoresValueEditsAndCompletionInActiveSession() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
+        context.insert(exercise)
+        try insertCompletedSession(startedAt: Date(timeIntervalSince1970: 100), exercise: exercise, sets: [(135, 10)], in: context)
+
+        let active = WorkoutSession(title: "Today", startedAt: Date(timeIntervalSince1970: 200), status: .active, source: .blank)
+        let logged = LoggedExercise(orderIndex: 0, exercise: exercise)
+        let set = LoggedSet(orderIndex: 0)
+        logged.sets.append(set)
+        active.loggedExercises.append(logged)
+        context.insert(active)
+        context.insert(logged)
+        try context.save()
+
+        let sessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let before = PreviousSetPerformance.CacheKey(session: active, sessions: sessions, ownerTokenIdentifier: nil)
+
+        set.weight = 185
+        set.reps = 5
+        set.isCompleted = true
+        set.touch()
+        active.title = "Renamed Mid-Workout"
+
+        let after = PreviousSetPerformance.CacheKey(session: active, sessions: sessions, ownerTokenIdentifier: nil)
+        XCTAssertEqual(before, after)
+    }
+
+    func testCacheKeyChangesWhenActiveSetStructureChanges() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
+        context.insert(exercise)
+
+        let active = WorkoutSession(title: "Today", startedAt: Date(timeIntervalSince1970: 200), status: .active, source: .blank)
+        let logged = LoggedExercise(orderIndex: 0, exercise: exercise)
+        let firstSet = LoggedSet(orderIndex: 0)
+        let secondSet = LoggedSet(orderIndex: 1)
+        logged.sets.append(contentsOf: [firstSet, secondSet])
+        active.loggedExercises.append(logged)
+        context.insert(active)
+        context.insert(logged)
+        try context.save()
+
+        let sessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let original = PreviousSetPerformance.CacheKey(session: active, sessions: sessions, ownerTokenIdentifier: nil)
+
+        let addedSet = LoggedSet(orderIndex: 2)
+        logged.sets.append(addedSet)
+        context.insert(addedSet)
+        let afterAdd = PreviousSetPerformance.CacheKey(session: active, sessions: sessions, ownerTokenIdentifier: nil)
+        XCTAssertNotEqual(original, afterAdd)
+
+        addedSet.markDeleted()
+        let afterRemove = PreviousSetPerformance.CacheKey(session: active, sessions: sessions, ownerTokenIdentifier: nil)
+        XCTAssertEqual(original, afterRemove)
+
+        firstSet.orderIndex = 1
+        secondSet.orderIndex = 0
+        let afterReorder = PreviousSetPerformance.CacheKey(session: active, sessions: sessions, ownerTokenIdentifier: nil)
+        XCTAssertNotEqual(original, afterReorder)
+    }
+
+    func testCacheKeyChangesWhenExerciseListChanges() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let bench = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
+        let squat = Exercise(name: "Back Squat", category: .strength, equipment: .barbell, primaryMuscleGroup: .quads)
+        context.insert(bench)
+        context.insert(squat)
+
+        let active = WorkoutSession(title: "Today", startedAt: Date(timeIntervalSince1970: 200), status: .active, source: .blank)
+        let loggedBench = LoggedExercise(orderIndex: 0, exercise: bench)
+        active.loggedExercises.append(loggedBench)
+        context.insert(active)
+        context.insert(loggedBench)
+        try context.save()
+
+        let sessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let original = PreviousSetPerformance.CacheKey(session: active, sessions: sessions, ownerTokenIdentifier: nil)
+
+        let loggedSquat = LoggedExercise(orderIndex: 1, exercise: squat)
+        active.loggedExercises.append(loggedSquat)
+        context.insert(loggedSquat)
+        let afterAdd = PreviousSetPerformance.CacheKey(session: active, sessions: sessions, ownerTokenIdentifier: nil)
+        XCTAssertNotEqual(original, afterAdd)
+
+        loggedSquat.markDeleted()
+        let afterRemove = PreviousSetPerformance.CacheKey(session: active, sessions: sessions, ownerTokenIdentifier: nil)
+        XCTAssertEqual(original, afterRemove)
+    }
+
+    func testCacheKeyChangesWhenSyncCompletes() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
+        context.insert(exercise)
+
+        let active = WorkoutSession(title: "Today", startedAt: Date(timeIntervalSince1970: 200), status: .active, source: .blank)
+        let logged = LoggedExercise(orderIndex: 0, exercise: exercise)
+        active.loggedExercises.append(logged)
+        context.insert(active)
+        context.insert(logged)
+        try context.save()
+
+        let sessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let beforeSync = PreviousSetPerformance.CacheKey(
+            session: active, sessions: sessions, ownerTokenIdentifier: nil, lastSyncedAt: nil
+        )
+        // Sync applies remote child-record edits without bumping the parent
+        // session's updatedAt, so a completed sync must invalidate on its own.
+        let afterSync = PreviousSetPerformance.CacheKey(
+            session: active, sessions: sessions, ownerTokenIdentifier: nil, lastSyncedAt: Date(timeIntervalSince1970: 300)
+        )
+        XCTAssertNotEqual(beforeSync, afterSync)
+    }
+
+    func testCacheKeyChangesWhenCompletedHistoryChanges() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
+        context.insert(exercise)
+        try insertCompletedSession(startedAt: Date(timeIntervalSince1970: 100), exercise: exercise, sets: [(135, 10)], in: context)
+
+        let active = WorkoutSession(title: "Today", startedAt: Date(timeIntervalSince1970: 200), status: .active, source: .blank)
+        let logged = LoggedExercise(orderIndex: 0, exercise: exercise)
+        active.loggedExercises.append(logged)
+        context.insert(active)
+        context.insert(logged)
+        try context.save()
+
+        var sessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let original = PreviousSetPerformance.CacheKey(session: active, sessions: sessions, ownerTokenIdentifier: nil)
+
+        try insertCompletedSession(startedAt: Date(timeIntervalSince1970: 150), exercise: exercise, sets: [(155, 8)], in: context)
+        sessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let afterNewSession = PreviousSetPerformance.CacheKey(session: active, sessions: sessions, ownerTokenIdentifier: nil)
+        XCTAssertNotEqual(original, afterNewSession)
+
+        let editBaseline = afterNewSession
+        let completed = sessions.first { $0.status == .completed }
+        // Real edits touch with .now, which always advances past creation times.
+        completed?.touch(now: Date(timeIntervalSinceNow: 60))
+        let afterHistoryEdit = PreviousSetPerformance.CacheKey(session: active, sessions: sessions, ownerTokenIdentifier: nil)
+        XCTAssertNotEqual(editBaseline, afterHistoryEdit)
+    }
+
+    func testCacheKeyChangesWhenCompletedHistorySetIsEditedThroughSaveService() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
+        context.insert(exercise)
+        try insertCompletedSession(startedAt: Date(timeIntervalSince1970: 100), exercise: exercise, sets: [(135, 10)], in: context)
+
+        let active = WorkoutSession(title: "Today", startedAt: Date(timeIntervalSince1970: 200), status: .active, source: .blank)
+        let logged = LoggedExercise(orderIndex: 0, exercise: exercise)
+        active.loggedExercises.append(logged)
+        context.insert(active)
+        context.insert(logged)
+        try context.save()
+
+        var sessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let original = PreviousSetPerformance.CacheKey(session: active, sessions: sessions, ownerTokenIdentifier: nil)
+        let completed = try XCTUnwrap(sessions.first { $0.status == .completed })
+        var draft = CompletedWorkoutEditDraft(session: completed)
+        draft.exercises[0].sets[0].weight = 145
+
+        try WorkoutHistoryMutationService().saveCompletedWorkoutEdit(
+            draft,
+            for: completed,
+            context: context,
+            now: Date(timeIntervalSince1970: 300)
+        )
+
+        sessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let afterHistorySetEdit = PreviousSetPerformance.CacheKey(session: active, sessions: sessions, ownerTokenIdentifier: nil)
+        XCTAssertNotEqual(original, afterHistorySetEdit)
+    }
+
     private func insertCompletedSession(
         startedAt: Date,
         exercise: Exercise,

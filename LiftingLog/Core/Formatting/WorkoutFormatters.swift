@@ -21,15 +21,32 @@ enum WorkoutFormatters {
         date.formatted(.dateTime.month(.abbreviated).day().year())
     }
 
+    // NumberFormatter allocation is expensive and number(_:) runs for every set
+    // row on every workout-form render, so both variants are cached. Main-thread
+    // use only: NumberFormatter is not thread-safe.
+    private static let wholeNumberFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = false
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 0
+        return formatter
+    }()
+
+    private static let fractionalNumberFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = true
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        return formatter
+    }()
+
     static func number(_ value: Double) -> String {
         guard value.isFinite else { return "-" }
         let isWholeNumber = value.rounded() == value
 
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.usesGroupingSeparator = !isWholeNumber
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = isWholeNumber ? 0 : 2
+        let formatter = isWholeNumber ? wholeNumberFormatter : fractionalNumberFormatter
         return formatter.string(from: NSNumber(value: value)) ?? String(value)
     }
 

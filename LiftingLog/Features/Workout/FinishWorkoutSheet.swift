@@ -9,6 +9,8 @@ struct FinishWorkoutSheet: View {
     @Bindable var engine: ActiveWorkoutEngine
     @State private var showsDiscardConfirmation = false
     @State private var actionError: WorkoutActionError?
+    @State private var titleDraft: String?
+    @State private var isDiscardingWorkout = false
     @FocusState private var focusedField: FinishWorkoutFocusedField?
     @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
 
@@ -68,6 +70,7 @@ struct FinishWorkoutSheet: View {
 
             Button {
                 focusedField = nil
+                commitWorkoutTitle()
                 do {
                     try engine.finishWorkout(
                         session,
@@ -91,7 +94,7 @@ struct FinishWorkoutSheet: View {
             .accessibilityIdentifier("SaveWorkoutButton")
 
             Button("Keep Going") {
-                finalizeWorkoutTitle()
+                commitWorkoutTitle()
                 dismiss()
             }
             .font(.callout.weight(.medium))
@@ -122,16 +125,22 @@ struct FinishWorkoutSheet: View {
         }
         .onChange(of: focusedField) { previousField, newField in
             if previousField == .title, newField != .title {
-                finalizeWorkoutTitle()
+                commitWorkoutTitle()
             }
+        }
+        .onDisappear {
+            guard !isDiscardingWorkout else { return }
+            commitWorkoutTitle()
         }
         .alert("Discard Workout?", isPresented: $showsDiscardConfirmation) {
             Button("Discard", role: .destructive) {
                 do {
+                    isDiscardingWorkout = true
                     try engine.discardWorkout(session, context: modelContext)
                     actionError = nil
                     dismiss()
                 } catch {
+                    isDiscardingWorkout = false
                     actionError = WorkoutActionError(title: "Couldn't Discard Workout", message: error.localizedDescription)
                 }
             }
@@ -148,21 +157,26 @@ struct FinishWorkoutSheet: View {
         }
     }
 
+    // Keystrokes stage in a view-local draft and commit in one save on focus
+    // loss or when leaving the sheet; never per keystroke.
     private var workoutTitleBinding: Binding<String> {
         Binding(
-            get: { session.title },
-            set: { newValue in
-                try? engine.updateWorkoutTitle(newValue, session: session, context: modelContext)
-            }
+            get: { titleDraft ?? session.title },
+            set: { titleDraft = $0 }
         )
     }
 
     private var showsDefaultTitleHint: Bool {
-        session.title.trimmingCharacters(in: .whitespacesAndNewlines) == "Workout"
+        (titleDraft ?? session.title).trimmingCharacters(in: .whitespacesAndNewlines) == "Workout"
     }
 
-    private func finalizeWorkoutTitle() {
-        try? engine.finalizeWorkoutTitle(session, context: modelContext)
+    private func commitWorkoutTitle() {
+        // The commit-then-clear-focus buttons also retrigger this through the
+        // focus onChange; the guard makes the second pass (and untouched
+        // dismissals) a no-op instead of a redundant save.
+        guard let titleDraft else { return }
+        try? engine.commitWorkoutTitle(titleDraft, session: session, context: modelContext)
+        self.titleDraft = nil
     }
 
     private struct WorkoutActionError: Identifiable {

@@ -191,4 +191,57 @@ struct PreviousSetPerformance: Equatable {
     private static func makePerformance(from set: LoggedSet) -> PreviousSetPerformance {
         PreviousSetPerformance(weight: set.weight, reps: set.reps)
     }
+
+    /// Captures everything the previous-set lookup depends on, so callers can
+    /// cache the (history-scanning) lookup and recompute only when this key
+    /// changes. Deliberately ignores in-progress value edits on the active
+    /// session — weight/reps/RPE/completion typing must not invalidate the
+    /// cache — while structural edits (rows, exercises, ordering, source
+    /// links) and any change to completed history do.
+    struct CacheKey: Equatable {
+        private struct ExerciseEntry: Equatable {
+            let id: UUID
+            let routeID: String
+            let sourceLoggedExerciseID: UUID?
+            let setIDs: [UUID]
+        }
+
+        private let sessionID: UUID
+        private let sourceSessionID: UUID?
+        private let ownerTokenIdentifier: String?
+        private let exerciseEntries: [ExerciseEntry]
+        private let completedSessionCount: Int
+        private let latestCompletedUpdatedAt: Date?
+        // Sync applies remote set/exercise records without cascading touch()
+        // to the parent session, so session updatedAt alone would miss those
+        // edits; a completed sync must invalidate the cache by itself.
+        private let lastSyncedAt: Date?
+
+        init(
+            session: WorkoutSession,
+            sessions: [WorkoutSession],
+            ownerTokenIdentifier: String?,
+            lastSyncedAt: Date? = nil
+        ) {
+            self.lastSyncedAt = lastSyncedAt
+            sessionID = session.id
+            sourceSessionID = session.source == .pastWorkout ? session.sourceSessionID : nil
+            self.ownerTokenIdentifier = ownerTokenIdentifier
+            exerciseEntries = session.sortedLoggedExercises.map { loggedExercise in
+                ExerciseEntry(
+                    id: loggedExercise.id,
+                    routeID: ExerciseHistoryRoute(loggedExercise: loggedExercise).id,
+                    sourceLoggedExerciseID: loggedExercise.sourceLoggedExerciseID,
+                    setIDs: loggedExercise.sortedSets.map(\.id)
+                )
+            }
+
+            let completedSessions = WorkoutSession.visibleCompletedSessions(
+                from: sessions,
+                ownerTokenIdentifier: ownerTokenIdentifier
+            )
+            completedSessionCount = completedSessions.count
+            latestCompletedUpdatedAt = completedSessions.map(\.updatedAt).max()
+        }
+    }
 }
