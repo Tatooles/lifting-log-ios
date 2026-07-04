@@ -1230,6 +1230,38 @@ final class PreviousSetPerformanceTests: XCTestCase {
         XCTAssertNotEqual(editBaseline, afterHistoryEdit)
     }
 
+    func testCacheKeyChangesWhenCompletedHistorySetIsEditedThroughSaveService() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
+        context.insert(exercise)
+        try insertCompletedSession(startedAt: Date(timeIntervalSince1970: 100), exercise: exercise, sets: [(135, 10)], in: context)
+
+        let active = WorkoutSession(title: "Today", startedAt: Date(timeIntervalSince1970: 200), status: .active, source: .blank)
+        let logged = LoggedExercise(orderIndex: 0, exercise: exercise)
+        active.loggedExercises.append(logged)
+        context.insert(active)
+        context.insert(logged)
+        try context.save()
+
+        var sessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let original = PreviousSetPerformance.CacheKey(session: active, sessions: sessions, ownerTokenIdentifier: nil)
+        let completed = try XCTUnwrap(sessions.first { $0.status == .completed })
+        var draft = CompletedWorkoutEditDraft(session: completed)
+        draft.exercises[0].sets[0].weight = 145
+
+        try WorkoutHistoryMutationService().saveCompletedWorkoutEdit(
+            draft,
+            for: completed,
+            context: context,
+            now: Date(timeIntervalSince1970: 300)
+        )
+
+        sessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let afterHistorySetEdit = PreviousSetPerformance.CacheKey(session: active, sessions: sessions, ownerTokenIdentifier: nil)
+        XCTAssertNotEqual(original, afterHistorySetEdit)
+    }
+
     private func insertCompletedSession(
         startedAt: Date,
         exercise: Exercise,

@@ -911,7 +911,7 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         XCTAssertNil(set.completedAt)
         XCTAssertEqual(set.notes, "Corrected set")
         XCTAssertEqual(set.updatedAt, editTime)
-        XCTAssertEqual(session.updatedAt, Date(timeIntervalSince1970: 100))
+        XCTAssertEqual(session.updatedAt, editTime)
         XCTAssertEqual(entries.count, 4)
         assertEntry(entries, kind: .workoutSession, id: session.id, operation: .create)
         assertEntry(entries, kind: .loggedExercise, id: loggedExercise.id, operation: .create)
@@ -920,7 +920,7 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         }
     }
 
-    func testEditingOwnedCompletedWorkoutSetRecordsOnlySetUpdate() throws {
+    func testEditingOwnedCompletedWorkoutSetRecordsSetAndSessionUpdates() throws {
         let owner = "issuer|owner_a"
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
@@ -944,7 +944,9 @@ final class SyncOutboxIntegrationTests: XCTestCase {
         XCTAssertEqual(session.syncOwnerTokenIdentifier, owner)
         XCTAssertEqual(set.weight, 225)
         XCTAssertEqual(set.updatedAt, editTime)
-        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(session.updatedAt, editTime)
+        XCTAssertEqual(entries.count, 2)
+        assertEntry(entries, kind: .workoutSession, id: session.id, operation: .update)
         assertEntry(entries, kind: .loggedSet, id: set.id, operation: .update)
     }
 

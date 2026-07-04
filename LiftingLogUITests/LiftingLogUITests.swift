@@ -66,6 +66,31 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
+    func testFinishWorkoutSheetCommitsTitleWhenDismissedInteractively() {
+        let app = makeApp()
+        app.launch()
+
+        app.buttons["StartBlankWorkoutButton"].tap()
+        XCTAssertTrue(app.textFields["WorkoutTitle"].waitForExistence(timeout: 3))
+
+        openFinishWorkoutSheet(in: app)
+        let finishTitleField = app.textFields["FinishWorkoutTitleField"]
+        XCTAssertTrue(finishTitleField.waitForExistence(timeout: 3))
+        replaceText(in: finishTitleField, with: "Dismissed Push")
+
+        let sheetTitle = app.staticTexts["Finish Workout?"]
+        XCTAssertTrue(sheetTitle.waitForExistence(timeout: 3))
+        let start = sheetTitle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95))
+        start.press(forDuration: 0.1, thenDragTo: end)
+
+        XCTAssertFalse(app.buttons["KeepGoingButton"].waitForExistence(timeout: 2))
+        let activeTitleField = app.textFields["WorkoutTitle"]
+        XCTAssertTrue(activeTitleField.waitForExistence(timeout: 3))
+        XCTAssertEqual(activeTitleField.value as? String, "Dismissed Push")
+    }
+
+    @MainActor
     func testFinishWorkoutSheetNormalizesBlankTitleBeforeKeepGoing() {
         let app = makeApp()
         app.launch()

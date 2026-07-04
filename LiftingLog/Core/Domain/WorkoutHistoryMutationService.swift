@@ -142,6 +142,7 @@ struct WorkoutHistoryMutationService {
 
         var didChange = false
         var didChangeSessionFields = false
+        var didChangeChildRecords = false
         let shouldRecordOwnerlessOutbox = try shouldRecordOwnerlessOutbox(
             for: session,
             ownerTokenIdentifier: ownerTokenIdentifier,
@@ -231,6 +232,7 @@ struct WorkoutHistoryMutationService {
                         now: now
                     )
                     didChange = true
+                    didChangeChildRecords = true
                 } else if hasChanges(setDraft, for: set) {
                     try claimOwnerlessWorkoutGraphIfNeeded(
                         session,
@@ -248,6 +250,7 @@ struct WorkoutHistoryMutationService {
                         now: now
                     )
                     didChange = true
+                    didChangeChildRecords = true
                 }
             }
 
@@ -266,6 +269,7 @@ struct WorkoutHistoryMutationService {
                     now: now
                 )
                 didChange = true
+                didChangeChildRecords = true
             }
 
             let newSetDrafts = exerciseDraft.sets.filter { $0.id == nil && !$0.isRemoved && !isEmptyNewSet($0) }
@@ -301,7 +305,20 @@ struct WorkoutHistoryMutationService {
                     now: now
                 )
                 didChange = true
+                didChangeChildRecords = true
             }
+        }
+
+        if didChangeChildRecords && !didChangeSessionFields {
+            session.updatedAt = now
+            try recordUpdateIfNeeded(
+                entityKind: .workoutSession,
+                entityID: session.id,
+                ownerTokenIdentifier: ownerTokenIdentifier,
+                shouldRecordOwnerlessOutbox: shouldRecordOwnerlessOutbox,
+                context: context,
+                now: now
+            )
         }
 
         guard didChange else { return }

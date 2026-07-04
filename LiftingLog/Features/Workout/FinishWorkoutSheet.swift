@@ -10,6 +10,7 @@ struct FinishWorkoutSheet: View {
     @State private var showsDiscardConfirmation = false
     @State private var actionError: WorkoutActionError?
     @State private var titleDraft: String?
+    @State private var isDiscardingWorkout = false
     @FocusState private var focusedField: FinishWorkoutFocusedField?
     @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
 
@@ -127,13 +128,19 @@ struct FinishWorkoutSheet: View {
                 commitWorkoutTitle()
             }
         }
+        .onDisappear {
+            guard !isDiscardingWorkout else { return }
+            commitWorkoutTitle()
+        }
         .alert("Discard Workout?", isPresented: $showsDiscardConfirmation) {
             Button("Discard", role: .destructive) {
                 do {
+                    isDiscardingWorkout = true
                     try engine.discardWorkout(session, context: modelContext)
                     actionError = nil
                     dismiss()
                 } catch {
+                    isDiscardingWorkout = false
                     actionError = WorkoutActionError(title: "Couldn't Discard Workout", message: error.localizedDescription)
                 }
             }
