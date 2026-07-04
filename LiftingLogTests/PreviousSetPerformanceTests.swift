@@ -1175,6 +1175,31 @@ final class PreviousSetPerformanceTests: XCTestCase {
         XCTAssertEqual(original, afterRemove)
     }
 
+    func testCacheKeyChangesWhenSyncCompletes() throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        let exercise = Exercise(name: "Bench Press", category: .strength, equipment: .barbell, primaryMuscleGroup: .chest)
+        context.insert(exercise)
+
+        let active = WorkoutSession(title: "Today", startedAt: Date(timeIntervalSince1970: 200), status: .active, source: .blank)
+        let logged = LoggedExercise(orderIndex: 0, exercise: exercise)
+        active.loggedExercises.append(logged)
+        context.insert(active)
+        context.insert(logged)
+        try context.save()
+
+        let sessions = try context.fetch(FetchDescriptor<WorkoutSession>())
+        let beforeSync = PreviousSetPerformance.CacheKey(
+            session: active, sessions: sessions, ownerTokenIdentifier: nil, lastSyncedAt: nil
+        )
+        // Sync applies remote child-record edits without bumping the parent
+        // session's updatedAt, so a completed sync must invalidate on its own.
+        let afterSync = PreviousSetPerformance.CacheKey(
+            session: active, sessions: sessions, ownerTokenIdentifier: nil, lastSyncedAt: Date(timeIntervalSince1970: 300)
+        )
+        XCTAssertNotEqual(beforeSync, afterSync)
+    }
+
     func testCacheKeyChangesWhenCompletedHistoryChanges() throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext

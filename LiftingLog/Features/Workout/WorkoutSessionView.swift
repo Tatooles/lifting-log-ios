@@ -291,7 +291,8 @@ struct WorkoutSessionView: View {
         PreviousSetPerformance.CacheKey(
             session: session,
             sessions: sessions,
-            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier
+            ownerTokenIdentifier: syncScheduler.currentOwnerTokenIdentifier,
+            lastSyncedAt: syncScheduler.lastSyncedAt
         )
     }
 
@@ -385,10 +386,20 @@ private struct WorkoutTitleDraftField: View {
         )
         .onChange(of: focusedField.wrappedValue) { previousField, newField in
             if previousField == .workoutTitle, newField != .workoutTitle {
-                commit(draft ?? title)
-                draft = nil
+                commitIfNeeded()
             }
         }
+        .onDisappear {
+            // The view can leave the tree mid-edit (tab switch, active session
+            // replaced); the focus-change commit no longer fires then.
+            commitIfNeeded()
+        }
+    }
+
+    private func commitIfNeeded() {
+        guard let draft else { return }
+        commit(draft)
+        self.draft = nil
     }
 }
 
@@ -452,12 +463,20 @@ private struct WorkoutNotesDraftCard: View {
         }
         .onChange(of: focusedField.wrappedValue) { previousField, newField in
             if previousField == .workoutNotes, newField != .workoutNotes {
-                if let draft {
-                    commit(draft)
-                }
-                draft = nil
+                commitIfNeeded()
             }
         }
+        .onDisappear {
+            // The view can leave the tree mid-edit (tab switch, active session
+            // replaced); the focus-change commit no longer fires then.
+            commitIfNeeded()
+        }
+    }
+
+    private func commitIfNeeded() {
+        guard let draft else { return }
+        commit(draft)
+        self.draft = nil
     }
 }
 

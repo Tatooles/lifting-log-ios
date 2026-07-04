@@ -164,8 +164,12 @@ struct FinishWorkoutSheet: View {
     }
 
     private func commitWorkoutTitle() {
-        try? engine.commitWorkoutTitle(titleDraft ?? session.title, session: session, context: modelContext)
-        titleDraft = nil
+        // The commit-then-clear-focus buttons also retrigger this through the
+        // focus onChange; the guard makes the second pass (and untouched
+        // dismissals) a no-op instead of a redundant save.
+        guard let titleDraft else { return }
+        try? engine.commitWorkoutTitle(titleDraft, session: session, context: modelContext)
+        self.titleDraft = nil
     }
 
     private struct WorkoutActionError: Identifiable {

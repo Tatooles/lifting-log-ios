@@ -212,8 +212,18 @@ struct PreviousSetPerformance: Equatable {
         private let exerciseEntries: [ExerciseEntry]
         private let completedSessionCount: Int
         private let latestCompletedUpdatedAt: Date?
+        // Sync applies remote set/exercise records without cascading touch()
+        // to the parent session, so session updatedAt alone would miss those
+        // edits; a completed sync must invalidate the cache by itself.
+        private let lastSyncedAt: Date?
 
-        init(session: WorkoutSession, sessions: [WorkoutSession], ownerTokenIdentifier: String?) {
+        init(
+            session: WorkoutSession,
+            sessions: [WorkoutSession],
+            ownerTokenIdentifier: String?,
+            lastSyncedAt: Date? = nil
+        ) {
+            self.lastSyncedAt = lastSyncedAt
             sessionID = session.id
             sourceSessionID = session.source == .pastWorkout ? session.sourceSessionID : nil
             self.ownerTokenIdentifier = ownerTokenIdentifier
