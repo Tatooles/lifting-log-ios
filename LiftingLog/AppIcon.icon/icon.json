@@ -1,0 +1,95 @@
+{
+  "fill" : {
+    "linear-gradient" : [
+      "display-p3:0.09058,0.09442,0.10217,1.00000",
+      "display-p3:0.05258,0.05634,0.06384,1.00000"
+    ],
+    "orientation" : {
+      "start" : {
+        "x" : 0.5,
+        "y" : 0
+      },
+      "stop" : {
+        "x" : 0.5,
+        "y" : 0.7
+      }
+    }
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "image-name" : "dumbbell.svg",
+          "name" : "dumbbell",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              35
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    },
+    {
+      "layers" : [
+        {
+          "image-name" : "log-dots.svg",
+          "name" : "log-dots",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              35
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    },
+    {
+      "layers" : [
+        {
+          "image-name" : "log-lines.svg",
+          "name" : "log-lines",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              35
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}
