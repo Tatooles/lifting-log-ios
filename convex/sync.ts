@@ -77,13 +77,13 @@ const accountDeletionTableValidator = v.union(
   v.literal("userSettings"),
 );
 
-const accountDeletionTableOrder: AccountDeletionTable[] = [
+const accountDeletionTableOrder = [
   "loggedSets",
   "loggedExercises",
   "workoutSessions",
   "exercises",
   "userSettings",
-];
+] as const satisfies readonly AccountDeletionTable[];
 
 type AccountDataDeletionTableBatchResult = {
   tableName: AccountDeletionTable;
@@ -400,7 +400,7 @@ async function nextServerUpdatedAt(
 }
 
 async function accountDeletionMarkerForOwner(
-  ctx: MutationCtx,
+  ctx: QueryCtx,
   ownerTokenIdentifier: string,
 ): Promise<Doc<"accountDeletionMarkers"> | null> {
   const markers = await ctx.db
@@ -506,52 +506,18 @@ async function ownerHasAccountData(
   ctx: MutationCtx,
   ownerTokenIdentifier: string,
 ): Promise<boolean> {
-  const [
-    userSettings,
-    exercises,
-    workoutSessions,
-    loggedExercises,
-    loggedSets,
-  ] = await Promise.all([
-    ctx.db
-      .query("userSettings")
-      .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
-        q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
-      )
-      .take(1),
-    ctx.db
-      .query("exercises")
-      .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
-        q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
-      )
-      .take(1),
-    ctx.db
-      .query("workoutSessions")
-      .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
-        q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
-      )
-      .take(1),
-    ctx.db
-      .query("loggedExercises")
-      .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
-        q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
-      )
-      .take(1),
-    ctx.db
-      .query("loggedSets")
-      .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
-        q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
-      )
-      .take(1),
-  ]);
+  const results = await Promise.all(
+    accountDeletionTableOrder.map((tableName) =>
+      ctx.db
+        .query(tableName)
+        .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
+          q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
+        )
+        .take(1),
+    ),
+  );
 
-  return [
-    userSettings,
-    exercises,
-    workoutSessions,
-    loggedExercises,
-    loggedSets,
-  ].some((records) => records.length > 0);
+  return results.some((records) => records.length > 0);
 }
 
 async function resolveExpiredAccountDeletionMarker(
