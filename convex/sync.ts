@@ -1394,14 +1394,37 @@ export const clearExpiredAccountDeletionMarkers = internalMutation({
     // Privacy backstop: markers whose cloud wipe finished long ago can never be
     // cancelled once the Clerk account is gone, so purge them instead of
     // retaining ownerTokenIdentifier forever.
-    const purgeCandidates = await ctx.db
+    const completedAtPurgeCandidates = await ctx.db
+      .query("accountDeletionMarkers")
+      .withIndex("by_phaseRaw_and_cloudDataDeletedAt", (q) =>
+        q
+          .eq("phaseRaw", "cloudDataDeleted")
+          .gt("cloudDataDeletedAt", 0)
+          .lt("cloudDataDeletedAt", purgeBefore),
+      )
+      .take(accountDeletionMarkerCleanupBatchSize + 1);
+    hasMore =
+      hasMore || completedAtPurgeCandidates.length > accountDeletionMarkerCleanupBatchSize;
+    for (const marker of completedAtPurgeCandidates.slice(
+      0,
+      accountDeletionMarkerCleanupBatchSize,
+    )) {
+      await ctx.db.delete(marker._id);
+      deletedCount += 1;
+    }
+
+    const createdAtPurgeCandidates = await ctx.db
       .query("accountDeletionMarkers")
       .withIndex("by_phaseRaw_and_createdAt", (q) =>
         q.eq("phaseRaw", "cloudDataDeleted").lt("createdAt", purgeBefore),
       )
       .take(accountDeletionMarkerCleanupBatchSize + 1);
-    hasMore = hasMore || purgeCandidates.length > accountDeletionMarkerCleanupBatchSize;
-    for (const marker of purgeCandidates.slice(0, accountDeletionMarkerCleanupBatchSize)) {
+    hasMore =
+      hasMore || createdAtPurgeCandidates.length > accountDeletionMarkerCleanupBatchSize;
+    for (const marker of createdAtPurgeCandidates.slice(
+      0,
+      accountDeletionMarkerCleanupBatchSize,
+    )) {
       const purgeEligibleAt = marker.cloudDataDeletedAt ?? marker.createdAt;
       if (purgeEligibleAt >= purgeBefore) {
         if (

@@ -994,6 +994,28 @@ describe("account data deletion", () => {
     await expect(accountDeletionMarkersForOwner(t, userB)).resolves.toEqual([]);
   });
 
+  test("clearExpiredAccountDeletionMarkers finds old post-wipe markers by cloud deletion time", async () => {
+    const t = testDb();
+    await t.run(async (ctx) => {
+      await ctx.db.insert("accountDeletionMarkers", {
+        ownerTokenIdentifier: userA.tokenIdentifier,
+        cancellationToken: "old-completed-token",
+        createdAt: 5_000,
+        phaseRaw: "cloudDataDeleted",
+        cloudDataDeletedAt: 1_000,
+      });
+    });
+
+    await expect(
+      t.mutation(internal.sync.clearExpiredAccountDeletionMarkers, {
+        expiresBefore: 0,
+        purgeBefore: 2_000,
+      }),
+    ).resolves.toEqual({ deletedCount: 1, hasMore: false });
+
+    await expect(accountDeletionMarkersForOwner(t, userA)).resolves.toEqual([]);
+  });
+
   test("clearExpiredAccountDeletionMarkers advances past fresh post-wipe markers", async () => {
     const t = testDb();
     await t.run(async (ctx) => {

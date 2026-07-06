@@ -29,7 +29,11 @@ export default defineSchema({
     cloudDataDeletedAt: v.optional(v.number()),
   })
     .index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"])
-    .index("by_phaseRaw_and_createdAt", ["phaseRaw", "createdAt"]),
+    .index("by_phaseRaw_and_createdAt", ["phaseRaw", "createdAt"])
+    .index("by_phaseRaw_and_cloudDataDeletedAt", [
+      "phaseRaw",
+      "cloudDataDeletedAt",
+    ]),
 
   userSettings: defineTable({
     ...syncFields,
