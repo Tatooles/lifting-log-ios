@@ -806,6 +806,34 @@ describe("account data deletion", () => {
     ]);
   });
 
+  test("resuming an expired partial deletion keeps the destructive phase", async () => {
+    const t = testDb();
+    await seedAccountDeletionMarker(t, userA, "lost-device-token", 1_000, "deleting");
+
+    await t.mutation(internal.sync.startAccountDeletion, {
+      ownerTokenIdentifier: userA.tokenIdentifier,
+      cancellationToken: "fresh-install-token",
+    });
+
+    await expect(accountDeletionMarkersForOwner(t, userA)).resolves.toMatchObject([
+      {
+        cancellationToken: "fresh-install-token",
+        phaseRaw: "deleting",
+      },
+    ]);
+  });
+
+  test("cancelAccountDeletion rejects a new token for an expired partial marker", async () => {
+    const t = testDb();
+    await seedAccountDeletionMarker(t, userA, "lost-device-token", 1_000, "deleting");
+
+    await expect(
+      t.withIdentity(userA).action(api.sync.cancelAccountDeletion, {
+        cancellationToken: "fresh-install-token",
+      }),
+    ).rejects.toThrow("Account deletion is already in progress on another client");
+  });
+
   test("startAccountDeletion rejects a different token for an active started marker", async () => {
     const t = testDb();
     await seedAccountDeletionMarker(t, userA, "device-a");

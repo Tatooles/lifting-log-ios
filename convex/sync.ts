@@ -440,29 +440,28 @@ async function markAccountDeletionStarted(
   cancellationToken: string,
 ): Promise<void> {
   const existing = await accountDeletionMarkerForOwner(ctx, ownerTokenIdentifier);
-  if (existing !== null) {
-    if (existing.phaseRaw !== "cloudDataDeleted") {
-      if (
-        !accountDeletionMarkerExpired(existing) &&
-        existing.cancellationToken !== cancellationToken
-      ) {
-        throw new Error("Account deletion is already in progress on another client");
-      }
-
-      await ctx.db.patch(existing._id, {
-        cancellationToken,
-        createdAt: Date.now(),
-        phaseRaw: "started",
-      });
-    }
+  if (existing === null) {
+    await ctx.db.insert("accountDeletionMarkers", {
+      ownerTokenIdentifier,
+      cancellationToken,
+      createdAt: Date.now(),
+      phaseRaw: "started",
+    });
     return;
   }
 
-  await ctx.db.insert("accountDeletionMarkers", {
-    ownerTokenIdentifier,
+  if (existing.phaseRaw === "cloudDataDeleted") {
+    return;
+  }
+
+  if (!canTakeOverAccountDeletionMarker(existing, cancellationToken)) {
+    throw new Error("Account deletion is already in progress on another client");
+  }
+
+  await ctx.db.patch(existing._id, {
     cancellationToken,
     createdAt: Date.now(),
-    phaseRaw: "started",
+    phaseRaw: existing.phaseRaw === "started" ? "started" : "deleting",
   });
 }
 
@@ -470,6 +469,16 @@ function accountDeletionMarkerExpired(
   marker: Pick<Doc<"accountDeletionMarkers">, "createdAt">,
 ): boolean {
   return marker.createdAt < Date.now() - accountDeletionMarkerExpiryMs;
+}
+
+function canTakeOverAccountDeletionMarker(
+  marker: Doc<"accountDeletionMarkers">,
+  cancellationToken: string,
+): boolean {
+  return (
+    marker.cancellationToken === cancellationToken ||
+    accountDeletionMarkerExpired(marker)
+  );
 }
 
 async function markAccountDeletionCloudDataDeleted(
@@ -511,11 +520,11 @@ async function clearAccountDeletionMarker(
     return;
   }
 
-  if (
-    existing.phaseRaw !== "cloudDataDeleted" &&
-    !accountDeletionMarkerExpired(existing) &&
-    existing.cancellationToken !== cancellationToken
-  ) {
+  const ownerRecoverable =
+    existing.phaseRaw === "cloudDataDeleted" ||
+    (existing.phaseRaw === "started" && accountDeletionMarkerExpired(existing));
+
+  if (existing.cancellationToken !== cancellationToken && !ownerRecoverable) {
     throw new Error("Account deletion is already in progress on another client");
   }
 
