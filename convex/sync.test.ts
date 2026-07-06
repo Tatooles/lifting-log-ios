@@ -996,6 +996,40 @@ describe("account data deletion", () => {
     }
   });
 
+  test("server-side recovery ages post-wipe purge from completion time", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+      const t = testDb();
+      await seedFullSyncGraphForOwner(t, userA, "A");
+      await seedAccountDeletionMarker(t, userA, "old-partial-token", 1_000, "deleting");
+
+      await expect(
+        t.mutation(internal.sync.clearExpiredAccountDeletionMarkers, {
+          expiresBefore: 1_500,
+          purgeBefore: 2_000,
+        }),
+      ).resolves.toEqual({ deletedCount: 0, hasMore: false });
+
+      await t.finishAllScheduledFunctions(vi.runAllTimers);
+      await expect(accountDeletionMarkersForOwner(t, userA)).resolves.toMatchObject([
+        { phaseRaw: "cloudDataDeleted", cancellationToken: "old-partial-token" },
+      ]);
+
+      await expect(
+        t.mutation(internal.sync.clearExpiredAccountDeletionMarkers, {
+          expiresBefore: 0,
+          purgeBefore: 2_000,
+        }),
+      ).resolves.toEqual({ deletedCount: 0, hasMore: false });
+      await expect(accountDeletionMarkersForOwner(t, userA)).resolves.toMatchObject([
+        { phaseRaw: "cloudDataDeleted", cancellationToken: "old-partial-token" },
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("clearExpiredAccountDeletionMarkers self-reschedules through a backlog", async () => {
     vi.useFakeTimers();
     try {

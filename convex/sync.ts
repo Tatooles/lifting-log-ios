@@ -547,9 +547,11 @@ async function resolveExpiredAccountDeletionMarker(
     return false;
   }
 
+  const completedAt = Date.now();
   await ctx.db.patch(marker._id, {
     phaseRaw: "cloudDataDeleted",
-    cloudDataDeletedAt: Date.now(),
+    createdAt: completedAt,
+    cloudDataDeletedAt: completedAt,
   });
   return false;
 }
@@ -1449,9 +1451,11 @@ export const markAccountDeletionDataDeleted = internalMutation({
       return;
     }
 
+    const completedAt = Date.now();
     await ctx.db.patch(existing._id, {
       phaseRaw: "cloudDataDeleted",
-      cloudDataDeletedAt: Date.now(),
+      createdAt: completedAt,
+      cloudDataDeletedAt: completedAt,
     });
   },
 });
