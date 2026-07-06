@@ -624,6 +624,30 @@ describe("account data deletion", () => {
     ).resolves.toMatchObject({ status: "inserted" });
   });
 
+  test("expired started marker no longer blocks writes and is cleared inline", async () => {
+    const t = testDb();
+    await seedAccountDeletionMarker(t, userA, "lost-device-token", 1_000);
+
+    await expect(
+      t.withIdentity(userA).mutation(api.sync.upsertExercise, {
+        record: exerciseRecord({ clientId: "post-expiry-exercise" }),
+      }),
+    ).resolves.toMatchObject({ status: "inserted" });
+
+    await expect(accountDeletionMarkersForOwner(t, userA)).resolves.toEqual([]);
+  });
+
+  test("expired partial-deletion marker still blocks writes", async () => {
+    const t = testDb();
+    await seedAccountDeletionMarker(t, userA, "lost-device-token", 1_000, "deleting");
+
+    await expect(
+      t.withIdentity(userA).mutation(api.sync.upsertExercise, {
+        record: exerciseRecord({ clientId: "blocked-exercise" }),
+      }),
+    ).rejects.toThrow("Account deletion is in progress");
+  });
+
   test("cancelAccountDeletion rejects a different token for an active started marker", async () => {
     const t = testDb();
 

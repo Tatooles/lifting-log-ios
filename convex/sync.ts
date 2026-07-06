@@ -418,9 +418,20 @@ async function assertAccountDeletionNotStarted(
   ownerTokenIdentifier: string,
 ): Promise<void> {
   const marker = await accountDeletionMarkerForOwner(ctx, ownerTokenIdentifier);
-  if (marker !== null) {
-    throw new Error("Account deletion is in progress");
+  if (marker === null) {
+    return;
   }
+
+  // "started" guarantees no destructive batch has run (deleteAccountDataBatch
+  // advances the phase in the same mutation as the first delete), so an
+  // expired started marker is inert and can be resolved right here instead of
+  // waiting for the cleanup cron.
+  if (marker.phaseRaw === "started" && accountDeletionMarkerExpired(marker)) {
+    await ctx.db.delete(marker._id);
+    return;
+  }
+
+  throw new Error("Account deletion is in progress");
 }
 
 async function markAccountDeletionStarted(
