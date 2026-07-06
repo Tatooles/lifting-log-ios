@@ -1372,7 +1372,7 @@ export const clearExpiredAccountDeletionMarkers = internalMutation({
   args: {
     expiresBefore: v.optional(v.number()),
     purgeBefore: v.optional(v.number()),
-    parkedCreatedAfter: v.optional(v.number()),
+    parkedCursor: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<AccountDeletionMarkerCleanupResult> => {
     const now = Date.now();
@@ -1447,20 +1447,21 @@ export const clearExpiredAccountDeletionMarkers = internalMutation({
 
     // Hourly retry for parked partial deletions. These markers stay in their
     // bucket until the resume action completes, so bucket size alone cannot
-    // drive hasMore without looping; instead a createdAt cursor carried
-    // through the self-reschedule pages the bucket so one page of stuck
-    // markers cannot starve the ones behind it.
-    const parked = await ctx.db
+    // drive hasMore without looping; instead an opaque pagination cursor
+    // carried through the self-reschedule pages the bucket (including
+    // createdAt ties) so one page of stuck markers cannot starve the ones
+    // behind it.
+    const parkedPage = await ctx.db
       .query("accountDeletionMarkers")
       .withIndex("by_phaseRaw_and_createdAt", (q) =>
-        q
-          .eq("phaseRaw", "deletionIncomplete")
-          .gt("createdAt", args.parkedCreatedAfter ?? Number.NEGATIVE_INFINITY),
+        q.eq("phaseRaw", "deletionIncomplete"),
       )
-      .take(accountDeletionMarkerCleanupBatchSize + 1);
-    const parkedToSchedule = parked.slice(0, accountDeletionMarkerCleanupBatchSize);
-    hasMore = hasMore || parked.length > accountDeletionMarkerCleanupBatchSize;
-    for (const marker of parkedToSchedule) {
+      .paginate({
+        numItems: accountDeletionMarkerCleanupBatchSize,
+        cursor: args.parkedCursor ?? null,
+      });
+    hasMore = hasMore || !parkedPage.isDone;
+    for (const marker of parkedPage.page) {
       await ctx.scheduler.runAfter(0, internal.sync.resumeIncompleteAccountDeletion, {
         ownerTokenIdentifier: marker.ownerTokenIdentifier,
       });
@@ -1472,10 +1473,7 @@ export const clearExpiredAccountDeletionMarkers = internalMutation({
         internal.sync.clearExpiredAccountDeletionMarkers,
         {
           ...args,
-          parkedCreatedAfter:
-            parkedToSchedule.length > 0
-              ? parkedToSchedule[parkedToSchedule.length - 1].createdAt
-              : args.parkedCreatedAfter,
+          parkedCursor: parkedPage.continueCursor,
         },
       );
     }

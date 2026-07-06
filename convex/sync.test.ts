@@ -1191,6 +1191,42 @@ describe("account data deletion", () => {
     }
   });
 
+  test("clearExpiredAccountDeletionMarkers pages parked markers with identical createdAt", async () => {
+    vi.useFakeTimers();
+    try {
+      const t = testDb();
+      await t.run(async (ctx) => {
+        for (let i = 0; i <= 100; i++) {
+          await ctx.db.insert("accountDeletionMarkers", {
+            ownerTokenIdentifier: `tied-owner-${i}`,
+            cancellationToken: `tied-token-${i}`,
+            createdAt: 1_000,
+            phaseRaw: "deletionIncomplete",
+          });
+        }
+      });
+
+      await expect(
+        t.mutation(internal.sync.clearExpiredAccountDeletionMarkers, {
+          expiresBefore: 0,
+          purgeBefore: 0,
+        }),
+      ).resolves.toEqual({ deletedCount: 0, hasMore: true });
+
+      await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+      const markers = await t.run(async (ctx) => {
+        return await ctx.db.query("accountDeletionMarkers").collect();
+      });
+      expect(markers).toHaveLength(101);
+      expect(markers.every((marker) => marker.phaseRaw === "cloudDataDeleted")).toBe(
+        true,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("clearExpiredAccountDeletionMarkers keeps partial deletion markers when data remains", async () => {
     vi.useFakeTimers();
     try {
