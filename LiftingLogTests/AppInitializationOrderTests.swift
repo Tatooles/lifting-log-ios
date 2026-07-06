@@ -32,6 +32,22 @@ final class AppInitializationOrderTests: XCTestCase {
             "The retry must be limited to restored active Clerk sessions."
         )
         XCTAssertTrue(
+            appSource.contains("restoreCachedOwnerForActiveClerkUserOrHideOwnerScopedData()"),
+            "Restored active Clerk sessions should share the same guarded owner restore fallback."
+        )
+        XCTAssertTrue(
+            appSource.contains("guard let activeClerkUserID else"),
+            "Cached owner restoration must be bound to the active Clerk user id."
+        )
+        XCTAssertTrue(
+            appSource.contains("matchingOwnerSubject: activeClerkUserID"),
+            "Cached owner restoration must not run for an unrelated active Clerk session."
+        )
+        XCTAssertTrue(
+            appSource.contains("syncScheduler.currentOwnerTokenIdentifier = nil"),
+            "A mismatched or unavailable active Clerk user id must hide any stale selected owner."
+        )
+        XCTAssertTrue(
             appSource.contains("Clerk.shared.isLoaded"),
             "Convex cache login must wait until Clerk can issue session tokens."
         )
@@ -85,9 +101,8 @@ final class AppInitializationOrderTests: XCTestCase {
         XCTAssertTrue(
             appSource.contains("""
                 if uiTestForcesSignedOutAuth {
-                    syncScheduler.currentOwnerTokenIdentifier = nil
                     syncScheduler.configure(modelContext: modelContainer.mainContext)
-                    syncScheduler.seedDefaultsForLocalMode()
+                    syncScheduler.enterSignedOutMode()
                     return
                 }
 """),
@@ -107,6 +122,64 @@ final class AppInitializationOrderTests: XCTestCase {
             appSource.distance(from: appSource.startIndex, to: forcedSignedOutOffset),
             appSource.distance(from: appSource.startIndex, to: configureSyncOffset),
             "Forced signed-out UI tests should return before normal sync startup can restore auth."
+        )
+    }
+
+    func testUnauthenticatedConvexStateRestoresCachedOwnerBeforeSignedOutLocalMode() throws {
+        let appSource = try sourceFileContents("LiftingLog/App/LiftingLogApp.swift")
+
+        XCTAssertTrue(
+            appSource.contains("if await restoreCachedSyncOwnerForActiveClerkSessionIfAvailable()"),
+            "Convex unauthenticated startup must use the persisted owner when Clerk still has an active session."
+        )
+        XCTAssertTrue(
+            appSource.contains("Clerk.shared.user?.id ?? Clerk.shared.session?.publicUserData?.userId"),
+            "The active Clerk session fallback must compare cached owners against Clerk's current user id."
+        )
+        XCTAssertTrue(
+            appSource.contains("restoreCachedOwnerForActiveClerkUserOrHideOwnerScopedData()"),
+            "The unauthenticated active-Clerk fallback must use the guarded restore helper."
+        )
+        XCTAssertTrue(
+            appSource.contains("if !syncScheduler.restoreLastKnownOwnerTokenIdentifier(matchingOwnerSubject: activeClerkUserID)"),
+            "The unauthenticated restore fallback must not expose a cached owner from another active Clerk user."
+        )
+        XCTAssertTrue(
+            appSource.contains("syncScheduler.currentOwnerTokenIdentifier = nil"),
+            "A mismatched cached owner must leave owner-scoped data hidden while auth is unvalidated."
+        )
+        XCTAssertTrue(
+            appSource.contains("syncScheduler.enterSignedOutMode()"),
+            "Only the explicit signed-out startup path should clear the cached owner and seed ownerless defaults."
+        )
+        XCTAssertFalse(
+            appSource.contains("""
+                case .unauthenticated:
+                    syncScheduler.currentOwnerTokenIdentifier = nil
+                    syncScheduler.seedDefaultsForLocalMode()
+"""),
+            "Transient unauthenticated Convex state must not immediately clear the owner or seed ownerless defaults."
+        )
+
+        let unauthenticatedOffset = try XCTUnwrap(appSource.range(of: "case .unauthenticated:")).lowerBound
+        let restoreOffset = try XCTUnwrap(
+            appSource.range(of: "if await restoreCachedSyncOwnerForActiveClerkSessionIfAvailable()")
+        ).lowerBound
+        let signedOutOffset = try XCTUnwrap(
+            appSource.range(
+                of: "syncScheduler.enterSignedOutMode()",
+                range: restoreOffset..<appSource.endIndex
+            )
+        ).lowerBound
+        XCTAssertLessThan(
+            appSource.distance(from: appSource.startIndex, to: unauthenticatedOffset),
+            appSource.distance(from: appSource.startIndex, to: restoreOffset),
+            "The unauthenticated branch should check for an active restored Clerk session before signed-out mode."
+        )
+        XCTAssertLessThan(
+            appSource.distance(from: appSource.startIndex, to: restoreOffset),
+            appSource.distance(from: appSource.startIndex, to: signedOutOffset),
+            "Signed-out local seeding should be the fallback after cached owner restoration fails."
         )
     }
 
