@@ -36,12 +36,12 @@ final class AppInitializationOrderTests: XCTestCase {
             "Restored active Clerk sessions should share the same guarded owner restore fallback."
         )
         XCTAssertTrue(
-            appSource.contains("guard let activeClerkUserID else"),
-            "Cached owner restoration must be bound to the active Clerk user id."
+            appSource.contains("expectedClerkOwnerTokenIdentifier"),
+            "Cached owner restoration must be bound to an issuer-scoped Clerk owner token."
         )
-        XCTAssertTrue(
+        XCTAssertFalse(
             appSource.contains("matchingOwnerSubject: activeClerkUserID"),
-            "Cached owner restoration must not run for an unrelated active Clerk session."
+            "Production cached owner restoration must not use subject-only matching."
         )
         XCTAssertTrue(
             appSource.contains("syncScheduler.currentOwnerTokenIdentifier = nil"),
@@ -134,15 +134,19 @@ final class AppInitializationOrderTests: XCTestCase {
         )
         XCTAssertTrue(
             appSource.contains("Clerk.shared.user?.id ?? Clerk.shared.session?.publicUserData?.userId"),
-            "The active Clerk session fallback must compare cached owners against Clerk's current user id."
+            "The active Clerk session fallback still needs Clerk's current user id to build an issuer-scoped owner token."
         )
         XCTAssertTrue(
             appSource.contains("restoreCachedOwnerForActiveClerkUserOrHideOwnerScopedData()"),
             "The unauthenticated active-Clerk fallback must use the guarded restore helper."
         )
         XCTAssertTrue(
-            appSource.contains("if !syncScheduler.restoreLastKnownOwnerTokenIdentifier(matchingOwnerSubject: activeClerkUserID)"),
-            "The unauthenticated restore fallback must not expose a cached owner from another active Clerk user."
+            appSource.contains("matchingOwnerTokenIdentifier: expectedClerkOwnerTokenIdentifier"),
+            "The unauthenticated restore fallback must validate the issuer-scoped owner token."
+        )
+        XCTAssertFalse(
+            appSource.contains("matchingOwnerSubject: activeClerkUserID"),
+            "Production active-Clerk restore must not expose same-subject data from another issuer."
         )
         XCTAssertTrue(
             appSource.contains("syncScheduler.currentOwnerTokenIdentifier = nil"),
@@ -247,6 +251,24 @@ final class AppInitializationOrderTests: XCTestCase {
         XCTAssertTrue(
             appSource.contains("matchingOwnerTokenIdentifier: activeClerkOwnerTokenIdentifier"),
             "Cached owner restoration should prefer exact iss|sub matching when the active session token is available."
+        )
+    }
+
+    func testActiveClerkRestoreFallbackBuildsIssuerScopedOwnerTokenFromConfiguration() throws {
+        let appSource = try sourceFileContents("LiftingLog/App/LiftingLogApp.swift")
+
+        XCTAssertTrue(
+            appSource.contains("private var expectedClerkOwnerTokenIdentifier: String?"),
+            "Active Clerk restore fallback should build a full owner token when no cached session JWT is available."
+        )
+        XCTAssertTrue(
+            appSource.contains("ClerkJWTIdentityResolver.issuer(")
+                && appSource.contains("fromPublishableKey: ClerkConfiguration.publishableKey"),
+            "The fallback should derive the expected issuer from the configured Clerk publishable key."
+        )
+        XCTAssertTrue(
+            appSource.contains("return \"\\(expectedClerkIssuer)|\\(activeClerkUserID)\""),
+            "The fallback owner token should use the same iss|sub shape as decoded Clerk JWTs."
         )
     }
 

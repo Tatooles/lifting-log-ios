@@ -198,12 +198,14 @@ struct LiftingLogApp: App {
             return false
         }
 
-        guard let activeClerkUserID else {
+        guard let expectedClerkOwnerTokenIdentifier else {
             syncScheduler.currentOwnerTokenIdentifier = nil
             return false
         }
 
-        if !syncScheduler.restoreLastKnownOwnerTokenIdentifier(matchingOwnerSubject: activeClerkUserID) {
+        if !syncScheduler.restoreLastKnownOwnerTokenIdentifier(
+            matchingOwnerTokenIdentifier: expectedClerkOwnerTokenIdentifier
+        ) {
             syncScheduler.currentOwnerTokenIdentifier = nil
             return false
         }
@@ -213,6 +215,17 @@ struct LiftingLogApp: App {
 
     private var activeClerkUserID: String? {
         Clerk.shared.user?.id ?? Clerk.shared.session?.publicUserData?.userId
+    }
+
+    private var expectedClerkOwnerTokenIdentifier: String? {
+        guard let activeClerkUserID,
+              let expectedClerkIssuer = ClerkJWTIdentityResolver.issuer(
+                  fromPublishableKey: ClerkConfiguration.publishableKey
+              ) else {
+            return nil
+        }
+
+        return "\(expectedClerkIssuer)|\(activeClerkUserID)"
     }
 
     private var activeClerkOwnerTokenIdentifier: String? {
