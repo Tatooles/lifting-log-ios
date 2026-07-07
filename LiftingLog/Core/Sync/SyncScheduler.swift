@@ -167,11 +167,18 @@ final class SyncScheduler {
     }
 
     private func restoreLastKnownOwnerTokenIdentifier(where isAllowedOwner: (String) -> Bool) -> Bool {
-        guard let ownerTokenIdentifier = lastKnownOwnerTokenStore.ownerTokenIdentifier
-            ?? inferSingleLocalOwnerTokenIdentifier() else {
-            return false
+        let cachedOwnerTokenIdentifier = lastKnownOwnerTokenStore.ownerTokenIdentifier
+        let ownerTokenIdentifier: String?
+        if let cachedOwnerTokenIdentifier, isAllowedOwner(cachedOwnerTokenIdentifier) {
+            ownerTokenIdentifier = cachedOwnerTokenIdentifier
+        } else if let inferredOwnerTokenIdentifier = inferSingleLocalOwnerTokenIdentifier(),
+                  isAllowedOwner(inferredOwnerTokenIdentifier) {
+            ownerTokenIdentifier = inferredOwnerTokenIdentifier
+        } else {
+            ownerTokenIdentifier = nil
         }
-        guard isAllowedOwner(ownerTokenIdentifier) else {
+
+        guard let ownerTokenIdentifier else {
             return false
         }
 

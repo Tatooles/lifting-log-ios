@@ -43,6 +43,22 @@ final class SyncSchedulerStatusTests: XCTestCase {
         XCTAssertEqual(store.ownerTokenIdentifier, owner)
     }
 
+    func testSchedulerFallsBackToInferredOwnerWhenCachedOwnerSubjectMismatches() throws {
+        let store = makeOwnerStore()
+        store.ownerTokenIdentifier = "issuer|owner_b"
+        let owner = "issuer|owner_a"
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        context.insert(UserSettings(syncOwnerTokenIdentifier: owner))
+        try context.save()
+        let scheduler = SyncScheduler(modelContext: context, lastKnownOwnerTokenStore: store)
+
+        XCTAssertTrue(scheduler.restoreLastKnownOwnerTokenIdentifier(matchingOwnerSubject: "owner_a"))
+
+        XCTAssertEqual(scheduler.currentOwnerTokenIdentifier, owner)
+        XCTAssertEqual(store.ownerTokenIdentifier, owner)
+    }
+
     func testSchedulerRestoresSingleLocalOwnerWhenCacheIsEmpty() throws {
         let store = makeOwnerStore()
         let owner = "issuer|owner_a"
