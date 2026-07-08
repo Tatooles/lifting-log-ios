@@ -43,6 +43,57 @@ final class SyncSchedulerStatusTests: XCTestCase {
         XCTAssertEqual(store.ownerTokenIdentifier, owner)
     }
 
+    func testSchedulerRestoresExactOwnerAmongMultipleLocalOwnersWhenTokenMatches() throws {
+        let store = makeOwnerStore()
+        let ownerA = "issuer|owner_a"
+        let ownerB = "issuer|owner_b"
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        context.insert(UserSettings(syncOwnerTokenIdentifier: ownerA))
+        context.insert(UserSettings(syncOwnerTokenIdentifier: ownerB))
+        try context.save()
+        let scheduler = SyncScheduler(modelContext: context, lastKnownOwnerTokenStore: store)
+
+        XCTAssertTrue(scheduler.restoreLastKnownOwnerTokenIdentifier(matchingOwnerTokenIdentifier: ownerB))
+
+        XCTAssertEqual(scheduler.currentOwnerTokenIdentifier, ownerB)
+        XCTAssertEqual(store.ownerTokenIdentifier, ownerB)
+    }
+
+    func testSchedulerRestoresExactOwnerAmongMultipleLocalOwnersWhenCacheIsStale() throws {
+        let store = makeOwnerStore()
+        let ownerA = "issuer|owner_a"
+        let ownerB = "issuer|owner_b"
+        store.ownerTokenIdentifier = ownerA
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        context.insert(UserSettings(syncOwnerTokenIdentifier: ownerA))
+        context.insert(UserSettings(syncOwnerTokenIdentifier: ownerB))
+        try context.save()
+        let scheduler = SyncScheduler(modelContext: context, lastKnownOwnerTokenStore: store)
+
+        XCTAssertTrue(scheduler.restoreLastKnownOwnerTokenIdentifier(matchingOwnerTokenIdentifier: ownerB))
+
+        XCTAssertEqual(scheduler.currentOwnerTokenIdentifier, ownerB)
+        XCTAssertEqual(store.ownerTokenIdentifier, ownerB)
+    }
+
+    func testSchedulerDoesNotRestoreExactOwnerWithoutLocalFootprint() throws {
+        let store = makeOwnerStore()
+        let ownerA = "issuer|owner_a"
+        let ownerB = "issuer|owner_b"
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        context.insert(UserSettings(syncOwnerTokenIdentifier: ownerA))
+        try context.save()
+        let scheduler = SyncScheduler(modelContext: context, lastKnownOwnerTokenStore: store)
+
+        XCTAssertFalse(scheduler.restoreLastKnownOwnerTokenIdentifier(matchingOwnerTokenIdentifier: ownerB))
+
+        XCTAssertNil(scheduler.currentOwnerTokenIdentifier)
+        XCTAssertNil(store.ownerTokenIdentifier)
+    }
+
     func testSchedulerDoesNotRestoreCachedOwnerWhenSubjectDoesNotMatch() throws {
         let store = makeOwnerStore()
         let scheduler = SyncScheduler(lastKnownOwnerTokenStore: store)
@@ -156,6 +207,21 @@ final class SyncSchedulerStatusTests: XCTestCase {
         let scheduler = SyncScheduler(modelContext: context, lastKnownOwnerTokenStore: store)
 
         XCTAssertFalse(scheduler.restoreLastKnownOwnerTokenIdentifier())
+
+        XCTAssertNil(scheduler.currentOwnerTokenIdentifier)
+        XCTAssertNil(store.ownerTokenIdentifier)
+    }
+
+    func testSchedulerDoesNotRestoreSubjectAmongMultipleLocalOwners() throws {
+        let store = makeOwnerStore()
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let context = container.mainContext
+        context.insert(UserSettings(syncOwnerTokenIdentifier: "issuer|owner_a"))
+        context.insert(UserSettings(syncOwnerTokenIdentifier: "issuer|owner_b"))
+        try context.save()
+        let scheduler = SyncScheduler(modelContext: context, lastKnownOwnerTokenStore: store)
+
+        XCTAssertFalse(scheduler.restoreLastKnownOwnerTokenIdentifier(matchingOwnerSubject: "owner_b"))
 
         XCTAssertNil(scheduler.currentOwnerTokenIdentifier)
         XCTAssertNil(store.ownerTokenIdentifier)

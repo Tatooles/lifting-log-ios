@@ -172,9 +172,13 @@ final class SyncScheduler {
             return false
         }
 
-        return restoreLastKnownOwnerTokenIdentifier { ownerTokenIdentifier in
-            ownerTokenIdentifier == expectedOwnerTokenIdentifier
+        guard lastKnownOwnerTokenStore.ownerTokenIdentifier == expectedOwnerTokenIdentifier
+                || localOwnerTokenIdentifiers().contains(expectedOwnerTokenIdentifier) else {
+            return false
         }
+
+        activateOwnerTokenIdentifier(expectedOwnerTokenIdentifier)
+        return true
     }
 
     private func restoreLastKnownOwnerTokenIdentifier(where isAllowedOwner: (String) -> Bool) -> Bool {
@@ -193,9 +197,7 @@ final class SyncScheduler {
             return false
         }
 
-        lastKnownOwnerTokenStore.ownerTokenIdentifier = ownerTokenIdentifier
-        currentOwnerTokenIdentifier = ownerTokenIdentifier
-        seedDefaultsForCurrentOwner()
+        activateOwnerTokenIdentifier(ownerTokenIdentifier)
         return true
     }
 
@@ -224,7 +226,13 @@ final class SyncScheduler {
     }
 
     private func inferSingleLocalOwnerTokenIdentifier() -> String? {
-        guard let modelContext else { return nil }
+        let owners = localOwnerTokenIdentifiers()
+
+        return owners.count == 1 ? owners.first : nil
+    }
+
+    private func localOwnerTokenIdentifiers() -> Set<String> {
+        guard let modelContext else { return [] }
 
         var owners = Set<String>()
         if let cursorStates = try? modelContext.fetch(FetchDescriptor<SyncCursorState>()) {
@@ -246,7 +254,13 @@ final class SyncScheduler {
             })
         }
 
-        return owners.count == 1 ? owners.first : nil
+        return owners
+    }
+
+    private func activateOwnerTokenIdentifier(_ ownerTokenIdentifier: String) {
+        lastKnownOwnerTokenStore.ownerTokenIdentifier = ownerTokenIdentifier
+        currentOwnerTokenIdentifier = ownerTokenIdentifier
+        seedDefaultsForCurrentOwner()
     }
 
     private static func ownerTokenIdentifier(_ ownerTokenIdentifier: String, matchesSubject subject: String) -> Bool {
