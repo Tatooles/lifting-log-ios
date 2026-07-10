@@ -148,6 +148,36 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
         XCTAssertEqual(remainingWorkout.syncOwnerTokenIdentifier, ownerTokenIdentifier)
     }
 
+    func testRecoveryRejectsTokenForDifferentClerkOwner() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let client = FakeSyncClient()
+        let scheduler = SyncScheduler(
+            coordinator: SyncCoordinator(client: client),
+            modelContext: container.mainContext,
+            lastKnownOwnerTokenStore: makeOwnerStore()
+        )
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_b"
+        let authenticationClient = StubSyncAuthenticationClient(
+            result: .success(makeJWT(issuer: "issuer", subject: "owner_a"))
+        )
+        let coordinator = SyncRecoveryCoordinator(
+            authenticationClient: authenticationClient,
+            syncScheduler: scheduler,
+            hasActiveSession: { true },
+            currentSessionIdentifier: { "session_b" },
+            isOwnerTokenIdentifierForCurrentSession: { ownerTokenIdentifier in
+                ownerTokenIdentifier == "issuer|owner_b"
+            }
+        )
+
+        await coordinator.recoverAuthenticationAndRequestSync(for: .manualRetry)
+
+        XCTAssertEqual(authenticationClient.loginFromCacheCallCount, 1)
+        XCTAssertEqual(scheduler.currentOwnerTokenIdentifier, "issuer|owner_b")
+        XCTAssertEqual(scheduler.requestCount, 0)
+        XCTAssertTrue(client.fetchRequests.isEmpty)
+    }
+
     func testRecoveryIsNoOpWithoutAnActiveSession() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let scheduler = SyncScheduler(

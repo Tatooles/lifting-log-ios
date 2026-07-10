@@ -46,6 +46,7 @@ final class SyncRecoveryCoordinator {
     private let syncScheduler: SyncScheduler
     private let hasActiveSession: @MainActor () -> Bool
     private let currentSessionIdentifier: @MainActor () -> String?
+    private let isOwnerTokenIdentifierForCurrentSession: @MainActor (String) -> Bool
     private var activeRecovery: ActiveRecovery?
     private var inFlightRecoveries: [UUID: RecoveryMetadata] = [:]
     private var earlyAuthenticatedStates: [AuthenticatedStateKey: Int] = [:]
@@ -63,12 +64,14 @@ final class SyncRecoveryCoordinator {
         authenticationClient: any SyncAuthenticationClient,
         syncScheduler: SyncScheduler,
         hasActiveSession: @MainActor @escaping () -> Bool,
-        currentSessionIdentifier: @MainActor @escaping () -> String? = { nil }
+        currentSessionIdentifier: @MainActor @escaping () -> String? = { nil },
+        isOwnerTokenIdentifierForCurrentSession: @MainActor @escaping (String) -> Bool = { _ in true }
     ) {
         self.authenticationClient = authenticationClient
         self.syncScheduler = syncScheduler
         self.hasActiveSession = hasActiveSession
         self.currentSessionIdentifier = currentSessionIdentifier
+        self.isOwnerTokenIdentifierForCurrentSession = isOwnerTokenIdentifierForCurrentSession
     }
 
     func shouldDeferAuthenticatedState(
@@ -128,7 +131,8 @@ final class SyncRecoveryCoordinator {
             }
             let result = await authenticationClient.loginFromCache()
             guard case .success(let token) = result,
-                  let ownerTokenIdentifier = ClerkJWTIdentityResolver.ownerTokenIdentifier(from: token) else {
+                  let ownerTokenIdentifier = ClerkJWTIdentityResolver.ownerTokenIdentifier(from: token),
+                  isOwnerTokenIdentifierForCurrentSession(ownerTokenIdentifier) else {
                 return
             }
             registerAuthenticatedState(

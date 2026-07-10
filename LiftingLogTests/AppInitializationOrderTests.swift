@@ -276,6 +276,10 @@ final class AppInitializationOrderTests: XCTestCase {
             "The app-level recovery action should refresh authentication before scheduling sync."
         )
         XCTAssertTrue(
+            appSource.contains("isOwnerTokenIdentifierForCurrentSession: { ownerTokenIdentifier in"),
+            "Auth recovery must validate the recovered Convex owner against the active Clerk user."
+        )
+        XCTAssertTrue(
             shellSource.contains("syncRecoveryAction(.manualRetry)"),
             "The global failure banner should use the shared authentication recovery path."
         )

@@ -29,7 +29,10 @@ struct LiftingLogApp: App {
                 authenticationClient: ConvexSyncAuthenticationClient(client: convexClient),
                 syncScheduler: syncScheduler,
                 hasActiveSession: { Clerk.shared.session?.status == .active },
-                currentSessionIdentifier: { Clerk.shared.session?.id }
+                currentSessionIdentifier: { Clerk.shared.session?.id },
+                isOwnerTokenIdentifierForCurrentSession: { ownerTokenIdentifier in
+                    ownerTokenIdentifier == Self.currentExpectedClerkOwnerTokenIdentifier
+                }
             )
         )
         let arguments = ProcessInfo.processInfo.arguments
@@ -245,10 +248,19 @@ struct LiftingLogApp: App {
     }
 
     private var activeClerkUserID: String? {
-        Clerk.shared.user?.id ?? Clerk.shared.session?.publicUserData?.userId
+        Self.currentActiveClerkUserID
     }
 
     private var expectedClerkOwnerTokenIdentifier: String? {
+        Self.currentExpectedClerkOwnerTokenIdentifier
+    }
+
+    private static var currentActiveClerkUserID: String? {
+        Clerk.shared.user?.id ?? Clerk.shared.session?.publicUserData?.userId
+    }
+
+    private static var currentExpectedClerkOwnerTokenIdentifier: String? {
+        let activeClerkUserID = currentActiveClerkUserID
         guard let activeClerkUserID,
               let expectedClerkIssuer = ClerkJWTIdentityResolver.issuer(
                   fromPublishableKey: ClerkConfiguration.publishableKey
