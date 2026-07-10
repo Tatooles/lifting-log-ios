@@ -28,6 +28,7 @@ final class SyncRecoveryCoordinator {
 
     private struct ActiveRecovery {
         let id: UUID
+        let recoveryInvalidationGeneration: UInt
         let task: Task<Void, Never>
     }
 
@@ -36,8 +37,11 @@ final class SyncRecoveryCoordinator {
     private let hasActiveSession: @MainActor () -> Bool
     private var activeRecovery: ActiveRecovery?
 
-    var isRecoveringAuthentication: Bool {
-        activeRecovery != nil
+    var willActiveRecoveryRequestSync: Bool {
+        guard let activeRecovery else { return false }
+        return hasActiveSession()
+            && !syncScheduler.isDeletionModeEnabled
+            && syncScheduler.recoveryInvalidationGeneration == activeRecovery.recoveryInvalidationGeneration
     }
 
     init(
@@ -92,7 +96,11 @@ final class SyncRecoveryCoordinator {
             }
         }
 
-        activeRecovery = ActiveRecovery(id: recoveryID, task: task)
+        activeRecovery = ActiveRecovery(
+            id: recoveryID,
+            recoveryInvalidationGeneration: recoveryInvalidationGeneration,
+            task: task
+        )
         await task.value
         if activeRecovery?.id == recoveryID {
             activeRecovery = nil

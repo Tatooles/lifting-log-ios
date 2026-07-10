@@ -51,17 +51,27 @@ final class AppInitializationOrderTests: XCTestCase {
             appSource.contains("Clerk.shared.isLoaded"),
             "Convex cache login must wait until Clerk can issue session tokens."
         )
-        let waitForClerkOffset = try XCTUnwrap(appSource.range(of: "await waitUntilClerkIsLoaded()")).lowerBound
-        let activeSessionOffset = try XCTUnwrap(appSource.range(of: "guard Clerk.shared.session?.status == .active")).lowerBound
-        let loginFromCacheOffset = try XCTUnwrap(appSource.range(of: "await convexClient.loginFromCache()")).lowerBound
+        let startupFunctionStart = try XCTUnwrap(
+            appSource.range(of: "private func syncConvexAuthFromRestoredClerkSessionIfAvailable()")
+        ).lowerBound
+        let nextFunctionStart = try XCTUnwrap(
+            appSource.range(
+                of: "private func restoreCachedSyncOwnerForActiveClerkSessionIfAvailable()",
+                range: startupFunctionStart..<appSource.endIndex
+            )
+        ).lowerBound
+        let startupSource = appSource[startupFunctionStart..<nextFunctionStart]
+        let waitForClerkOffset = try XCTUnwrap(startupSource.range(of: "await waitUntilClerkIsLoaded()")).lowerBound
+        let activeSessionOffset = try XCTUnwrap(startupSource.range(of: "guard Clerk.shared.session?.status == .active")).lowerBound
+        let loginFromCacheOffset = try XCTUnwrap(startupSource.range(of: "await convexClient.loginFromCache()")).lowerBound
         XCTAssertLessThan(
-            appSource.distance(from: appSource.startIndex, to: waitForClerkOffset),
-            appSource.distance(from: appSource.startIndex, to: activeSessionOffset),
+            startupSource.distance(from: startupSource.startIndex, to: waitForClerkOffset),
+            startupSource.distance(from: startupSource.startIndex, to: activeSessionOffset),
             "Startup retry must wait for Clerk to load before deciding whether a restored active session exists."
         )
         XCTAssertLessThan(
-            appSource.distance(from: appSource.startIndex, to: activeSessionOffset),
-            appSource.distance(from: appSource.startIndex, to: loginFromCacheOffset),
+            startupSource.distance(from: startupSource.startIndex, to: activeSessionOffset),
+            startupSource.distance(from: startupSource.startIndex, to: loginFromCacheOffset),
             "Convex cache login should run only after Clerk has loaded an active restored session."
         )
         XCTAssertTrue(

@@ -255,6 +255,38 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
         XCTAssertTrue(client.fetchRequests.isEmpty)
     }
 
+    func testInvalidatedRecoveryNoLongerSuppressesAuthenticatedStateSync() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let scheduler = SyncScheduler(
+            coordinator: SyncCoordinator(client: FakeSyncClient()),
+            modelContext: container.mainContext,
+            lastKnownOwnerTokenStore: makeOwnerStore()
+        )
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+        let authenticationClient = StubSyncAuthenticationClient(
+            result: .success(makeJWT(issuer: "issuer", subject: "owner_a")),
+            waitsForResume: true
+        )
+        let coordinator = SyncRecoveryCoordinator(
+            authenticationClient: authenticationClient,
+            syncScheduler: scheduler,
+            hasActiveSession: { true }
+        )
+
+        let recovery = Task { @MainActor in
+            await coordinator.recoverAuthenticationAndRequestSync(for: .appForeground)
+        }
+        try await waitUntil { authenticationClient.hasPendingLogin }
+        XCTAssertTrue(coordinator.willActiveRecoveryRequestSync)
+
+        scheduler.enterSignedOutMode()
+
+        XCTAssertFalse(coordinator.willActiveRecoveryRequestSync)
+        authenticationClient.resumeLogin()
+        await recovery.value
+        XCTAssertEqual(scheduler.requestCount, 0)
+    }
+
     func testOverlappingRecoveryRequestsShareOneAuthenticationAndSync() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let client = FakeSyncClient()

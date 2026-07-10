@@ -169,12 +169,16 @@ struct LiftingLogApp: App {
                     }
                     syncScheduler.enterSignedOutMode()
                 case .authenticated(let token):
+                    guard Clerk.shared.session?.status == .active,
+                          !syncScheduler.isDeletionModeEnabled else {
+                        break
+                    }
                     guard let ownerTokenIdentifier = ClerkJWTIdentityResolver.ownerTokenIdentifier(from: token) else {
                         break
                     }
                     authenticateSyncOwner(
                         ownerTokenIdentifier,
-                        requestsSync: !syncRecoveryCoordinator.isRecoveringAuthentication
+                        requestsSync: !syncRecoveryCoordinator.willActiveRecoveryRequestSync
                     )
                 }
             }
