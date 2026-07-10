@@ -173,6 +173,7 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
         await coordinator.recoverAuthenticationAndRequestSync(for: .manualRetry)
 
         XCTAssertEqual(authenticationClient.loginFromCacheCallCount, 1)
+        XCTAssertEqual(authenticationClient.logoutCallCount, 1)
         XCTAssertEqual(scheduler.currentOwnerTokenIdentifier, "issuer|owner_b")
         XCTAssertEqual(scheduler.requestCount, 0)
         XCTAssertTrue(client.fetchRequests.isEmpty)
@@ -526,6 +527,7 @@ private final class StubSyncAuthenticationClient: SyncAuthenticationClient {
     private let waitsForResume: Bool
     private var continuations: [CheckedContinuation<Result<String, Error>, Never>] = []
     private(set) var loginFromCacheCallCount = 0
+    private(set) var logoutCallCount = 0
 
     var hasPendingLogin: Bool {
         !continuations.isEmpty
@@ -548,6 +550,10 @@ private final class StubSyncAuthenticationClient: SyncAuthenticationClient {
             }
         }
         return result
+    }
+
+    func logout() async {
+        logoutCallCount += 1
     }
 
     func resumeLogin() {

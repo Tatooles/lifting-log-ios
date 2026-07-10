@@ -4,6 +4,7 @@ import Foundation
 @MainActor
 protocol SyncAuthenticationClient: AnyObject {
     func loginFromCache() async -> Result<String, Error>
+    func logout() async
 }
 
 @MainActor
@@ -16,6 +17,10 @@ final class ConvexSyncAuthenticationClient: SyncAuthenticationClient {
 
     func loginFromCache() async -> Result<String, Error> {
         await client.loginFromCache()
+    }
+
+    func logout() async {
+        await client.logout()
     }
 }
 
@@ -130,9 +135,15 @@ final class SyncRecoveryCoordinator {
                 return
             }
             let result = await authenticationClient.loginFromCache()
-            guard case .success(let token) = result,
-                  let ownerTokenIdentifier = ClerkJWTIdentityResolver.ownerTokenIdentifier(from: token),
+            guard case .success(let token) = result else {
+                return
+            }
+            guard let ownerTokenIdentifier = ClerkJWTIdentityResolver.ownerTokenIdentifier(from: token),
                   isOwnerTokenIdentifierForCurrentSession(ownerTokenIdentifier) else {
+                // loginFromCache installs the token on the shared Convex client before
+                // returning it. Fail closed so no other cloud path can use a token that
+                // does not belong to the active Clerk user.
+                await authenticationClient.logout()
                 return
             }
             registerAuthenticatedState(
