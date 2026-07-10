@@ -146,6 +146,7 @@ final class SyncRecoveryCoordinator {
                 // loginFromCache installs the token on the shared Convex client before
                 // returning it. Fail closed so no other cloud path can use a token that
                 // does not belong to the active Clerk user.
+                syncScheduler.currentOwnerTokenIdentifier = nil
                 await authenticationClient.logout()
                 return
             }

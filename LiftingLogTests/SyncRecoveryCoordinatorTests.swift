@@ -216,7 +216,7 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(authenticationClient.loginFromCacheCallCount, 1)
         XCTAssertEqual(authenticationClient.logoutCallCount, 1)
-        XCTAssertEqual(scheduler.currentOwnerTokenIdentifier, "issuer|owner_b")
+        XCTAssertNil(scheduler.currentOwnerTokenIdentifier)
         XCTAssertEqual(scheduler.requestCount, 0)
         XCTAssertTrue(client.fetchRequests.isEmpty)
     }
