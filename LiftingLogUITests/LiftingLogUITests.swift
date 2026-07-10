@@ -745,6 +745,10 @@ final class LiftingLogUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Sync Status"].exists)
         XCTAssertTrue(app.staticTexts["Cloud sync could not finish. Your data is saved on this iPhone."].exists)
+        let settingsRetryButton = app.buttons["SettingsSyncStatusRow"]
+        XCTAssertTrue(settingsRetryButton.waitForExistence(timeout: 3))
+        settingsRetryButton.tap()
+        XCTAssertTrue(app.staticTexts["UITestSyncRequestCount-2"].waitForExistence(timeout: 3))
 
         app.buttons["SettingsDeveloperDiagnosticsRow"].tap()
         XCTAssertTrue(app.staticTexts["DeveloperDiagnosticsEnvironment"].waitForExistence(timeout: 3))

@@ -14,12 +14,23 @@ struct LiftingLogApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var navigationState = AppNavigationState()
     @State private var activeWorkoutEngine = ActiveWorkoutEngine()
-    @State private var syncScheduler = SyncScheduler()
+    @State private var syncScheduler: SyncScheduler
+    @State private var syncRecoveryCoordinator: SyncRecoveryCoordinator
     @State private var syncAuthTask: Task<Void, Never>?
 
     init() {
         Clerk.configure(publishableKey: ClerkConfiguration.publishableKey)
-        convexClient = ConvexClientFactory.makeAuthenticatedClient()
+        let convexClient = ConvexClientFactory.makeAuthenticatedClient()
+        self.convexClient = convexClient
+        let syncScheduler = SyncScheduler()
+        _syncScheduler = State(initialValue: syncScheduler)
+        _syncRecoveryCoordinator = State(
+            initialValue: SyncRecoveryCoordinator(
+                authenticationClient: ConvexSyncAuthenticationClient(client: convexClient),
+                syncScheduler: syncScheduler,
+                hasActiveSession: { Clerk.shared.session?.status == .active }
+            )
+        )
         let arguments = ProcessInfo.processInfo.arguments
         FirstRunExperienceStore.resetForUITestingIfRequested(arguments: arguments)
         FirstRunExperienceStore.markSeenForUITestingIfRequested(arguments: arguments)
@@ -70,6 +81,12 @@ struct LiftingLogApp: App {
             .environment(Clerk.shared)
             .environment(syncScheduler)
             .environment(
+                \.syncRecoveryAction,
+                SyncRecoveryAction { trigger in
+                    requestSyncRecovery(for: trigger)
+                }
+            )
+            .environment(
                 \.accountDeletionFactory,
                 AccountDeletionFactory.live(syncClient: ConvexSyncClient(client: convexClient))
             )
@@ -108,8 +125,24 @@ struct LiftingLogApp: App {
             }
             .onChange(of: scenePhase) { _, newScenePhase in
                 guard newScenePhase == .active else { return }
-                syncScheduler.requestSyncOnAppForeground()
+                requestSyncRecovery(for: .appForeground)
             }
+        }
+    }
+
+    private func requestSyncRecovery(for trigger: SyncRecoveryCoordinator.Trigger) {
+        if uiTestSyncOwner != nil {
+            switch trigger {
+            case .appForeground:
+                syncScheduler.requestSyncOnAppForeground()
+            case .manualRetry:
+                syncScheduler.retrySync()
+            }
+            return
+        }
+
+        Task { @MainActor in
+            await syncRecoveryCoordinator.recoverAuthenticationAndRequestSync(for: trigger)
         }
     }
 
@@ -139,7 +172,10 @@ struct LiftingLogApp: App {
                     guard let ownerTokenIdentifier = ClerkJWTIdentityResolver.ownerTokenIdentifier(from: token) else {
                         break
                     }
-                    authenticateSyncOwner(ownerTokenIdentifier)
+                    authenticateSyncOwner(
+                        ownerTokenIdentifier,
+                        requestsSync: !syncRecoveryCoordinator.isRecoveringAuthentication
+                    )
                 }
             }
         }
@@ -232,9 +268,14 @@ struct LiftingLogApp: App {
         }
     }
 
-    private func authenticateSyncOwner(_ ownerTokenIdentifier: String) {
+    private func authenticateSyncOwner(
+        _ ownerTokenIdentifier: String,
+        requestsSync: Bool = true
+    ) {
         syncScheduler.currentOwnerTokenIdentifier = ownerTokenIdentifier
         syncScheduler.seedDefaultsForCurrentOwner()
-        syncScheduler.requestSync()
+        if requestsSync {
+            syncScheduler.requestSync()
+        }
     }
 }

@@ -251,8 +251,31 @@ final class AppInitializationOrderTests: XCTestCase {
             "Only foreground activation should trigger the lifecycle sync request."
         )
         XCTAssertTrue(
-            appSource.contains("syncScheduler.requestSyncOnAppForeground()"),
-            "Foreground activation should use the guarded scheduler trigger for signed-in, non-deletion-mode sync."
+            appSource.contains("requestSyncRecovery(for: .appForeground)"),
+            "Foreground activation should refresh Convex authentication before using the guarded scheduler trigger."
+        )
+    }
+
+    func testForegroundAndManualRetryUseSharedAuthenticationRecovery() throws {
+        let appSource = try sourceFileContents("LiftingLog/App/LiftingLogApp.swift")
+        let shellSource = try sourceFileContents("LiftingLog/App/AppShellView.swift")
+        let settingsSource = try sourceFileContents("LiftingLog/Features/Profile/SettingsAccountSection.swift")
+
+        XCTAssertTrue(
+            appSource.contains("recoverAuthenticationAndRequestSync(for: trigger)"),
+            "The app-level recovery action should refresh authentication before scheduling sync."
+        )
+        XCTAssertTrue(
+            shellSource.contains("syncRecoveryAction(.manualRetry)"),
+            "The global failure banner should use the shared authentication recovery path."
+        )
+        XCTAssertTrue(
+            settingsSource.contains("syncRecoveryAction(.manualRetry)"),
+            "The Settings Retry button should use the shared authentication recovery path."
+        )
+        XCTAssertFalse(
+            shellSource.contains("syncScheduler.retrySync()") || settingsSource.contains("syncScheduler.retrySync()"),
+            "Production Retry surfaces must not bypass authentication recovery."
         )
     }
 
