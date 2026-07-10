@@ -64,9 +64,17 @@ final class SyncRecoveryCoordinator {
         let authenticationClient = self.authenticationClient
         let syncScheduler = self.syncScheduler
         let hasActiveSession = self.hasActiveSession
+        let recoveryInvalidationGeneration = syncScheduler.recoveryInvalidationGeneration
         let task = Task { @MainActor in
+            guard hasActiveSession(),
+                  !syncScheduler.isDeletionModeEnabled,
+                  syncScheduler.recoveryInvalidationGeneration == recoveryInvalidationGeneration else {
+                return
+            }
             let result = await authenticationClient.loginFromCache()
-            guard hasActiveSession(), !syncScheduler.isDeletionModeEnabled else {
+            guard hasActiveSession(),
+                  !syncScheduler.isDeletionModeEnabled,
+                  syncScheduler.recoveryInvalidationGeneration == recoveryInvalidationGeneration else {
                 return
             }
             guard case .success(let token) = result,

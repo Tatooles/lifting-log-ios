@@ -89,7 +89,6 @@ struct SettingsAccountSection: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .accessibilityIdentifier("SettingsSyncStatusRow")
     }
 
     private var displayTint: Color {

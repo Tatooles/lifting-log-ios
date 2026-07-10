@@ -745,10 +745,6 @@ final class LiftingLogUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Sync Status"].exists)
         XCTAssertTrue(app.staticTexts["Cloud sync could not finish. Your data is saved on this iPhone."].exists)
-        let settingsRetryButton = app.buttons["SettingsSyncStatusRow"]
-        XCTAssertTrue(settingsRetryButton.waitForExistence(timeout: 3))
-        settingsRetryButton.tap()
-        XCTAssertTrue(app.staticTexts["UITestSyncRequestCount-2"].waitForExistence(timeout: 3))
 
         app.buttons["SettingsDeveloperDiagnosticsRow"].tap()
         XCTAssertTrue(app.staticTexts["DeveloperDiagnosticsEnvironment"].waitForExistence(timeout: 3))
@@ -761,6 +757,23 @@ final class LiftingLogUITests: XCTestCase {
         let syncSummary = app.staticTexts["DeveloperDiagnosticsSyncSummary"]
         XCTAssertTrue(syncSummary.waitForExistence(timeout: 3))
         XCTAssertTrue(syncSummary.label.contains("lastFailure: Convex function sync:fetchChanges failed for token issuer|ui_owner"))
+    }
+
+    @MainActor
+    func testSettingsSyncRetryRequestsSyncInUITestMode() {
+        let app = makeApp(extraArguments: [
+            "--uitest-sync-owner", "issuer|ui_owner",
+            "--uitest-show-sync-failure",
+        ])
+        app.launch()
+
+        app.buttons["GlobalSyncDetailsButton"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
+        let settingsRetryButton = app.buttons["SettingsSyncRetryButton"]
+        XCTAssertTrue(settingsRetryButton.waitForExistence(timeout: 3))
+        settingsRetryButton.tap()
+
+        XCTAssertTrue(app.staticTexts["UITestSyncRequestCount-1"].waitForExistence(timeout: 3))
     }
 
     @MainActor

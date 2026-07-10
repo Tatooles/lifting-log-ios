@@ -16,7 +16,8 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
         )
         scheduler.currentOwnerTokenIdentifier = ownerTokenIdentifier
         let authenticationClient = StubSyncAuthenticationClient(
-            result: .success(makeJWT(issuer: "https://clerk.auth.liftinglog.app", subject: "user_123"))
+            result: .success(makeJWT(issuer: "https://clerk.auth.liftinglog.app", subject: "user_123")),
+            waitsForResume: true
         )
         let coordinator = SyncRecoveryCoordinator(
             authenticationClient: authenticationClient,
@@ -24,7 +25,14 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
             hasActiveSession: { true }
         )
 
-        await coordinator.recoverAuthenticationAndRequestSync(for: .appForeground)
+        let recovery = Task { @MainActor in
+            await coordinator.recoverAuthenticationAndRequestSync(for: .appForeground)
+        }
+        try await waitUntil { authenticationClient.hasPendingLogin }
+        XCTAssertEqual(scheduler.requestCount, 0)
+        XCTAssertTrue(client.fetchRequests.isEmpty)
+        authenticationClient.resumeLogin()
+        await recovery.value
         try await waitUntil { scheduler.lastSyncedAt != nil }
 
         XCTAssertEqual(authenticationClient.loginFromCacheCallCount, 1)
@@ -44,7 +52,8 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
         )
         scheduler.currentOwnerTokenIdentifier = ownerTokenIdentifier
         let authenticationClient = StubSyncAuthenticationClient(
-            result: .success(makeJWT(issuer: "https://clerk.auth.liftinglog.app", subject: "user_123"))
+            result: .success(makeJWT(issuer: "https://clerk.auth.liftinglog.app", subject: "user_123")),
+            waitsForResume: true
         )
         let coordinator = SyncRecoveryCoordinator(
             authenticationClient: authenticationClient,
@@ -52,7 +61,14 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
             hasActiveSession: { true }
         )
 
-        await coordinator.recoverAuthenticationAndRequestSync(for: .manualRetry)
+        let recovery = Task { @MainActor in
+            await coordinator.recoverAuthenticationAndRequestSync(for: .manualRetry)
+        }
+        try await waitUntil { authenticationClient.hasPendingLogin }
+        XCTAssertEqual(scheduler.requestCount, 0)
+        XCTAssertTrue(client.fetchRequests.isEmpty)
+        authenticationClient.resumeLogin()
+        await recovery.value
         try await waitUntil { scheduler.lastSyncedAt != nil }
 
         XCTAssertEqual(authenticationClient.loginFromCacheCallCount, 1)
@@ -66,9 +82,17 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
         let ownerTokenIdentifier = "https://clerk.auth.liftinglog.app|user_123"
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
+        let workout = WorkoutSession(
+            title: "Offline Workout",
+            startedAt: Date(timeIntervalSince1970: 50),
+            endedAt: Date(timeIntervalSince1970: 100),
+            status: .completed,
+            source: .blank,
+            syncOwnerTokenIdentifier: ownerTokenIdentifier
+        )
         let failedEntry = SyncOutboxEntry(
-            entityKind: .exercise,
-            entityID: UUID(),
+            entityKind: .workoutSession,
+            entityID: workout.id,
             operation: .update,
             status: .failed,
             ownerTokenIdentifier: ownerTokenIdentifier,
@@ -78,6 +102,7 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
             attemptCount: 1,
             lastErrorMessage: "Not authenticated"
         )
+        context.insert(workout)
         context.insert(failedEntry)
         try context.save()
         let scheduler = SyncScheduler(
@@ -102,6 +127,9 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
         let remainingEntry = try XCTUnwrap(
             context.fetch(FetchDescriptor<SyncOutboxEntry>()).first { $0.id == failedEntry.id }
         )
+        let remainingWorkout = try XCTUnwrap(
+            context.fetch(FetchDescriptor<WorkoutSession>()).first { $0.id == workout.id }
+        )
         XCTAssertEqual(authenticationClient.loginFromCacheCallCount, 1)
         XCTAssertEqual(scheduler.requestCount, 0)
         XCTAssertEqual(scheduler.lastFailure?.message, "Not authenticated")
@@ -109,6 +137,8 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
         XCTAssertEqual(remainingEntry.status, SyncOutboxStatus.failed)
         XCTAssertEqual(remainingEntry.attemptCount, 1)
         XCTAssertEqual(remainingEntry.lastErrorMessage, "Not authenticated")
+        XCTAssertEqual(remainingWorkout.title, "Offline Workout")
+        XCTAssertEqual(remainingWorkout.syncOwnerTokenIdentifier, ownerTokenIdentifier)
     }
 
     func testRecoveryIsNoOpWithoutAnActiveSession() async throws {
@@ -190,6 +220,41 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
         XCTAssertEqual(scheduler.currentOwnerTokenIdentifier, "issuer|owner_a")
     }
 
+    func testRecoveryDoesNotResumeAfterAccountDeletionCompletes() async throws {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let client = FakeSyncClient()
+        let scheduler = SyncScheduler(
+            coordinator: SyncCoordinator(client: client),
+            modelContext: container.mainContext,
+            lastKnownOwnerTokenStore: makeOwnerStore()
+        )
+        scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+        let authenticationClient = StubSyncAuthenticationClient(
+            result: .success(makeJWT(issuer: "issuer", subject: "owner_a")),
+            waitsForResume: true
+        )
+        let coordinator = SyncRecoveryCoordinator(
+            authenticationClient: authenticationClient,
+            syncScheduler: scheduler,
+            hasActiveSession: { true }
+        )
+
+        let recovery = Task { @MainActor in
+            await coordinator.recoverAuthenticationAndRequestSync(for: .manualRetry)
+        }
+        try await waitUntil { authenticationClient.hasPendingLogin }
+        scheduler.beginDeletionMode()
+        scheduler.resetAfterDataDeletion()
+        XCTAssertFalse(scheduler.isDeletionModeEnabled)
+        authenticationClient.resumeLogin()
+        await recovery.value
+
+        XCTAssertEqual(authenticationClient.loginFromCacheCallCount, 1)
+        XCTAssertEqual(scheduler.requestCount, 0)
+        XCTAssertNil(scheduler.currentOwnerTokenIdentifier)
+        XCTAssertTrue(client.fetchRequests.isEmpty)
+    }
+
     func testOverlappingRecoveryRequestsShareOneAuthenticationAndSync() async throws {
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let client = FakeSyncClient()
@@ -217,6 +282,8 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
             await coordinator.recoverAuthenticationAndRequestSync(for: .manualRetry)
         }
         await Task.yield()
+        XCTAssertEqual(scheduler.requestCount, 0)
+        XCTAssertTrue(client.fetchRequests.isEmpty)
         authenticationClient.resumeLogin()
         await foregroundRecovery.value
         await manualRecovery.value
