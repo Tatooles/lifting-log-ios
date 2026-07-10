@@ -293,6 +293,40 @@ final class AppInitializationOrderTests: XCTestCase {
         )
     }
 
+    func testAuthenticatedConvexOwnerMismatchHidesLocalDataAndClearsAuth() throws {
+        let appSource = try sourceFileContents("LiftingLog/App/LiftingLogApp.swift")
+
+        XCTAssertTrue(
+            appSource.contains("guard ownerTokenIdentifier == expectedClerkOwnerTokenIdentifier else"),
+            "An authenticated Convex token for another Clerk owner must use the fail-closed mismatch path."
+        )
+        XCTAssertTrue(
+            appSource.contains("await rejectMismatchedConvexAuthentication()"),
+            "The mismatch path must immediately hide stale owner data and clear the shared Convex authentication."
+        )
+
+        let handlerOffset = try XCTUnwrap(
+            appSource.range(of: "private func rejectMismatchedConvexAuthentication() async")
+        ).lowerBound
+        let clearOwnerOffset = try XCTUnwrap(
+            appSource.range(
+                of: "syncScheduler.currentOwnerTokenIdentifier = nil",
+                range: handlerOffset..<appSource.endIndex
+            )
+        ).lowerBound
+        let logoutOffset = try XCTUnwrap(
+            appSource.range(
+                of: "await convexClient.logout()",
+                range: handlerOffset..<appSource.endIndex
+            )
+        ).lowerBound
+        XCTAssertLessThan(
+            appSource.distance(from: appSource.startIndex, to: clearOwnerOffset),
+            appSource.distance(from: appSource.startIndex, to: logoutOffset),
+            "Stale owner data must be hidden synchronously before clearing Convex auth can suspend."
+        )
+    }
+
     func testUITestHelpersForceSignedOutAuthByDefault() throws {
         let uiTestSource = try sourceFileContents("LiftingLogUITests/LiftingLogUITests.swift")
 

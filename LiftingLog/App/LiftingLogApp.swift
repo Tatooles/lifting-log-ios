@@ -183,14 +183,26 @@ struct LiftingLogApp: App {
                         break
                     }
                     guard Clerk.shared.session?.status == .active,
-                          !syncScheduler.isDeletionModeEnabled,
-                          ownerTokenIdentifier == expectedClerkOwnerTokenIdentifier else {
+                          !syncScheduler.isDeletionModeEnabled else {
+                        break
+                    }
+                    guard let expectedClerkOwnerTokenIdentifier else {
+                        syncScheduler.currentOwnerTokenIdentifier = nil
+                        break
+                    }
+                    guard ownerTokenIdentifier == expectedClerkOwnerTokenIdentifier else {
+                        await rejectMismatchedConvexAuthentication()
                         break
                     }
                     authenticateSyncOwner(ownerTokenIdentifier)
                 }
             }
         }
+    }
+
+    private func rejectMismatchedConvexAuthentication() async {
+        syncScheduler.currentOwnerTokenIdentifier = nil
+        await convexClient.logout()
     }
 
     private func syncConvexAuthFromRestoredClerkSessionIfAvailable() async {
