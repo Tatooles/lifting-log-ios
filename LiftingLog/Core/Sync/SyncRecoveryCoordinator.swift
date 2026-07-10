@@ -24,6 +24,106 @@ final class ConvexSyncAuthenticationClient: SyncAuthenticationClient {
     }
 }
 
+private struct AuthenticatedStateCorrelation {
+    struct Key: Hashable {
+        let ownerTokenIdentifier: String
+        let sessionIdentifier: String
+    }
+
+    private struct PendingState {
+        var count: Int
+        var expiresAt: Date
+    }
+
+    private let pendingLifetime: TimeInterval
+    private var earlyStates: [Key: Int] = [:]
+    private var pendingStates: [Key: PendingState] = [:]
+
+    init(pendingLifetime: TimeInterval) {
+        self.pendingLifetime = pendingLifetime
+    }
+
+    mutating func shouldDefer(
+        key: Key,
+        hasRecoveryForSession: Bool,
+        now: Date
+    ) -> Bool {
+        discardExpiredPendingStates(now: now)
+        if Self.consume(key, from: &pendingStates) {
+            return true
+        }
+        guard hasRecoveryForSession else { return false }
+
+        earlyStates[key, default: 0] += 1
+        return true
+    }
+
+    mutating func registerRecoveryAuthentication(key: Key, now: Date) {
+        discardExpiredPendingStates(now: now)
+        guard !Self.consume(key, from: &earlyStates) else { return }
+
+        let expiresAt = now.addingTimeInterval(pendingLifetime)
+        if var pendingState = pendingStates[key] {
+            pendingState.count += 1
+            pendingState.expiresAt = expiresAt
+            pendingStates[key] = pendingState
+        } else {
+            pendingStates[key] = PendingState(count: 1, expiresAt: expiresAt)
+        }
+    }
+
+    mutating func finishRecovery(
+        sessionIdentifier: String,
+        stillHasRecoveryForSession: Bool,
+        now: Date
+    ) {
+        discardExpiredPendingStates(now: now)
+        guard !stillHasRecoveryForSession else { return }
+        earlyStates = earlyStates.filter { key, _ in
+            key.sessionIdentifier != sessionIdentifier
+        }
+    }
+
+    mutating func keepOnlySession(_ sessionIdentifier: String?, now: Date) {
+        discardExpiredPendingStates(now: now)
+        guard let sessionIdentifier else {
+            earlyStates.removeAll()
+            pendingStates.removeAll()
+            return
+        }
+
+        earlyStates = earlyStates.filter { key, _ in
+            key.sessionIdentifier == sessionIdentifier
+        }
+        pendingStates = pendingStates.filter { key, _ in
+            key.sessionIdentifier == sessionIdentifier
+        }
+    }
+
+    private mutating func discardExpiredPendingStates(now: Date) {
+        pendingStates = pendingStates.filter { _, state in
+            state.expiresAt > now
+        }
+    }
+
+    private static func consume(_ key: Key, from states: inout [Key: Int]) -> Bool {
+        guard let count = states[key], count > 0 else { return false }
+        if count == 1 {
+            states[key] = nil
+        } else {
+            states[key] = count - 1
+        }
+        return true
+    }
+
+    private static func consume(_ key: Key, from states: inout [Key: PendingState]) -> Bool {
+        guard var state = states[key], state.count > 0 else { return false }
+        state.count -= 1
+        states[key] = state.count == 0 ? nil : state
+        return true
+    }
+}
+
 @MainActor
 final class SyncRecoveryCoordinator {
     enum Trigger {
@@ -42,20 +142,21 @@ final class SyncRecoveryCoordinator {
         let sessionIdentifier: String?
     }
 
-    private struct AuthenticatedStateKey: Hashable {
-        let ownerTokenIdentifier: String
-        let sessionIdentifier: String
+    private enum OwnerValidation: Equatable {
+        case current
+        case unavailable
+        case mismatch
     }
 
     private let authenticationClient: any SyncAuthenticationClient
     private let syncScheduler: SyncScheduler
     private let hasActiveSession: @MainActor () -> Bool
     private let currentSessionIdentifier: @MainActor () -> String?
-    private let isOwnerTokenIdentifierForCurrentSession: @MainActor (String) -> Bool
+    private let expectedOwnerTokenIdentifier: @MainActor () -> String?
+    private let now: @MainActor () -> Date
     private var activeRecovery: ActiveRecovery?
     private var inFlightRecoveries: [UUID: RecoveryMetadata] = [:]
-    private var earlyAuthenticatedStates: [AuthenticatedStateKey: Int] = [:]
-    private var pendingAuthenticatedStates: [AuthenticatedStateKey: Int] = [:]
+    private var authenticatedStateCorrelation: AuthenticatedStateCorrelation
 
     var willActiveRecoveryRequestSync: Bool {
         guard let activeRecovery else { return false }
@@ -70,39 +171,53 @@ final class SyncRecoveryCoordinator {
         syncScheduler: SyncScheduler,
         hasActiveSession: @MainActor @escaping () -> Bool,
         currentSessionIdentifier: @MainActor @escaping () -> String? = { nil },
-        isOwnerTokenIdentifierForCurrentSession: @MainActor @escaping (String) -> Bool = { _ in true }
+        expectedOwnerTokenIdentifier: @MainActor @escaping () -> String?,
+        pendingAuthenticatedStateLifetime: TimeInterval = 5,
+        now: @MainActor @escaping () -> Date = Date.init
     ) {
         self.authenticationClient = authenticationClient
         self.syncScheduler = syncScheduler
         self.hasActiveSession = hasActiveSession
         self.currentSessionIdentifier = currentSessionIdentifier
-        self.isOwnerTokenIdentifierForCurrentSession = isOwnerTokenIdentifierForCurrentSession
+        self.expectedOwnerTokenIdentifier = expectedOwnerTokenIdentifier
+        self.now = now
+        self.authenticatedStateCorrelation = AuthenticatedStateCorrelation(
+            pendingLifetime: pendingAuthenticatedStateLifetime
+        )
     }
 
-    func shouldDeferAuthenticatedState(
+    func shouldActivateAuthenticatedState(
         ownerTokenIdentifier: String,
         sessionIdentifier: String?
-    ) -> Bool {
-        guard isOwnerTokenIdentifierForCurrentSession(ownerTokenIdentifier) else {
+    ) async -> Bool {
+        guard hasActiveSession(), !syncScheduler.isDeletionModeEnabled else {
             return false
         }
+
+        switch validateOwnerTokenIdentifier(ownerTokenIdentifier) {
+        case .current:
+            break
+        case .unavailable:
+            syncScheduler.currentOwnerTokenIdentifier = nil
+            return false
+        case .mismatch:
+            await rejectInstalledAuthentication()
+            return false
+        }
+
         guard let sessionIdentifier else { return false }
-        let key = AuthenticatedStateKey(
+        let key = AuthenticatedStateCorrelation.Key(
             ownerTokenIdentifier: ownerTokenIdentifier,
             sessionIdentifier: sessionIdentifier
         )
-
-        if Self.consumeState(key, from: &pendingAuthenticatedStates) {
-            return true
-        }
-
         let hasRecoveryForSession = inFlightRecoveries.values.contains { metadata in
             metadata.sessionIdentifier == sessionIdentifier
         }
-        guard hasRecoveryForSession else { return false }
-
-        earlyAuthenticatedStates[key, default: 0] += 1
-        return true
+        return !authenticatedStateCorrelation.shouldDefer(
+            key: key,
+            hasRecoveryForSession: hasRecoveryForSession,
+            now: now()
+        )
     }
 
     func recoverAuthenticationAndRequestSync(for trigger: Trigger) async {
@@ -123,6 +238,10 @@ final class SyncRecoveryCoordinator {
         let recoveryID = UUID()
         let recoveryInvalidationGeneration = syncScheduler.recoveryInvalidationGeneration
         let recoverySessionIdentifier = currentSessionIdentifier()
+        authenticatedStateCorrelation.keepOnlySession(
+            recoverySessionIdentifier,
+            now: now()
+        )
         inFlightRecoveries[recoveryID] = RecoveryMetadata(
             sessionIdentifier: recoverySessionIdentifier
         )
@@ -141,13 +260,7 @@ final class SyncRecoveryCoordinator {
             guard case .success(let token) = result else {
                 return
             }
-            guard let ownerTokenIdentifier = ClerkJWTIdentityResolver.ownerTokenIdentifier(from: token),
-                  isOwnerTokenIdentifierForCurrentSession(ownerTokenIdentifier) else {
-                // loginFromCache installs the token on the shared Convex client before
-                // returning it. Fail closed so no other cloud path can use a token that
-                // does not belong to the active Clerk user.
-                syncScheduler.currentOwnerTokenIdentifier = nil
-                await authenticationClient.logout()
+            guard let ownerTokenIdentifier = await validatedRecoveredOwner(from: token) else {
                 return
             }
             registerAuthenticatedState(
@@ -201,14 +314,11 @@ final class SyncRecoveryCoordinator {
         guard let sessionIdentifier = inFlightRecoveries[recoveryID]?.sessionIdentifier else {
             return
         }
-        let key = AuthenticatedStateKey(
+        let key = AuthenticatedStateCorrelation.Key(
             ownerTokenIdentifier: ownerTokenIdentifier,
             sessionIdentifier: sessionIdentifier
         )
-
-        if !Self.consumeState(key, from: &earlyAuthenticatedStates) {
-            pendingAuthenticatedStates[key, default: 0] += 1
-        }
+        authenticatedStateCorrelation.registerRecoveryAuthentication(key: key, now: now())
     }
 
     private func finishRecovery(_ recoveryID: UUID) {
@@ -217,23 +327,33 @@ final class SyncRecoveryCoordinator {
         let stillHasRecoveryForSession = inFlightRecoveries.values.contains { metadata in
             metadata.sessionIdentifier == sessionIdentifier
         }
-        if !stillHasRecoveryForSession {
-            earlyAuthenticatedStates = earlyAuthenticatedStates.filter { key, _ in
-                key.sessionIdentifier != sessionIdentifier
-            }
-        }
+        authenticatedStateCorrelation.finishRecovery(
+            sessionIdentifier: sessionIdentifier,
+            stillHasRecoveryForSession: stillHasRecoveryForSession,
+            now: now()
+        )
     }
 
-    private static func consumeState(
-        _ key: AuthenticatedStateKey,
-        from states: inout [AuthenticatedStateKey: Int]
-    ) -> Bool {
-        guard let count = states[key], count > 0 else { return false }
-        if count == 1 {
-            states[key] = nil
-        } else {
-            states[key] = count - 1
+    private func validatedRecoveredOwner(from token: String) async -> String? {
+        guard let ownerTokenIdentifier = ClerkJWTIdentityResolver.ownerTokenIdentifier(from: token),
+              validateOwnerTokenIdentifier(ownerTokenIdentifier) == .current else {
+            // loginFromCache installs the token on the shared Convex client before
+            // returning it, so an unvalidated result must fail closed.
+            await rejectInstalledAuthentication()
+            return nil
         }
-        return true
+        return ownerTokenIdentifier
+    }
+
+    private func validateOwnerTokenIdentifier(_ ownerTokenIdentifier: String) -> OwnerValidation {
+        guard let expectedOwnerTokenIdentifier = expectedOwnerTokenIdentifier() else {
+            return .unavailable
+        }
+        return ownerTokenIdentifier == expectedOwnerTokenIdentifier ? .current : .mismatch
+    }
+
+    private func rejectInstalledAuthentication() async {
+        syncScheduler.currentOwnerTokenIdentifier = nil
+        await authenticationClient.logout()
     }
 }

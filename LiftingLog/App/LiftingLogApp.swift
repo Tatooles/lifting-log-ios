@@ -30,9 +30,7 @@ struct LiftingLogApp: App {
                 syncScheduler: syncScheduler,
                 hasActiveSession: { Clerk.shared.session?.status == .active },
                 currentSessionIdentifier: { Clerk.shared.session?.id },
-                isOwnerTokenIdentifierForCurrentSession: { ownerTokenIdentifier in
-                    ownerTokenIdentifier == Self.currentExpectedClerkOwnerTokenIdentifier
-                }
+                expectedOwnerTokenIdentifier: { Self.currentExpectedClerkOwnerTokenIdentifier }
             )
         )
         let arguments = ProcessInfo.processInfo.arguments
@@ -176,33 +174,16 @@ struct LiftingLogApp: App {
                     guard let ownerTokenIdentifier = ClerkJWTIdentityResolver.ownerTokenIdentifier(from: token) else {
                         break
                     }
-                    guard !syncRecoveryCoordinator.shouldDeferAuthenticatedState(
+                    guard await syncRecoveryCoordinator.shouldActivateAuthenticatedState(
                         ownerTokenIdentifier: ownerTokenIdentifier,
                         sessionIdentifier: Clerk.shared.session?.id
                     ) else {
-                        break
-                    }
-                    guard Clerk.shared.session?.status == .active,
-                          !syncScheduler.isDeletionModeEnabled else {
-                        break
-                    }
-                    guard let expectedClerkOwnerTokenIdentifier else {
-                        syncScheduler.currentOwnerTokenIdentifier = nil
-                        break
-                    }
-                    guard ownerTokenIdentifier == expectedClerkOwnerTokenIdentifier else {
-                        await rejectMismatchedConvexAuthentication()
                         break
                     }
                     authenticateSyncOwner(ownerTokenIdentifier)
                 }
             }
         }
-    }
-
-    private func rejectMismatchedConvexAuthentication() async {
-        syncScheduler.currentOwnerTokenIdentifier = nil
-        await convexClient.logout()
     }
 
     private func syncConvexAuthFromRestoredClerkSessionIfAvailable() async {

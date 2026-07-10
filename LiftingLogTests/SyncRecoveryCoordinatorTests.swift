@@ -7,19 +7,14 @@ import XCTest
 final class SyncRecoveryCoordinatorTests: XCTestCase {
     func testForegroundRecoveryAuthenticatesBeforeRequestingSync() async throws {
         let ownerTokenIdentifier = "https://clerk.auth.liftinglog.app|user_123"
-        let container = try SwiftDataTestSupport.makeInMemoryContainer()
-        let client = FakeSyncClient()
-        let scheduler = SyncScheduler(
-            coordinator: SyncCoordinator(client: client),
-            modelContext: container.mainContext,
-            lastKnownOwnerTokenStore: makeOwnerStore()
-        )
-        scheduler.currentOwnerTokenIdentifier = ownerTokenIdentifier
+        let harness = try makeConfiguredScheduler(ownerTokenIdentifier: ownerTokenIdentifier)
+        let client = harness.client
+        let scheduler = harness.scheduler
         let authenticationClient = StubSyncAuthenticationClient(
             result: .success(makeJWT(issuer: "https://clerk.auth.liftinglog.app", subject: "user_123")),
             waitsForResume: true
         )
-        let coordinator = SyncRecoveryCoordinator(
+        let coordinator = makeCoordinator(
             authenticationClient: authenticationClient,
             syncScheduler: scheduler,
             hasActiveSession: { true },
@@ -32,12 +27,11 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
         try await waitUntil { authenticationClient.hasPendingLogin }
         XCTAssertEqual(scheduler.requestCount, 0)
         XCTAssertTrue(client.fetchRequests.isEmpty)
-        XCTAssertTrue(
-            coordinator.shouldDeferAuthenticatedState(
-                ownerTokenIdentifier: ownerTokenIdentifier,
-                sessionIdentifier: "session_a"
-            )
+        let shouldActivateEarlyState = await coordinator.shouldActivateAuthenticatedState(
+            ownerTokenIdentifier: ownerTokenIdentifier,
+            sessionIdentifier: "session_a"
         )
+        XCTAssertFalse(shouldActivateEarlyState)
         authenticationClient.resumeLogin()
         await recovery.value
         try await waitUntil { scheduler.lastSyncedAt != nil }
@@ -48,7 +42,7 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
         XCTAssertFalse(client.fetchRequests.isEmpty)
     }
 
-    func testRecoveryDoesNotDeferAuthenticatedStateForDifferentClerkOwner() async throws {
+    func testRecoveryRejectsMismatchedAuthenticatedStateBeforeDeferral() async throws {
         let currentOwnerTokenIdentifier = "issuer|owner_b"
         let scheduler = SyncScheduler(
             lastKnownOwnerTokenStore: makeOwnerStore()
@@ -58,14 +52,12 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
             result: .success(makeJWT(issuer: "issuer", subject: "owner_b")),
             waitsForResume: true
         )
-        let coordinator = SyncRecoveryCoordinator(
+        let coordinator = makeCoordinator(
             authenticationClient: authenticationClient,
             syncScheduler: scheduler,
             hasActiveSession: { true },
             currentSessionIdentifier: { "session_b" },
-            isOwnerTokenIdentifierForCurrentSession: { ownerTokenIdentifier in
-                ownerTokenIdentifier == currentOwnerTokenIdentifier
-            }
+            expectedOwnerTokenIdentifier: { currentOwnerTokenIdentifier }
         )
 
         let recovery = Task { @MainActor in
@@ -73,18 +65,18 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
         }
         try await waitUntil { authenticationClient.hasPendingLogin }
 
-        XCTAssertFalse(
-            coordinator.shouldDeferAuthenticatedState(
-                ownerTokenIdentifier: "issuer|owner_a",
-                sessionIdentifier: "session_b"
-            )
+        let shouldActivateMismatchedState = await coordinator.shouldActivateAuthenticatedState(
+            ownerTokenIdentifier: "issuer|owner_a",
+            sessionIdentifier: "session_b"
         )
-        XCTAssertTrue(
-            coordinator.shouldDeferAuthenticatedState(
-                ownerTokenIdentifier: currentOwnerTokenIdentifier,
-                sessionIdentifier: "session_b"
-            )
+        XCTAssertFalse(shouldActivateMismatchedState)
+        XCTAssertEqual(authenticationClient.logoutCallCount, 1)
+        XCTAssertNil(scheduler.currentOwnerTokenIdentifier)
+        let shouldActivateRecoveryState = await coordinator.shouldActivateAuthenticatedState(
+            ownerTokenIdentifier: currentOwnerTokenIdentifier,
+            sessionIdentifier: "session_b"
         )
+        XCTAssertFalse(shouldActivateRecoveryState)
 
         authenticationClient.resumeLogin()
         await recovery.value
@@ -92,19 +84,14 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
 
     func testManualRetryAuthenticatesBeforeRequestingSync() async throws {
         let ownerTokenIdentifier = "https://clerk.auth.liftinglog.app|user_123"
-        let container = try SwiftDataTestSupport.makeInMemoryContainer()
-        let client = FakeSyncClient()
-        let scheduler = SyncScheduler(
-            coordinator: SyncCoordinator(client: client),
-            modelContext: container.mainContext,
-            lastKnownOwnerTokenStore: makeOwnerStore()
-        )
-        scheduler.currentOwnerTokenIdentifier = ownerTokenIdentifier
+        let harness = try makeConfiguredScheduler(ownerTokenIdentifier: ownerTokenIdentifier)
+        let client = harness.client
+        let scheduler = harness.scheduler
         let authenticationClient = StubSyncAuthenticationClient(
             result: .success(makeJWT(issuer: "https://clerk.auth.liftinglog.app", subject: "user_123")),
             waitsForResume: true
         )
-        let coordinator = SyncRecoveryCoordinator(
+        let coordinator = makeCoordinator(
             authenticationClient: authenticationClient,
             syncScheduler: scheduler,
             hasActiveSession: { true }
@@ -165,7 +152,7 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
         let authenticationClient = StubSyncAuthenticationClient(
             result: .failure(AuthenticationError())
         )
-        let coordinator = SyncRecoveryCoordinator(
+        let coordinator = makeCoordinator(
             authenticationClient: authenticationClient,
             syncScheduler: scheduler,
             hasActiveSession: { true }
@@ -191,25 +178,18 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
     }
 
     func testRecoveryRejectsTokenForDifferentClerkOwner() async throws {
-        let container = try SwiftDataTestSupport.makeInMemoryContainer()
-        let client = FakeSyncClient()
-        let scheduler = SyncScheduler(
-            coordinator: SyncCoordinator(client: client),
-            modelContext: container.mainContext,
-            lastKnownOwnerTokenStore: makeOwnerStore()
-        )
-        scheduler.currentOwnerTokenIdentifier = "issuer|owner_b"
+        let harness = try makeConfiguredScheduler(ownerTokenIdentifier: "issuer|owner_b")
+        let client = harness.client
+        let scheduler = harness.scheduler
         let authenticationClient = StubSyncAuthenticationClient(
             result: .success(makeJWT(issuer: "issuer", subject: "owner_a"))
         )
-        let coordinator = SyncRecoveryCoordinator(
+        let coordinator = makeCoordinator(
             authenticationClient: authenticationClient,
             syncScheduler: scheduler,
             hasActiveSession: { true },
             currentSessionIdentifier: { "session_b" },
-            isOwnerTokenIdentifierForCurrentSession: { ownerTokenIdentifier in
-                ownerTokenIdentifier == "issuer|owner_b"
-            }
+            expectedOwnerTokenIdentifier: { "issuer|owner_b" }
         )
 
         await coordinator.recoverAuthenticationAndRequestSync(for: .manualRetry)
@@ -231,7 +211,7 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
         let authenticationClient = StubSyncAuthenticationClient(
             result: .success(makeJWT(issuer: "issuer", subject: "owner_a"))
         )
-        let coordinator = SyncRecoveryCoordinator(
+        let coordinator = makeCoordinator(
             authenticationClient: authenticationClient,
             syncScheduler: scheduler,
             hasActiveSession: { false }
@@ -256,7 +236,7 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
         let authenticationClient = StubSyncAuthenticationClient(
             result: .success(makeJWT(issuer: "issuer", subject: "owner_a"))
         )
-        let coordinator = SyncRecoveryCoordinator(
+        let coordinator = makeCoordinator(
             authenticationClient: authenticationClient,
             syncScheduler: scheduler,
             hasActiveSession: { true }
@@ -281,7 +261,7 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
             waitsForResume: true
         )
         let sessionState = ActiveSessionState()
-        let coordinator = SyncRecoveryCoordinator(
+        let coordinator = makeCoordinator(
             authenticationClient: authenticationClient,
             syncScheduler: scheduler,
             hasActiveSession: { sessionState.isActive }
@@ -313,7 +293,7 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
             result: .success(makeJWT(issuer: "issuer", subject: "owner_a")),
             waitsForResume: true
         )
-        let coordinator = SyncRecoveryCoordinator(
+        let coordinator = makeCoordinator(
             authenticationClient: authenticationClient,
             syncScheduler: scheduler,
             hasActiveSession: { true }
@@ -348,11 +328,12 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
             result: .success(jwt),
             waitsForResume: true
         )
-        let coordinator = SyncRecoveryCoordinator(
+        let coordinator = makeCoordinator(
             authenticationClient: authenticationClient,
             syncScheduler: scheduler,
             hasActiveSession: { true },
-            currentSessionIdentifier: { "session_a" }
+            currentSessionIdentifier: { "session_a" },
+            expectedOwnerTokenIdentifier: { "issuer|owner_a" }
         )
 
         let recovery = Task { @MainActor in
@@ -364,20 +345,55 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
         authenticationClient.resumeLogin()
         await recovery.value
 
-        XCTAssertTrue(
-            coordinator.shouldDeferAuthenticatedState(
-                ownerTokenIdentifier: "issuer|owner_a",
-                sessionIdentifier: "session_a"
-            )
+        let shouldActivatePendingState = await coordinator.shouldActivateAuthenticatedState(
+            ownerTokenIdentifier: "issuer|owner_a",
+            sessionIdentifier: "session_a"
         )
-        XCTAssertFalse(
-            coordinator.shouldDeferAuthenticatedState(
-                ownerTokenIdentifier: "issuer|owner_a",
-                sessionIdentifier: "session_a"
-            )
+        XCTAssertFalse(shouldActivatePendingState)
+        let shouldActivateFollowingState = await coordinator.shouldActivateAuthenticatedState(
+            ownerTokenIdentifier: "issuer|owner_a",
+            sessionIdentifier: "session_a"
         )
+        XCTAssertTrue(shouldActivateFollowingState)
         XCTAssertEqual(scheduler.requestCount, 0)
         XCTAssertNil(scheduler.currentOwnerTokenIdentifier)
+    }
+
+    func testPendingRecoveryAuthenticatedStateExpires() async throws {
+        let ownerTokenIdentifier = "issuer|owner_a"
+        let scheduler = SyncScheduler(lastKnownOwnerTokenStore: makeOwnerStore())
+        scheduler.currentOwnerTokenIdentifier = ownerTokenIdentifier
+        let authenticationClient = StubSyncAuthenticationClient(
+            result: .success(makeJWT(issuer: "issuer", subject: "owner_a")),
+            waitsForResume: true
+        )
+        let clock = TestClock(now: Date(timeIntervalSince1970: 1_000))
+        let coordinator = makeCoordinator(
+            authenticationClient: authenticationClient,
+            syncScheduler: scheduler,
+            hasActiveSession: { true },
+            currentSessionIdentifier: { "session_a" },
+            expectedOwnerTokenIdentifier: { ownerTokenIdentifier },
+            pendingAuthenticatedStateLifetime: 5,
+            now: { clock.now }
+        )
+
+        let recovery = Task { @MainActor in
+            await coordinator.recoverAuthenticationAndRequestSync(for: .appForeground)
+        }
+        try await waitUntil { authenticationClient.hasPendingLogin }
+        authenticationClient.resumeLogin()
+        await recovery.value
+        clock.now = clock.now.addingTimeInterval(6)
+
+        let shouldActivateExpiredState = await coordinator.shouldActivateAuthenticatedState(
+            ownerTokenIdentifier: ownerTokenIdentifier,
+            sessionIdentifier: "session_a"
+        )
+        XCTAssertTrue(
+            shouldActivateExpiredState,
+            "A recovery callback that never arrives must not suppress a later authenticated state forever."
+        )
     }
 
     func testInvalidatedRecoveryDoesNotDeferAuthenticatedStateForNewSession() async throws {
@@ -392,7 +408,7 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
             result: .success(makeJWT(issuer: "issuer", subject: "owner_a")),
             waitsForResume: true
         )
-        let coordinator = SyncRecoveryCoordinator(
+        let coordinator = makeCoordinator(
             authenticationClient: authenticationClient,
             syncScheduler: scheduler,
             hasActiveSession: { true },
@@ -405,12 +421,11 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
         try await waitUntil { authenticationClient.hasPendingLogin }
         scheduler.enterSignedOutMode()
 
-        XCTAssertFalse(
-            coordinator.shouldDeferAuthenticatedState(
-                ownerTokenIdentifier: "issuer|owner_b",
-                sessionIdentifier: "session_b"
-            )
+        let shouldActivateNewSessionState = await coordinator.shouldActivateAuthenticatedState(
+            ownerTokenIdentifier: "issuer|owner_b",
+            sessionIdentifier: "session_b"
         )
+        XCTAssertFalse(shouldActivateNewSessionState)
         authenticationClient.resumeLogin()
         await recovery.value
     }
@@ -429,7 +444,7 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
             waitsForResume: true
         )
         let sessionState = SessionIdentifierState(identifier: "session_a")
-        let coordinator = SyncRecoveryCoordinator(
+        let coordinator = makeCoordinator(
             authenticationClient: authenticationClient,
             syncScheduler: scheduler,
             hasActiveSession: { true },
@@ -452,22 +467,18 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
     }
 
     func testInvalidatedRecoveryAllowsFreshRetry() async throws {
-        let container = try SwiftDataTestSupport.makeInMemoryContainer()
-        let client = FakeSyncClient()
-        let scheduler = SyncScheduler(
-            coordinator: SyncCoordinator(client: client),
-            modelContext: container.mainContext,
-            lastKnownOwnerTokenStore: makeOwnerStore()
-        )
-        scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+        let harness = try makeConfiguredScheduler(ownerTokenIdentifier: "issuer|owner_a")
+        let client = harness.client
+        let scheduler = harness.scheduler
         let authenticationClient = StubSyncAuthenticationClient(
             result: .success(makeJWT(issuer: "issuer", subject: "owner_a")),
             waitsForResume: true
         )
-        let coordinator = SyncRecoveryCoordinator(
+        let coordinator = makeCoordinator(
             authenticationClient: authenticationClient,
             syncScheduler: scheduler,
-            hasActiveSession: { true }
+            hasActiveSession: { true },
+            expectedOwnerTokenIdentifier: { "issuer|owner_a" }
         )
 
         let recovery = Task { @MainActor in
@@ -499,19 +510,14 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
     }
 
     func testOverlappingRecoveryRequestsShareOneAuthenticationAndSync() async throws {
-        let container = try SwiftDataTestSupport.makeInMemoryContainer()
-        let client = FakeSyncClient()
-        let scheduler = SyncScheduler(
-            coordinator: SyncCoordinator(client: client),
-            modelContext: container.mainContext,
-            lastKnownOwnerTokenStore: makeOwnerStore()
-        )
-        scheduler.currentOwnerTokenIdentifier = "issuer|owner_a"
+        let harness = try makeConfiguredScheduler(ownerTokenIdentifier: "issuer|owner_a")
+        let client = harness.client
+        let scheduler = harness.scheduler
         let authenticationClient = StubSyncAuthenticationClient(
             result: .success(makeJWT(issuer: "issuer", subject: "owner_a")),
             waitsForResume: true
         )
-        let coordinator = SyncRecoveryCoordinator(
+        let coordinator = makeCoordinator(
             authenticationClient: authenticationClient,
             syncScheduler: scheduler,
             hasActiveSession: { true }
@@ -535,6 +541,47 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
         XCTAssertEqual(authenticationClient.loginFromCacheCallCount, 1)
         XCTAssertEqual(scheduler.requestCount, 1)
         XCTAssertFalse(client.fetchRequests.isEmpty)
+    }
+
+    private func makeConfiguredScheduler(
+        ownerTokenIdentifier: String? = nil
+    ) throws -> ConfiguredSchedulerHarness {
+        let container = try SwiftDataTestSupport.makeInMemoryContainer()
+        let client = FakeSyncClient()
+        let scheduler = SyncScheduler(
+            coordinator: SyncCoordinator(client: client),
+            modelContext: container.mainContext,
+            lastKnownOwnerTokenStore: makeOwnerStore()
+        )
+        scheduler.currentOwnerTokenIdentifier = ownerTokenIdentifier
+        return ConfiguredSchedulerHarness(
+            container: container,
+            client: client,
+            scheduler: scheduler
+        )
+    }
+
+    private func makeCoordinator(
+        authenticationClient: any SyncAuthenticationClient,
+        syncScheduler: SyncScheduler,
+        hasActiveSession: @MainActor @escaping () -> Bool,
+        currentSessionIdentifier: @MainActor @escaping () -> String? = { nil },
+        expectedOwnerTokenIdentifier: (@MainActor () -> String?)? = nil,
+        pendingAuthenticatedStateLifetime: TimeInterval = 5,
+        now: @MainActor @escaping () -> Date = Date.init
+    ) -> SyncRecoveryCoordinator {
+        let expectedOwnerTokenIdentifier = expectedOwnerTokenIdentifier ?? {
+            syncScheduler.currentOwnerTokenIdentifier
+        }
+        return SyncRecoveryCoordinator(
+            authenticationClient: authenticationClient,
+            syncScheduler: syncScheduler,
+            hasActiveSession: hasActiveSession,
+            currentSessionIdentifier: currentSessionIdentifier,
+            expectedOwnerTokenIdentifier: expectedOwnerTokenIdentifier,
+            pendingAuthenticatedStateLifetime: pendingAuthenticatedStateLifetime,
+            now: now
+        )
     }
 
     private func waitUntil(
@@ -561,6 +608,13 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
         let payload = Data(#"{"iss":"\#(issuer)","sub":"\#(subject)"}"#.utf8).base64URLEncodedString()
         return "\(header).\(payload).signature"
     }
+}
+
+private struct ConfiguredSchedulerHarness {
+    // Retaining the container keeps the in-memory ModelContext alive for each test.
+    let container: ModelContainer
+    let client: FakeSyncClient
+    let scheduler: SyncScheduler
 }
 
 @MainActor
@@ -601,6 +655,15 @@ private final class StubSyncAuthenticationClient: SyncAuthenticationClient {
     func resumeLogin() {
         guard !continuations.isEmpty else { return }
         continuations.removeFirst().resume(returning: result)
+    }
+}
+
+@MainActor
+private final class TestClock {
+    var now: Date
+
+    init(now: Date) {
+        self.now = now
     }
 }
 
