@@ -30,20 +30,20 @@ final class SyncSchedulerStatusTests: XCTestCase {
         XCTAssertEqual(store.ownerTokenIdentifier, owner)
     }
 
-    func testSchedulerRestoresCachedOwnerWhenOwnerTokenIdentifierMatches() throws {
+    func testSchedulerActivatesValidatedOwnerAndCachesIt() throws {
         let store = makeOwnerStore()
         let scheduler = SyncScheduler(lastKnownOwnerTokenStore: store)
         let owner = "issuer|owner_a"
         scheduler.currentOwnerTokenIdentifier = owner
         scheduler.currentOwnerTokenIdentifier = nil
 
-        XCTAssertTrue(scheduler.restoreLastKnownOwnerTokenIdentifier(matchingOwnerTokenIdentifier: owner))
+        XCTAssertTrue(scheduler.activateValidatedOwnerTokenIdentifier(owner))
 
         XCTAssertEqual(scheduler.currentOwnerTokenIdentifier, owner)
         XCTAssertEqual(store.ownerTokenIdentifier, owner)
     }
 
-    func testSchedulerRestoresExactOwnerAmongMultipleLocalOwnersWhenTokenMatches() throws {
+    func testSchedulerActivatesValidatedExactOwnerAmongMultipleLocalOwners() throws {
         let store = makeOwnerStore()
         let ownerA = "issuer|owner_a"
         let ownerB = "issuer|owner_b"
@@ -54,13 +54,13 @@ final class SyncSchedulerStatusTests: XCTestCase {
         try context.save()
         let scheduler = SyncScheduler(modelContext: context, lastKnownOwnerTokenStore: store)
 
-        XCTAssertTrue(scheduler.restoreLastKnownOwnerTokenIdentifier(matchingOwnerTokenIdentifier: ownerB))
+        XCTAssertTrue(scheduler.activateValidatedOwnerTokenIdentifier(ownerB))
 
         XCTAssertEqual(scheduler.currentOwnerTokenIdentifier, ownerB)
         XCTAssertEqual(store.ownerTokenIdentifier, ownerB)
     }
 
-    func testSchedulerRestoresExactOwnerAmongMultipleLocalOwnersWhenCacheIsStale() throws {
+    func testSchedulerValidatedExactOwnerOverridesStaleCache() throws {
         let store = makeOwnerStore()
         let ownerA = "issuer|owner_a"
         let ownerB = "issuer|owner_b"
@@ -72,26 +72,23 @@ final class SyncSchedulerStatusTests: XCTestCase {
         try context.save()
         let scheduler = SyncScheduler(modelContext: context, lastKnownOwnerTokenStore: store)
 
-        XCTAssertTrue(scheduler.restoreLastKnownOwnerTokenIdentifier(matchingOwnerTokenIdentifier: ownerB))
+        XCTAssertTrue(scheduler.activateValidatedOwnerTokenIdentifier(ownerB))
 
         XCTAssertEqual(scheduler.currentOwnerTokenIdentifier, ownerB)
         XCTAssertEqual(store.ownerTokenIdentifier, ownerB)
     }
 
-    func testSchedulerDoesNotRestoreExactOwnerWithoutLocalFootprint() throws {
+    func testSchedulerRestoresValidatedExactOwnerWithoutLocalFootprint() throws {
         let store = makeOwnerStore()
-        let ownerA = "issuer|owner_a"
         let ownerB = "issuer|owner_b"
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
-        context.insert(UserSettings(syncOwnerTokenIdentifier: ownerA))
-        try context.save()
         let scheduler = SyncScheduler(modelContext: context, lastKnownOwnerTokenStore: store)
 
-        XCTAssertFalse(scheduler.restoreLastKnownOwnerTokenIdentifier(matchingOwnerTokenIdentifier: ownerB))
+        XCTAssertTrue(scheduler.activateValidatedOwnerTokenIdentifier(ownerB))
 
-        XCTAssertNil(scheduler.currentOwnerTokenIdentifier)
-        XCTAssertNil(store.ownerTokenIdentifier)
+        XCTAssertEqual(scheduler.currentOwnerTokenIdentifier, ownerB)
+        XCTAssertEqual(store.ownerTokenIdentifier, ownerB)
     }
 
     func testSchedulerDoesNotRestoreCachedOwnerWhenSubjectDoesNotMatch() throws {
@@ -107,19 +104,19 @@ final class SyncSchedulerStatusTests: XCTestCase {
         XCTAssertEqual(store.ownerTokenIdentifier, owner)
     }
 
-    func testSchedulerDoesNotRestoreCachedOwnerWhenIssuerDoesNotMatchOwnerTokenIdentifier() throws {
+    func testSchedulerUsesValidatedExactOwnerWhenCacheBelongsToDifferentIssuer() throws {
         let store = makeOwnerStore()
         let scheduler = SyncScheduler(lastKnownOwnerTokenStore: store)
         let cachedOwner = "issuer_a|owner_a"
         scheduler.currentOwnerTokenIdentifier = cachedOwner
         scheduler.currentOwnerTokenIdentifier = nil
 
-        XCTAssertFalse(
-            scheduler.restoreLastKnownOwnerTokenIdentifier(matchingOwnerTokenIdentifier: "issuer_b|owner_a")
+        XCTAssertTrue(
+            scheduler.activateValidatedOwnerTokenIdentifier("issuer_b|owner_a")
         )
 
-        XCTAssertNil(scheduler.currentOwnerTokenIdentifier)
-        XCTAssertEqual(store.ownerTokenIdentifier, cachedOwner)
+        XCTAssertEqual(scheduler.currentOwnerTokenIdentifier, "issuer_b|owner_a")
+        XCTAssertEqual(store.ownerTokenIdentifier, "issuer_b|owner_a")
     }
 
     func testSchedulerFallsBackToInferredOwnerWhenCachedOwnerSubjectMismatches() throws {

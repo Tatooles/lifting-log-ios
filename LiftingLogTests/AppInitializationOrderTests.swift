@@ -32,7 +32,7 @@ final class AppInitializationOrderTests: XCTestCase {
             "The retry must be limited to restored active Clerk sessions."
         )
         XCTAssertTrue(
-            appSource.contains("restoreCachedOwnerForActiveClerkUserOrHideOwnerScopedData()"),
+            appSource.contains("activateOwnerForActiveClerkUserOrHideOwnerScopedData()"),
             "Restored active Clerk sessions should share the same guarded owner restore fallback."
         )
         XCTAssertTrue(
@@ -137,11 +137,11 @@ final class AppInitializationOrderTests: XCTestCase {
             "The active Clerk session fallback still needs Clerk's current user id to build an issuer-scoped owner token."
         )
         XCTAssertTrue(
-            appSource.contains("restoreCachedOwnerForActiveClerkUserOrHideOwnerScopedData()"),
+            appSource.contains("activateOwnerForActiveClerkUserOrHideOwnerScopedData()"),
             "The unauthenticated active-Clerk fallback must use the guarded restore helper."
         )
         XCTAssertTrue(
-            appSource.contains("matchingOwnerTokenIdentifier: expectedClerkOwnerTokenIdentifier"),
+            appSource.contains("activateValidatedOwnerTokenIdentifier(expectedClerkOwnerTokenIdentifier)"),
             "The unauthenticated restore fallback must validate the issuer-scoped owner token."
         )
         XCTAssertFalse(
@@ -187,53 +187,16 @@ final class AppInitializationOrderTests: XCTestCase {
         )
     }
 
-    func testActiveClerkRestoreMissSeedsLocalDefaultsWithoutClearingCachedOwner() throws {
+    func testActiveClerkRestoreMissDoesNotSeedOwnerlessDefaults() throws {
         let appSource = try sourceFileContents("LiftingLog/App/LiftingLogApp.swift")
 
-        let seedWrapperOffset = try XCTUnwrap(
-            appSource.range(of: "private func restoreCachedOwnerForActiveClerkUserOrSeedLocalDefaults() -> Bool")
-        ).lowerBound
-        let missOffset = try XCTUnwrap(
-            appSource.range(
-                of: "if !restoreCachedOwnerForActiveClerkUserOrHideOwnerScopedData()",
-                range: seedWrapperOffset..<appSource.endIndex
-            )
-        ).lowerBound
-        let seedOffset = try XCTUnwrap(
-            appSource.range(
-                of: "syncScheduler.seedDefaultsForLocalMode()",
-                range: missOffset..<appSource.endIndex
-            )
-        ).lowerBound
-        let returnFalseOffset = try XCTUnwrap(
-            appSource.range(of: "return false", range: seedOffset..<appSource.endIndex)
-        ).lowerBound
-
-        XCTAssertTrue(
-            appSource.contains("restoreCachedOwnerForActiveClerkUserOrSeedLocalDefaults()"),
-            "Active Clerk startup paths should share the local-default restore miss fallback."
-        )
-        XCTAssertTrue(
-            appSource.contains("@discardableResult\n    private func restoreCachedOwnerForActiveClerkUserOrHideOwnerScopedData() -> Bool"),
-            "The guarded restore helper should report whether an owner was actually restored."
-        )
-        XCTAssertLessThan(
-            appSource.distance(from: appSource.startIndex, to: missOffset),
-            appSource.distance(from: appSource.startIndex, to: seedOffset),
-            "An active Clerk session with no restorable owner should seed ownerless defaults."
-        )
-        XCTAssertLessThan(
-            appSource.distance(from: appSource.startIndex, to: seedOffset),
-            appSource.distance(from: appSource.startIndex, to: returnFalseOffset),
-            "The local seed fallback should still report that no owner was restored."
-        )
         XCTAssertFalse(
-            appSource.contains("""
-                if !restoreCachedOwnerForActiveClerkUserOrHideOwnerScopedData() {
-                    syncScheduler.enterSignedOutMode()
-                }
-"""),
-            "An active Clerk restore miss must not clear the cached owner token as a signed-out transition."
+            appSource.contains("restoreCachedOwnerForActiveClerkUserOrSeedLocalDefaults()"),
+            "An active Clerk session must not fall back to ownerless local seeding."
+        )
+        XCTAssertTrue(
+            appSource.contains("activateOwnerForActiveClerkUserOrHideOwnerScopedData()"),
+            "An active Clerk restore miss should hide owner-scoped data until an exact owner is available."
         )
     }
 
@@ -249,7 +212,7 @@ final class AppInitializationOrderTests: XCTestCase {
             "Offline owner restoration should use Clerk's cached session JWT to validate the issuer as well as subject."
         )
         XCTAssertTrue(
-            appSource.contains("matchingOwnerTokenIdentifier: activeClerkOwnerTokenIdentifier"),
+            appSource.contains("activateValidatedOwnerTokenIdentifier(activeClerkOwnerTokenIdentifier)"),
             "Cached owner restoration should prefer exact iss|sub matching when the active session token is available."
         )
     }

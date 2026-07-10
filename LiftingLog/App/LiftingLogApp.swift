@@ -149,7 +149,7 @@ struct LiftingLogApp: App {
         await waitUntilClerkIsLoaded()
         guard !Task.isCancelled else { return }
         guard Clerk.shared.session?.status == .active else { return }
-        restoreCachedOwnerForActiveClerkUserOrSeedLocalDefaults()
+        activateOwnerForActiveClerkUserOrHideOwnerScopedData()
 
         let result = await convexClient.loginFromCache()
         let token: String
@@ -171,26 +171,14 @@ struct LiftingLogApp: App {
         guard !Task.isCancelled else { return true }
         guard Clerk.shared.session?.status == .active else { return false }
 
-        restoreCachedOwnerForActiveClerkUserOrSeedLocalDefaults()
+        activateOwnerForActiveClerkUserOrHideOwnerScopedData()
         return true
     }
 
     @discardableResult
-    private func restoreCachedOwnerForActiveClerkUserOrSeedLocalDefaults() -> Bool {
-        if !restoreCachedOwnerForActiveClerkUserOrHideOwnerScopedData() {
-            syncScheduler.seedDefaultsForLocalMode()
-            return false
-        }
-
-        return true
-    }
-
-    @discardableResult
-    private func restoreCachedOwnerForActiveClerkUserOrHideOwnerScopedData() -> Bool {
+    private func activateOwnerForActiveClerkUserOrHideOwnerScopedData() -> Bool {
         if let activeClerkOwnerTokenIdentifier {
-            if syncScheduler.restoreLastKnownOwnerTokenIdentifier(
-                matchingOwnerTokenIdentifier: activeClerkOwnerTokenIdentifier
-            ) {
+            if syncScheduler.activateValidatedOwnerTokenIdentifier(activeClerkOwnerTokenIdentifier) {
                 return true
             }
 
@@ -203,9 +191,7 @@ struct LiftingLogApp: App {
             return false
         }
 
-        if !syncScheduler.restoreLastKnownOwnerTokenIdentifier(
-            matchingOwnerTokenIdentifier: expectedClerkOwnerTokenIdentifier
-        ) {
+        if !syncScheduler.activateValidatedOwnerTokenIdentifier(expectedClerkOwnerTokenIdentifier) {
             syncScheduler.currentOwnerTokenIdentifier = nil
             return false
         }

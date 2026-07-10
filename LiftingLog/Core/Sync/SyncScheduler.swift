@@ -167,17 +167,12 @@ final class SyncScheduler {
     }
 
     @discardableResult
-    func restoreLastKnownOwnerTokenIdentifier(matchingOwnerTokenIdentifier expectedOwnerTokenIdentifier: String) -> Bool {
-        guard !expectedOwnerTokenIdentifier.isEmpty else {
+    func activateValidatedOwnerTokenIdentifier(_ ownerTokenIdentifier: String) -> Bool {
+        guard !ownerTokenIdentifier.isEmpty else {
             return false
         }
 
-        guard lastKnownOwnerTokenStore.ownerTokenIdentifier == expectedOwnerTokenIdentifier
-                || localOwnerTokenIdentifiers().contains(expectedOwnerTokenIdentifier) else {
-            return false
-        }
-
-        activateOwnerTokenIdentifier(expectedOwnerTokenIdentifier)
+        activateOwnerTokenIdentifier(ownerTokenIdentifier)
         return true
     }
 
