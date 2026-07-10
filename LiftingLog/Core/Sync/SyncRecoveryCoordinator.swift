@@ -83,6 +83,9 @@ final class SyncRecoveryCoordinator {
         ownerTokenIdentifier: String,
         sessionIdentifier: String?
     ) -> Bool {
+        guard isOwnerTokenIdentifierForCurrentSession(ownerTokenIdentifier) else {
+            return false
+        }
         guard let sessionIdentifier else { return false }
         let key = AuthenticatedStateKey(
             ownerTokenIdentifier: ownerTokenIdentifier,

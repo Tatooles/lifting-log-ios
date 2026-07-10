@@ -48,6 +48,48 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
         XCTAssertFalse(client.fetchRequests.isEmpty)
     }
 
+    func testRecoveryDoesNotDeferAuthenticatedStateForDifferentClerkOwner() async throws {
+        let currentOwnerTokenIdentifier = "issuer|owner_b"
+        let scheduler = SyncScheduler(
+            lastKnownOwnerTokenStore: makeOwnerStore()
+        )
+        scheduler.currentOwnerTokenIdentifier = currentOwnerTokenIdentifier
+        let authenticationClient = StubSyncAuthenticationClient(
+            result: .success(makeJWT(issuer: "issuer", subject: "owner_b")),
+            waitsForResume: true
+        )
+        let coordinator = SyncRecoveryCoordinator(
+            authenticationClient: authenticationClient,
+            syncScheduler: scheduler,
+            hasActiveSession: { true },
+            currentSessionIdentifier: { "session_b" },
+            isOwnerTokenIdentifierForCurrentSession: { ownerTokenIdentifier in
+                ownerTokenIdentifier == currentOwnerTokenIdentifier
+            }
+        )
+
+        let recovery = Task { @MainActor in
+            await coordinator.recoverAuthenticationAndRequestSync(for: .appForeground)
+        }
+        try await waitUntil { authenticationClient.hasPendingLogin }
+
+        XCTAssertFalse(
+            coordinator.shouldDeferAuthenticatedState(
+                ownerTokenIdentifier: "issuer|owner_a",
+                sessionIdentifier: "session_b"
+            )
+        )
+        XCTAssertTrue(
+            coordinator.shouldDeferAuthenticatedState(
+                ownerTokenIdentifier: currentOwnerTokenIdentifier,
+                sessionIdentifier: "session_b"
+            )
+        )
+
+        authenticationClient.resumeLogin()
+        await recovery.value
+    }
+
     func testManualRetryAuthenticatesBeforeRequestingSync() async throws {
         let ownerTokenIdentifier = "https://clerk.auth.liftinglog.app|user_123"
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
