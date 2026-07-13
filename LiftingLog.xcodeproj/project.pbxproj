@@ -109,8 +109,10 @@
 		AB4F2E874EF076CD6CD30A77 /* SyncOutboxIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7F732960ACFFD3709931AFB /* SyncOutboxIntegrationTests.swift */; };
 		AD646CF5B13A9138E4EB3479 /* SyncFailureNoticePresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F2C94F445734EFFD8A865F4 /* SyncFailureNoticePresentationTests.swift */; };
 		AD9B0899FA656A3E141643A6 /* ExerciseMuscleGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF74B7CE70C49E564ED00FDF /* ExerciseMuscleGroup.swift */; };
+		AF723CDA27CE6A8AE2281673 /* AppLinksTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 524CF59AB20710B1AA556861 /* AppLinksTests.swift */; };
 		AFF96C9DF43AB6A16C5D474A /* DeleteDataConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D0EE1D080F54768F9E215FA /* DeleteDataConfirmationView.swift */; };
 		B01C71A13BBCC55178AEFB27 /* FormattingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97D4F05FB241C4EE29FC43EE /* FormattingTests.swift */; };
+		B14AA02C0047C54A4CC266C8 /* AppLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7185F48A47F68A3D73F7E33D /* AppLinks.swift */; };
 		B4EDA8C6351F43F22CAF247B /* WorkoutSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9805F9A67B0D4ADEFD6D4446 /* WorkoutSession.swift */; };
 		B5BE5FBA5B780E38E8D8DA90 /* SyncScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45C4D9744D95F3023BC8AC26 /* SyncScheduler.swift */; };
 		B6F09A8AA3B74557E1F7D1CE /* WorkoutDataExportServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E09AE5EE2127ED66A3E3D928 /* WorkoutDataExportServiceTests.swift */; };
@@ -222,6 +224,7 @@
 		471BBCA3415CCB0142B4844B /* PreviousSetPerformance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviousSetPerformance.swift; sourceTree = "<group>"; };
 		49C731DA20E3AFDB50E247AD /* UITestFixtureSeeder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestFixtureSeeder.swift; sourceTree = "<group>"; };
 		4D0EE1D080F54768F9E215FA /* DeleteDataConfirmationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeleteDataConfirmationView.swift; sourceTree = "<group>"; };
+		524CF59AB20710B1AA556861 /* AppLinksTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLinksTests.swift; sourceTree = "<group>"; };
 		53A0AC2A67CDFE8BE93F6F99 /* SyncEntityKind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEntityKind.swift; sourceTree = "<group>"; };
 		54AEC1C879FEDA6709B30F53 /* LoggedExercise.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoggedExercise.swift; sourceTree = "<group>"; };
 		54DE670FB152B27AC0198DE0 /* ConvexClientFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConvexClientFactory.swift; sourceTree = "<group>"; };
@@ -238,6 +241,7 @@
 		688514D6739A89B9049CC772 /* LiftingLogUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiftingLogUITests.swift; sourceTree = "<group>"; };
 		68EA4D22932EC47EAD988098 /* ExerciseHistoryNoteBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseHistoryNoteBlock.swift; sourceTree = "<group>"; };
 		6A61D51390C57E55CBDD3FFB /* PrivacyDataSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyDataSection.swift; sourceTree = "<group>"; };
+		7185F48A47F68A3D73F7E33D /* AppLinks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLinks.swift; sourceTree = "<group>"; };
 		725ED241191390A7E4C1A6A1 /* ConvexConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConvexConfiguration.swift; sourceTree = "<group>"; };
 		73565DEB1001EDBB835F1335 /* ClerkJWTIdentityResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClerkJWTIdentityResolverTests.swift; sourceTree = "<group>"; };
 		75BB41D2CBBEDDF4F4CFF55F /* ModelPersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelPersistenceTests.swift; sourceTree = "<group>"; };
@@ -375,6 +379,7 @@
 			isa = PBXGroup;
 			children = (
 				A25636E2B74A20542477F523 /* AppBuildInfo.swift */,
+				7185F48A47F68A3D73F7E33D /* AppLinks.swift */,
 				0E781E5EB3DB48BD5606EF92 /* AccountDeletion */,
 				F52CE50BEED989CBD075E622 /* Auth */,
 				9F029759C33D5537FF77E418 /* Domain */,
@@ -435,6 +440,7 @@
 				A517D28A0B6B5550E2F3E8A3 /* AccountDisplayStateTests.swift */,
 				2941B8AE0D934766808444B2 /* ActiveWorkoutEngineTests.swift */,
 				09F067980B06070EB906C6DA /* AppInitializationOrderTests.swift */,
+				524CF59AB20710B1AA556861 /* AppLinksTests.swift */,
 				77096CDECA32467D94D767DF /* AppNavigationStateTests.swift */,
 				C52A1C061D09E267CE5764DA /* ClerkConfigurationTests.swift */,
 				73565DEB1001EDBB835F1335 /* ClerkJWTIdentityResolverTests.swift */,
@@ -830,6 +836,7 @@
 				9622D4476759D9E4D6CD832E /* AccountDisplayStateTests.swift in Sources */,
 				E1841BF9CE2E3EFA2B9E0246 /* ActiveWorkoutEngineTests.swift in Sources */,
 				90042FFF53E5CDB6AA423587 /* AppInitializationOrderTests.swift in Sources */,
+				AF723CDA27CE6A8AE2281673 /* AppLinksTests.swift in Sources */,
 				0096CA4318A3370CE3BA938F /* AppNavigationStateTests.swift in Sources */,
 				1F89A4E55A6263247C37239B /* ClerkConfigurationTests.swift in Sources */,
 				99DC2B62F11AAEF046895EFE /* ClerkJWTIdentityResolverTests.swift in Sources */,
@@ -876,6 +883,7 @@
 				0FA5C398E41A7B2F65956D13 /* ActivityView.swift in Sources */,
 				C3B664AC2AD3AE23F1D39492 /* AddExerciseSheet.swift in Sources */,
 				422E86620DC0E0D30AB643E1 /* AppBuildInfo.swift in Sources */,
+				B14AA02C0047C54A4CC266C8 /* AppLinks.swift in Sources */,
 				350A67F1F3CDD2389113FB1D /* AppNavigationState.swift in Sources */,
 				E29FE87177B74CEBE88DAC12 /* AppShellView.swift in Sources */,
 				6AB7A0F44B97D2ED6BC30998 /* AppTheme.swift in Sources */,

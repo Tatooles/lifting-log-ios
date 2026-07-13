@@ -185,6 +185,26 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
+    func testSettingsShowsGitHubRepositoryLink() {
+        let app = makeApp()
+        app.launch()
+
+        app.buttons["ProfileTab"].tap()
+        XCTAssertTrue(app.staticTexts["ProfileTitle"].waitForExistence(timeout: 3))
+        app.buttons["ProfileSettingsLink"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
+
+        let githubLink = app.buttons["SettingsGitHubLink"]
+        for _ in 0..<5 where !githubLink.isHittable {
+            app.swipeUp()
+        }
+
+        XCTAssertTrue(githubLink.exists)
+        XCTAssertTrue(githubLink.isHittable)
+        XCTAssertEqual(githubLink.label, "View on GitHub")
+    }
+
+    @MainActor
     func testAddingExerciseAndSetMovesFocusAndKeyboardCanBeDismissed() {
         let app = makeApp()
         app.launch()

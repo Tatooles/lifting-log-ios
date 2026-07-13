@@ -92,6 +92,11 @@ struct SettingsView: View {
             }
             .accessibilityIdentifier("SettingsWhatsNewButton")
 
+            Link(destination: AppLinks.githubRepositoryURL) {
+                Label("View on GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
+            }
+            .accessibilityIdentifier("SettingsGitHubLink")
+
             Button {
                 copyAppInfo()
             } label: {
