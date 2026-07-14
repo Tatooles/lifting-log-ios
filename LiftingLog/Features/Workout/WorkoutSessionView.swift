@@ -124,14 +124,6 @@ struct WorkoutSessionView: View {
                 .padding(.horizontal, AppTheme.shellPadding)
                 .padding(.top, 8)
                 .padding(.bottom, contentBottomPadding)
-                // Animate only the collapse back to resting padding so the
-                // scroll offset settles instead of snapping. Expansion must
-                // stay instant: the scroll-to-reveal fires 350ms later and
-                // needs the full extent already in place.
-                .animation(
-                    contentBottomPadding == 24 ? .spring(response: 0.32, dampingFraction: 0.9) : nil,
-                    value: contentBottomPadding
-                )
             }
             .safeAreaInset(edge: .top, spacing: 0) {
                 TimelineView(.periodic(from: .now, by: 1)) { timeline in
@@ -179,32 +171,26 @@ struct WorkoutSessionView: View {
                     }
                 }
             }
-            .onChange(of: focusedField) { previousField, newField in
+            .onChange(of: focusedField) { _, newField in
                 if RPEEditingFocusPolicy.shouldReset(editingSetID: rpeEditingSetID, newFocusedField: newField) {
                     rpeEditingSetID = nil
                     rpeEditingSourceField = nil
                 }
 
-                if let newField {
+                if let newField,
+                   !(recentlyAddedExerciseID != nil && Self.isSetField(newField)) {
                     Task { @MainActor in
                         try? await Task.sleep(for: .milliseconds(250))
                         withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
                             scrollProxy.scrollTo(newField, anchor: Self.focusRevealAnchor)
                         }
                     }
-                } else if Self.isSetField(previousField), let recentlyAddedExerciseID {
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(300))
-                        // Collapse the reveal padding before the scroll so
-                        // the target is computed against the final layout;
-                        // scrolling first lands on extent that then shrinks
-                        // out from under the offset, producing a second
-                        // settle.
-                        self.recentlyAddedExerciseID = nil
-                        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
-                            scrollProxy.scrollTo(recentlyAddedExerciseID, anchor: .top)
-                        }
-                    }
+                } else if recentlyAddedExerciseID != nil {
+                    // Keyboard dismissal already performs the visible layout
+                    // transition. Clear the temporary reveal extent in the
+                    // same focus-loss update; a delayed scroll here creates a
+                    // separate after-bump once the keyboard has moved away.
+                    recentlyAddedExerciseID = nil
                 }
             }
             .toolbar {
@@ -263,20 +249,7 @@ struct WorkoutSessionView: View {
                         Spacer()
 
                         Button("Done") {
-                            let scrollTarget = recentlyAddedExerciseID
                             focusedField = nil
-
-                            if let scrollTarget {
-                                Task { @MainActor in
-                                    try? await Task.sleep(for: .milliseconds(500))
-                                    // Same ordering contract as the focus
-                                    // onChange reveal: collapse before scroll.
-                                    self.recentlyAddedExerciseID = nil
-                                    withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
-                                        scrollProxy.scrollTo(scrollTarget, anchor: .top)
-                                    }
-                                }
-                            }
                         }
                         .font(.system(size: 16, weight: .semibold))
                         .accessibilityIdentifier("DismissKeyboardButton")
