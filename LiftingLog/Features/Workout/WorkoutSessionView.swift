@@ -177,20 +177,21 @@ struct WorkoutSessionView: View {
                     rpeEditingSourceField = nil
                 }
 
-                if let newField,
-                   !(recentlyAddedExerciseID != nil && Self.isSetField(newField)) {
+                let shouldRetainNewExerciseReveal = recentlyAddedExerciseID != nil && Self.isSetField(newField)
+                if !shouldRetainNewExerciseReveal {
+                    // The temporary reveal extent is only needed while moving
+                    // between set fields. Clear it before revealing any other
+                    // field or dismissing focus.
+                    recentlyAddedExerciseID = nil
+                }
+
+                if let newField, !shouldRetainNewExerciseReveal {
                     Task { @MainActor in
                         try? await Task.sleep(for: .milliseconds(250))
                         withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
                             scrollProxy.scrollTo(newField, anchor: Self.focusRevealAnchor)
                         }
                     }
-                } else if recentlyAddedExerciseID != nil {
-                    // Keyboard dismissal already performs the visible layout
-                    // transition. Clear the temporary reveal extent in the
-                    // same focus-loss update; a delayed scroll here creates a
-                    // separate after-bump once the keyboard has moved away.
-                    recentlyAddedExerciseID = nil
                 }
             }
             .toolbar {
