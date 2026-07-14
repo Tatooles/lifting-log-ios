@@ -32,9 +32,18 @@ struct WorkoutSessionView: View {
     @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
 
     private var contentBottomPadding: CGFloat {
-        // Extra scroll room is only needed while revealing a focused field or
-        // positioning a newly added exercise near the top of the viewport.
-        focusedField == nil && recentlyAddedExerciseID == nil ? 24 : 120
+        // Extra scroll room is only needed while positioning a newly added
+        // exercise near the top of the viewport or revealing a focused
+        // mid-list field. The workout notes card is the last element, so
+        // keyboard avoidance alone reveals it; extra room would let it float
+        // above the keyboard.
+        if recentlyAddedExerciseID != nil { return 120 }
+        switch focusedField {
+        case .exerciseNotes, .setWeight, .setReps:
+            return 120
+        case .workoutTitle, .workoutNotes, nil:
+            return 24
+        }
     }
 
     private var weightUnit: MeasurementUnit {
@@ -113,6 +122,14 @@ struct WorkoutSessionView: View {
                 .padding(.horizontal, AppTheme.shellPadding)
                 .padding(.top, 8)
                 .padding(.bottom, contentBottomPadding)
+                // Animate only the collapse back to resting padding so the
+                // scroll offset settles instead of snapping. Expansion must
+                // stay instant: the scroll-to-reveal fires 350ms later and
+                // needs the full extent already in place.
+                .animation(
+                    contentBottomPadding == 24 ? .spring(response: 0.32, dampingFraction: 0.9) : nil,
+                    value: contentBottomPadding
+                )
             }
             .safeAreaInset(edge: .top, spacing: 0) {
                 TimelineView(.periodic(from: .now, by: 1)) { timeline in
