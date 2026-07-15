@@ -238,7 +238,7 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
-    func testAddingExerciseScrollsNewExerciseToTop() {
+    func testAddingExerciseScrollsNewExerciseToTopWhileEditing() {
         let app = makeApp()
         app.launch()
 
@@ -248,7 +248,7 @@ final class LiftingLogUITests: XCTestCase {
         addExercise("Back Squat, Barbell • Quads", in: app)
         dismissKeyboardIfNeeded(in: app)
         addExercise("Bench Press, Barbell • Chest", in: app)
-        dismissKeyboardIfNeeded(in: app)
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3))
 
         let addedExerciseHeader = app.buttons["ExerciseHeader-1"]
         XCTAssertTrue(addedExerciseHeader.waitForExistence(timeout: 3))
@@ -256,6 +256,9 @@ final class LiftingLogUITests: XCTestCase {
             waitForElement(addedExerciseHeader, maxYOrigin: 150, timeout: 3),
             "Expected ExerciseHeader-1 to scroll near the top, got minY \(addedExerciseHeader.frame.minY)"
         )
+
+        dismissKeyboardIfNeeded(in: app)
+        XCTAssertTrue(addedExerciseHeader.isHittable)
     }
 
     @MainActor
@@ -332,7 +335,10 @@ final class LiftingLogUITests: XCTestCase {
 
         let doneButton = app.buttons["DismissKeyboardButton"]
         XCTAssertTrue(doneButton.waitForExistence(timeout: 3))
-        XCTAssertLessThan(notesField.frame.maxY, doneButton.frame.minY - 8)
+        // 24 = the card's 16pt inner inset below the field + 8pt clearance,
+        // so the card edge (not just the field) clears the floating
+        // keyboard accessory buttons.
+        XCTAssertLessThan(notesField.frame.maxY, doneButton.frame.minY - 24)
     }
 
     @MainActor

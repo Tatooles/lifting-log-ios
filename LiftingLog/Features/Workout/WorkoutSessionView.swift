@@ -30,7 +30,25 @@ struct WorkoutSessionView: View {
     @FocusState private var focusedField: WorkoutField?
     @Query(sort: \WorkoutSession.startedAt, order: .reverse) private var sessions: [WorkoutSession]
     @Query(sort: \UserSettings.createdAt) private var settingsRecords: [UserSettings]
-    private let contentBottomPadding: CGFloat = 120
+
+    private var contentBottomPadding: CGFloat {
+        // Any padding that appears while a field is focused collapses on
+        // dismissal and clamps the scroll offset (a visible jump), so each
+        // tier is the minimum the state needs. Full room is only for
+        // positioning a newly added exercise near the top of the viewport.
+        // The workout notes card is the last element, so editing it needs
+        // enough room to clear the floating keyboard accessory buttons,
+        // which sit ~48pt above the keyboard's safe-area inset. Mid-list
+        // fields always have real content below them, so keyboard avoidance
+        // reveals them with no extra room at all.
+        if recentlyAddedExerciseID != nil { return 120 }
+        switch focusedField {
+        case .workoutTitle, .workoutNotes:
+            return 64
+        case .exerciseNotes, .setWeight, .setReps, nil:
+            return 24
+        }
+    }
 
     private var weightUnit: MeasurementUnit {
         UserSettings.visibleSettingsRecords(
@@ -155,26 +173,26 @@ struct WorkoutSessionView: View {
                     }
                 }
             }
-            .onChange(of: focusedField) { previousField, newField in
+            .onChange(of: focusedField) { _, newField in
                 if RPEEditingFocusPolicy.shouldReset(editingSetID: rpeEditingSetID, newFocusedField: newField) {
                     rpeEditingSetID = nil
                     rpeEditingSourceField = nil
                 }
 
-                if let newField {
+                let shouldRetainNewExerciseReveal = recentlyAddedExerciseID != nil && Self.isSetField(newField)
+                if !shouldRetainNewExerciseReveal {
+                    // The temporary reveal extent is only needed while moving
+                    // between set fields. Clear it before revealing any other
+                    // field or dismissing focus.
+                    recentlyAddedExerciseID = nil
+                }
+
+                if let newField, !shouldRetainNewExerciseReveal {
                     Task { @MainActor in
                         try? await Task.sleep(for: .milliseconds(250))
                         withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
                             scrollProxy.scrollTo(newField, anchor: Self.focusRevealAnchor)
                         }
-                    }
-                } else if Self.isSetField(previousField), let recentlyAddedExerciseID {
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(300))
-                        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
-                            scrollProxy.scrollTo(recentlyAddedExerciseID, anchor: .top)
-                        }
-                        self.recentlyAddedExerciseID = nil
                     }
                 }
             }
@@ -234,18 +252,7 @@ struct WorkoutSessionView: View {
                         Spacer()
 
                         Button("Done") {
-                            let scrollTarget = recentlyAddedExerciseID
                             focusedField = nil
-
-                            if let scrollTarget {
-                                Task { @MainActor in
-                                    try? await Task.sleep(for: .milliseconds(500))
-                                    withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
-                                        scrollProxy.scrollTo(scrollTarget, anchor: .top)
-                                    }
-                                    self.recentlyAddedExerciseID = nil
-                                }
-                            }
                         }
                         .font(.system(size: 16, weight: .semibold))
                         .accessibilityIdentifier("DismissKeyboardButton")
