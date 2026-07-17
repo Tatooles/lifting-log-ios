@@ -185,6 +185,26 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
+    func testSettingsShowsGitHubRepositoryLink() {
+        let app = makeApp()
+        app.launch()
+
+        app.buttons["ProfileTab"].tap()
+        XCTAssertTrue(app.staticTexts["ProfileTitle"].waitForExistence(timeout: 3))
+        app.buttons["ProfileSettingsLink"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
+
+        let githubLink = app.buttons["SettingsGitHubLink"]
+        for _ in 0..<5 where !githubLink.isHittable {
+            app.swipeUp()
+        }
+
+        XCTAssertTrue(githubLink.exists)
+        XCTAssertTrue(githubLink.isHittable)
+        XCTAssertEqual(githubLink.label, "View on GitHub")
+    }
+
+    @MainActor
     func testAddingExerciseAndSetMovesFocusAndKeyboardCanBeDismissed() {
         let app = makeApp()
         app.launch()
@@ -218,7 +238,7 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
-    func testAddingExerciseScrollsNewExerciseToTop() {
+    func testAddingExerciseScrollsNewExerciseToTopWhileEditing() {
         let app = makeApp()
         app.launch()
 
@@ -228,7 +248,7 @@ final class LiftingLogUITests: XCTestCase {
         addExercise("Back Squat, Barbell • Quads", in: app)
         dismissKeyboardIfNeeded(in: app)
         addExercise("Bench Press, Barbell • Chest", in: app)
-        dismissKeyboardIfNeeded(in: app)
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3))
 
         let addedExerciseHeader = app.buttons["ExerciseHeader-1"]
         XCTAssertTrue(addedExerciseHeader.waitForExistence(timeout: 3))
@@ -236,6 +256,9 @@ final class LiftingLogUITests: XCTestCase {
             waitForElement(addedExerciseHeader, maxYOrigin: 150, timeout: 3),
             "Expected ExerciseHeader-1 to scroll near the top, got minY \(addedExerciseHeader.frame.minY)"
         )
+
+        dismissKeyboardIfNeeded(in: app)
+        XCTAssertTrue(addedExerciseHeader.isHittable)
     }
 
     @MainActor
@@ -312,7 +335,10 @@ final class LiftingLogUITests: XCTestCase {
 
         let doneButton = app.buttons["DismissKeyboardButton"]
         XCTAssertTrue(doneButton.waitForExistence(timeout: 3))
-        XCTAssertLessThan(notesField.frame.maxY, doneButton.frame.minY - 8)
+        // 24 = the card's 16pt inner inset below the field + 8pt clearance,
+        // so the card edge (not just the field) clears the floating
+        // keyboard accessory buttons.
+        XCTAssertLessThan(notesField.frame.maxY, doneButton.frame.minY - 24)
     }
 
     @MainActor
@@ -760,6 +786,23 @@ final class LiftingLogUITests: XCTestCase {
     }
 
     @MainActor
+    func testSettingsSyncRetryRequestsSyncInUITestMode() {
+        let app = makeApp(extraArguments: [
+            "--uitest-sync-owner", "issuer|ui_owner",
+            "--uitest-show-sync-failure",
+        ])
+        app.launch()
+
+        app.buttons["GlobalSyncDetailsButton"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
+        let settingsRetryButton = app.buttons["SettingsSyncRetryButton"]
+        XCTAssertTrue(settingsRetryButton.waitForExistence(timeout: 3))
+        settingsRetryButton.tap()
+
+        XCTAssertTrue(app.staticTexts["UITestSyncRequestCount-1"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
     func testFailedSyncBannerCanBeDismissed() {
         let app = makeApp(extraArguments: [
             "--uitest-sync-owner", "issuer|ui_owner",
@@ -944,6 +987,46 @@ final class LiftingLogUITests: XCTestCase {
         relaunchedApp.buttons["WorkoutHistoryButton-0"].tap()
         XCTAssertTrue(relaunchedApp.staticTexts["Relaunch Push"].waitForExistence(timeout: 3))
         XCTAssertTrue(relaunchedApp.staticTexts["Bench Press"].exists)
+    }
+
+    @MainActor
+    func testOfflineColdLaunchWithCachedOwnerPreservesOwnerScopedData() {
+        let owner = "issuer|offline_cached_owner"
+        let app = makeDiskBackedResetApp(extraArguments: [
+            "--uitest-sync-owner", owner,
+            "--uitest-seed-completed-bench-workout", "Offline Cached Owner Push",
+        ])
+        app.launch()
+
+        app.buttons["ProfileTab"].tap()
+        app.buttons["ProfileSettingsLink"].tap()
+        XCTAssertTrue(app.segmentedControls["WeightUnitPicker"].waitForExistence(timeout: 3))
+        app.segmentedControls["WeightUnitPicker"].buttons["Kilograms"].tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
+        app.buttons["ProfileExerciseLibraryLink"].tap()
+        XCTAssertTrue(app.navigationBars["Exercises"].waitForExistence(timeout: 3))
+        createExercise(name: "Aardvark Offline Press", equipment: "Barbell", muscle: "Chest", in: app)
+        XCTAssertTrue(app.buttons["ExerciseLibraryRow-Aardvark Offline Press-Barbell"].waitForExistence(timeout: 3))
+        app.terminate()
+
+        let relaunchedApp = makeDiskBackedApp(extraArguments: [
+            "--uitest-force-signed-in-auth",
+            "--uitest-restore-cached-sync-owner",
+            "--uitest-restore-cached-sync-owner-subject", "offline_cached_owner",
+        ])
+        relaunchedApp.launch()
+
+        relaunchedApp.buttons["ProfileTab"].tap()
+        XCTAssertTrue(relaunchedApp.staticTexts["KG"].waitForExistence(timeout: 3))
+        relaunchedApp.buttons["ProfileExerciseLibraryLink"].tap()
+        XCTAssertTrue(relaunchedApp.navigationBars["Exercises"].waitForExistence(timeout: 3))
+        XCTAssertTrue(relaunchedApp.buttons["ExerciseLibraryRow-Aardvark Offline Press-Barbell"].waitForExistence(timeout: 3))
+
+        relaunchedApp.buttons["HistoryTab"].tap()
+        XCTAssertTrue(relaunchedApp.buttons["WorkoutHistoryButton-0"].waitForExistence(timeout: 3))
+        relaunchedApp.buttons["WorkoutHistoryButton-0"].tap()
+        XCTAssertTrue(relaunchedApp.staticTexts["Offline Cached Owner Push"].waitForExistence(timeout: 3))
     }
 
     @MainActor

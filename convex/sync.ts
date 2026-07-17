@@ -2,7 +2,9 @@ import { v, type Infer } from "convex/values";
 import { internal } from "./_generated/api";
 import {
   action,
+  internalAction,
   internalMutation,
+  internalQuery,
   mutation,
   query,
   type MutationCtx,
@@ -77,16 +79,21 @@ const accountDeletionTableValidator = v.union(
   v.literal("userSettings"),
 );
 
-const accountDeletionTableOrder: AccountDeletionTable[] = [
+const accountDeletionTableOrder = [
   "loggedSets",
   "loggedExercises",
   "workoutSessions",
   "exercises",
   "userSettings",
-];
+] as const satisfies readonly AccountDeletionTable[];
 
 type AccountDataDeletionTableBatchResult = {
   tableName: AccountDeletionTable;
+  deletedCount: number;
+  hasMore: boolean;
+};
+
+type AccountDeletionMarkerCleanupResult = {
   deletedCount: number;
   hasMore: boolean;
 };
@@ -100,6 +107,9 @@ const defaultFetchLimit = 100;
 const maxFetchLimit = 500;
 const accountDeletionBatchSize = 1000;
 const maxAccountDeletionPassesPerAction = 100;
+const accountDeletionMarkerExpiryMs = 24 * 60 * 60 * 1000;
+const accountDeletionMarkerPurgeMs = 30 * 24 * 60 * 60 * 1000;
+const accountDeletionMarkerCleanupBatchSize = 100;
 const defaultPrimaryMuscleGroupRaw = "other";
 const defaultExerciseSnapshotEquipmentRaw = "other";
 const defaultExerciseSnapshotPrimaryMuscleGroupRaw = "other";
@@ -393,7 +403,7 @@ async function nextServerUpdatedAt(
 }
 
 async function accountDeletionMarkerForOwner(
-  ctx: MutationCtx,
+  ctx: QueryCtx,
   ownerTokenIdentifier: string,
 ): Promise<Doc<"accountDeletionMarkers"> | null> {
   const markers = await ctx.db
@@ -411,9 +421,20 @@ async function assertAccountDeletionNotStarted(
   ownerTokenIdentifier: string,
 ): Promise<void> {
   const marker = await accountDeletionMarkerForOwner(ctx, ownerTokenIdentifier);
-  if (marker !== null) {
-    throw new Error("Account deletion is in progress");
+  if (marker === null) {
+    return;
   }
+
+  // "started" guarantees no destructive batch has run (deleteAccountDataBatch
+  // advances the phase in the same mutation as the first delete), so an
+  // expired started marker is inert and can be resolved right here instead of
+  // waiting for the cleanup cron.
+  if (marker.phaseRaw === "started" && accountDeletionMarkerExpired(marker)) {
+    await ctx.db.delete(marker._id);
+    return;
+  }
+
+  throw new Error("Account deletion is in progress");
 }
 
 async function markAccountDeletionStarted(
@@ -422,18 +443,45 @@ async function markAccountDeletionStarted(
   cancellationToken: string,
 ): Promise<void> {
   const existing = await accountDeletionMarkerForOwner(ctx, ownerTokenIdentifier);
-  if (existing !== null) {
-    if (existing.cancellationToken !== cancellationToken) {
-      throw new Error("Account deletion is already in progress on another client");
-    }
+  if (existing === null) {
+    await ctx.db.insert("accountDeletionMarkers", {
+      ownerTokenIdentifier,
+      cancellationToken,
+      createdAt: Date.now(),
+      phaseRaw: "started",
+    });
     return;
   }
 
-  await ctx.db.insert("accountDeletionMarkers", {
-    ownerTokenIdentifier,
+  if (existing.phaseRaw === "cloudDataDeleted") {
+    return;
+  }
+
+  if (!canTakeOverAccountDeletionMarker(existing, cancellationToken)) {
+    throw new Error("Account deletion is already in progress on another client");
+  }
+
+  await ctx.db.patch(existing._id, {
     cancellationToken,
     createdAt: Date.now(),
+    phaseRaw: existing.phaseRaw === "started" ? "started" : "deleting",
   });
+}
+
+function accountDeletionMarkerExpired(
+  marker: Pick<Doc<"accountDeletionMarkers">, "createdAt">,
+): boolean {
+  return marker.createdAt < Date.now() - accountDeletionMarkerExpiryMs;
+}
+
+function canTakeOverAccountDeletionMarker(
+  marker: Doc<"accountDeletionMarkers">,
+  cancellationToken: string,
+): boolean {
+  return (
+    marker.cancellationToken === cancellationToken ||
+    accountDeletionMarkerExpired(marker)
+  );
 }
 
 async function clearAccountDeletionMarker(
@@ -446,12 +494,71 @@ async function clearAccountDeletionMarker(
     return;
   }
 
-  if (existing.cancellationToken !== cancellationToken) {
+  const ownerRecoverable =
+    existing.phaseRaw === "cloudDataDeleted" ||
+    (existing.phaseRaw === "started" && accountDeletionMarkerExpired(existing));
+
+  // A matching token may clear the marker in any phase, including mid-wipe:
+  // the token holder is the device that initiated deletion, and the client
+  // always follows a successful cancellation with a full local re-push
+  // (SyncScheduler.recoverAfterFailedAccountDeletion), which restores any
+  // partially deleted cloud data.
+  if (existing.cancellationToken !== cancellationToken && !ownerRecoverable) {
     throw new Error("Account deletion is already in progress on another client");
   }
 
   await ctx.db.delete(existing._id);
 }
+
+async function ownerHasAccountData(
+  ctx: MutationCtx,
+  ownerTokenIdentifier: string,
+): Promise<boolean> {
+  const results = await Promise.all(
+    accountDeletionTableOrder.map((tableName) =>
+      ctx.db
+        .query(tableName)
+        .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
+          q.eq("ownerTokenIdentifier", ownerTokenIdentifier),
+        )
+        .take(1),
+    ),
+  );
+
+  return results.some((records) => records.length > 0);
+}
+
+async function resolveExpiredAccountDeletionMarker(
+  ctx: MutationCtx,
+  marker: Doc<"accountDeletionMarkers">,
+): Promise<boolean> {
+  if (
+    marker.phaseRaw === "cloudDataDeleted" ||
+    marker.phaseRaw === "deletionIncomplete"
+  ) {
+    return false;
+  }
+
+  if (marker.phaseRaw === "started") {
+    await ctx.db.delete(marker._id);
+    return true;
+  }
+
+  if (await ownerHasAccountData(ctx, marker.ownerTokenIdentifier)) {
+    await ctx.db.patch(marker._id, { phaseRaw: "deletionIncomplete" });
+    return false;
+  }
+
+  const completedAt = Date.now();
+  await ctx.db.patch(marker._id, {
+    phaseRaw: "cloudDataDeleted",
+    createdAt: completedAt,
+    cloudDataDeletedAt: completedAt,
+  });
+  return false;
+}
+
+const expirableAccountDeletionPhases = ["started", "deleting", undefined] as const;
 
 async function upsertUserSettingsByClientId(
   ctx: MutationCtx,
@@ -1225,12 +1332,194 @@ export const clearAccountDeletion = internalMutation({
   },
 });
 
+export const accountDeletionMarkerForOwnerInternal = internalQuery({
+  args: {
+    ownerTokenIdentifier: v.string(),
+  },
+  handler: async (ctx, args): Promise<Doc<"accountDeletionMarkers"> | null> => {
+    return await accountDeletionMarkerForOwner(ctx, args.ownerTokenIdentifier);
+  },
+});
+
+export const resumeIncompleteAccountDeletion = internalAction({
+  args: {
+    ownerTokenIdentifier: v.string(),
+  },
+  handler: async (ctx, args): Promise<void> => {
+    const marker: Doc<"accountDeletionMarkers"> | null = await ctx.runQuery(
+      internal.sync.accountDeletionMarkerForOwnerInternal,
+      { ownerTokenIdentifier: args.ownerTokenIdentifier },
+    );
+    if (marker === null || marker.phaseRaw !== "deletionIncomplete") {
+      return;
+    }
+
+    await deleteAccountDataWithBatches(async (tableName) => {
+      return await ctx.runMutation(internal.sync.deleteAccountDataBatch, {
+        ownerTokenIdentifier: args.ownerTokenIdentifier,
+        tableName,
+      });
+    });
+
+    await ctx.runMutation(internal.sync.markAccountDeletionDataDeleted, {
+      ownerTokenIdentifier: args.ownerTokenIdentifier,
+      cancellationToken: marker.cancellationToken,
+    });
+  },
+});
+
+export const clearExpiredAccountDeletionMarkers = internalMutation({
+  args: {
+    expiresBefore: v.optional(v.number()),
+    purgeBefore: v.optional(v.number()),
+    parkedCursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<AccountDeletionMarkerCleanupResult> => {
+    const now = Date.now();
+    const expiresBefore = args.expiresBefore ?? now - accountDeletionMarkerExpiryMs;
+    const purgeBefore = args.purgeBefore ?? now - accountDeletionMarkerPurgeMs;
+    let deletedCount = 0;
+    let hasMore = false;
+
+    for (const phaseRaw of expirableAccountDeletionPhases) {
+      const candidates = await ctx.db
+        .query("accountDeletionMarkers")
+        .withIndex("by_phaseRaw_and_createdAt", (q) =>
+          q.eq("phaseRaw", phaseRaw).lt("createdAt", expiresBefore),
+        )
+        .take(accountDeletionMarkerCleanupBatchSize + 1);
+      hasMore = hasMore || candidates.length > accountDeletionMarkerCleanupBatchSize;
+
+      for (const marker of candidates.slice(0, accountDeletionMarkerCleanupBatchSize)) {
+        if (await resolveExpiredAccountDeletionMarker(ctx, marker)) {
+          deletedCount += 1;
+        }
+      }
+    }
+
+    // Privacy backstop: markers whose cloud wipe finished long ago can never be
+    // cancelled once the Clerk account is gone, so purge them instead of
+    // retaining ownerTokenIdentifier forever.
+    const completedAtPurgeCandidates = await ctx.db
+      .query("accountDeletionMarkers")
+      .withIndex("by_phaseRaw_and_cloudDataDeletedAt", (q) =>
+        q
+          .eq("phaseRaw", "cloudDataDeleted")
+          .gt("cloudDataDeletedAt", 0)
+          .lt("cloudDataDeletedAt", purgeBefore),
+      )
+      .take(accountDeletionMarkerCleanupBatchSize + 1);
+    hasMore =
+      hasMore || completedAtPurgeCandidates.length > accountDeletionMarkerCleanupBatchSize;
+    for (const marker of completedAtPurgeCandidates.slice(
+      0,
+      accountDeletionMarkerCleanupBatchSize,
+    )) {
+      await ctx.db.delete(marker._id);
+      deletedCount += 1;
+    }
+
+    const createdAtPurgeCandidates = await ctx.db
+      .query("accountDeletionMarkers")
+      .withIndex("by_phaseRaw_and_createdAt", (q) =>
+        q.eq("phaseRaw", "cloudDataDeleted").lt("createdAt", purgeBefore),
+      )
+      .take(accountDeletionMarkerCleanupBatchSize + 1);
+    hasMore =
+      hasMore || createdAtPurgeCandidates.length > accountDeletionMarkerCleanupBatchSize;
+    for (const marker of createdAtPurgeCandidates.slice(
+      0,
+      accountDeletionMarkerCleanupBatchSize,
+    )) {
+      const purgeEligibleAt = marker.cloudDataDeletedAt ?? marker.createdAt;
+      if (purgeEligibleAt >= purgeBefore) {
+        if (
+          marker.cloudDataDeletedAt !== undefined &&
+          marker.createdAt !== marker.cloudDataDeletedAt
+        ) {
+          await ctx.db.patch(marker._id, { createdAt: marker.cloudDataDeletedAt });
+        }
+        continue;
+      }
+      await ctx.db.delete(marker._id);
+      deletedCount += 1;
+    }
+
+    // Hourly retry for parked partial deletions. These markers stay in their
+    // bucket until the resume action completes, so bucket size alone cannot
+    // drive hasMore without looping; instead an opaque pagination cursor
+    // carried through the self-reschedule pages the bucket (including
+    // createdAt ties) so one page of stuck markers cannot starve the ones
+    // behind it.
+    const parkedPage = await ctx.db
+      .query("accountDeletionMarkers")
+      .withIndex("by_phaseRaw_and_createdAt", (q) =>
+        q.eq("phaseRaw", "deletionIncomplete"),
+      )
+      .paginate({
+        numItems: accountDeletionMarkerCleanupBatchSize,
+        cursor: args.parkedCursor ?? null,
+      });
+    hasMore = hasMore || !parkedPage.isDone;
+    for (const marker of parkedPage.page) {
+      await ctx.scheduler.runAfter(0, internal.sync.resumeIncompleteAccountDeletion, {
+        ownerTokenIdentifier: marker.ownerTokenIdentifier,
+      });
+    }
+
+    if (hasMore) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.sync.clearExpiredAccountDeletionMarkers,
+        {
+          ...args,
+          parkedCursor: parkedPage.continueCursor,
+        },
+      );
+    }
+
+    return { deletedCount, hasMore };
+  },
+});
+
+export const markAccountDeletionDataDeleted = internalMutation({
+  args: {
+    ownerTokenIdentifier: v.string(),
+    cancellationToken: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await accountDeletionMarkerForOwner(ctx, args.ownerTokenIdentifier);
+    if (
+      existing === null ||
+      existing.phaseRaw === "cloudDataDeleted" ||
+      existing.cancellationToken !== args.cancellationToken
+    ) {
+      return;
+    }
+
+    const completedAt = Date.now();
+    await ctx.db.patch(existing._id, {
+      phaseRaw: "cloudDataDeleted",
+      createdAt: completedAt,
+      cloudDataDeletedAt: completedAt,
+    });
+  },
+});
+
 export const deleteAccountDataBatch = internalMutation({
   args: {
     ownerTokenIdentifier: v.string(),
     tableName: accountDeletionTableValidator,
   },
   handler: async (ctx, args): Promise<AccountDataDeletionTableBatchResult> => {
+    const marker = await accountDeletionMarkerForOwner(ctx, args.ownerTokenIdentifier);
+    if (marker === null) {
+      return { tableName: args.tableName, deletedCount: 0, hasMore: false };
+    }
+    if (marker.phaseRaw !== "deleting" && marker.phaseRaw !== "cloudDataDeleted") {
+      await ctx.db.patch(marker._id, { phaseRaw: "deleting" });
+    }
+
     switch (args.tableName) {
       case "loggedSets": {
         const result = await deleteLoggedSetsForOwnerBatch(
@@ -1283,7 +1572,7 @@ export const deleteAccountData = action({
 
     const ownerTokenIdentifier = identity.tokenIdentifier;
 
-    return await deleteAccountDataForOwner(
+    const result = await deleteAccountDataForOwner(
       async () => {
         await ctx.runMutation(internal.sync.startAccountDeletion, {
           ownerTokenIdentifier,
@@ -1297,6 +1586,13 @@ export const deleteAccountData = action({
         });
       },
     );
+
+    await ctx.runMutation(internal.sync.markAccountDeletionDataDeleted, {
+      ownerTokenIdentifier,
+      cancellationToken: args.cancellationToken,
+    });
+
+    return result;
   },
 });
 

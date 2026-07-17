@@ -9,21 +9,42 @@ struct LiftingLogApp: App {
     private let convexClient: ConvexClientWithAuth<String>
     private let uiTestSyncOwner: String?
     private let uiTestForcesSignedOutAuth: Bool
+    private let uiTestRestoresCachedSyncOwner: Bool
+    private let uiTestRestoresCachedSyncOwnerSubject: String?
     @Environment(\.scenePhase) private var scenePhase
     @State private var navigationState = AppNavigationState()
     @State private var activeWorkoutEngine = ActiveWorkoutEngine()
-    @State private var syncScheduler = SyncScheduler()
+    @State private var syncScheduler: SyncScheduler
+    @State private var syncRecoveryCoordinator: SyncRecoveryCoordinator
     @State private var syncAuthTask: Task<Void, Never>?
 
     init() {
         Clerk.configure(publishableKey: ClerkConfiguration.publishableKey)
-        convexClient = ConvexClientFactory.makeAuthenticatedClient()
+        let convexClient = ConvexClientFactory.makeAuthenticatedClient()
+        self.convexClient = convexClient
+        let syncScheduler = SyncScheduler()
+        _syncScheduler = State(initialValue: syncScheduler)
+        _syncRecoveryCoordinator = State(
+            initialValue: SyncRecoveryCoordinator(
+                authenticationClient: ConvexSyncAuthenticationClient(client: convexClient),
+                syncScheduler: syncScheduler,
+                hasActiveSession: { Clerk.shared.session?.status == .active },
+                currentSessionIdentifier: { Clerk.shared.session?.id },
+                expectedOwnerTokenIdentifier: { Self.currentExpectedClerkOwnerTokenIdentifier }
+            )
+        )
         let arguments = ProcessInfo.processInfo.arguments
         FirstRunExperienceStore.resetForUITestingIfRequested(arguments: arguments)
         FirstRunExperienceStore.markSeenForUITestingIfRequested(arguments: arguments)
         uiTestForcesSignedOutAuth = arguments.contains("--uitest-force-signed-out-auth")
+        uiTestRestoresCachedSyncOwner = arguments.contains("--uitest-restore-cached-sync-owner")
         let uiTestSyncOwnerIndex = arguments.firstIndex(of: "--uitest-sync-owner")
         uiTestSyncOwner = uiTestSyncOwnerIndex.flatMap { index -> String? in
+            let nextIndex = arguments.index(after: index)
+            return nextIndex < arguments.endIndex ? arguments[nextIndex] : nil
+        }
+        let uiTestRestoreSubjectIndex = arguments.firstIndex(of: "--uitest-restore-cached-sync-owner-subject")
+        uiTestRestoresCachedSyncOwnerSubject = uiTestRestoreSubjectIndex.flatMap { index -> String? in
             let nextIndex = arguments.index(after: index)
             return nextIndex < arguments.endIndex ? arguments[nextIndex] : nil
         }
@@ -62,6 +83,12 @@ struct LiftingLogApp: App {
             .environment(Clerk.shared)
             .environment(syncScheduler)
             .environment(
+                \.syncRecoveryAction,
+                SyncRecoveryAction { trigger in
+                    requestSyncRecovery(for: trigger)
+                }
+            )
+            .environment(
                 \.accountDeletionFactory,
                 AccountDeletionFactory.live(syncClient: ConvexSyncClient(client: convexClient))
             )
@@ -82,18 +109,42 @@ struct LiftingLogApp: App {
                     }
                     return
                 }
-                if uiTestForcesSignedOutAuth {
-                    syncScheduler.currentOwnerTokenIdentifier = nil
+                if uiTestRestoresCachedSyncOwner {
                     syncScheduler.configure(modelContext: modelContainer.mainContext)
-                    syncScheduler.seedDefaultsForLocalMode()
+                    if let uiTestRestoresCachedSyncOwnerSubject {
+                        _ = syncScheduler.restoreLastKnownOwnerTokenIdentifier(
+                            matchingOwnerSubject: uiTestRestoresCachedSyncOwnerSubject
+                        )
+                    }
+                    return
+                }
+                if uiTestForcesSignedOutAuth {
+                    syncScheduler.configure(modelContext: modelContainer.mainContext)
+                    syncScheduler.enterSignedOutMode()
                     return
                 }
                 configureSyncIfNeeded()
             }
             .onChange(of: scenePhase) { _, newScenePhase in
                 guard newScenePhase == .active else { return }
-                syncScheduler.requestSyncOnAppForeground()
+                requestSyncRecovery(for: .appForeground)
             }
+        }
+    }
+
+    private func requestSyncRecovery(for trigger: SyncRecoveryCoordinator.Trigger) {
+        if uiTestSyncOwner != nil {
+            switch trigger {
+            case .appForeground:
+                syncScheduler.requestSyncOnAppForeground()
+            case .manualRetry:
+                syncScheduler.retrySync()
+            }
+            return
+        }
+
+        Task { @MainActor in
+            await syncRecoveryCoordinator.recoverAuthenticationAndRequestSync(for: trigger)
         }
     }
 
@@ -115,10 +166,18 @@ struct LiftingLogApp: App {
                 case .loading:
                     break
                 case .unauthenticated:
-                    syncScheduler.currentOwnerTokenIdentifier = nil
-                    syncScheduler.seedDefaultsForLocalMode()
+                    if await restoreCachedSyncOwnerForActiveClerkSessionIfAvailable() {
+                        break
+                    }
+                    syncScheduler.enterSignedOutMode()
                 case .authenticated(let token):
                     guard let ownerTokenIdentifier = ClerkJWTIdentityResolver.ownerTokenIdentifier(from: token) else {
+                        break
+                    }
+                    guard await syncRecoveryCoordinator.shouldActivateAuthenticatedState(
+                        ownerTokenIdentifier: ownerTokenIdentifier,
+                        sessionIdentifier: Clerk.shared.session?.id
+                    ) else {
                         break
                     }
                     authenticateSyncOwner(ownerTokenIdentifier)
@@ -131,6 +190,7 @@ struct LiftingLogApp: App {
         await waitUntilClerkIsLoaded()
         guard !Task.isCancelled else { return }
         guard Clerk.shared.session?.status == .active else { return }
+        activateOwnerForActiveClerkUserOrHideOwnerScopedData()
 
         let result = await convexClient.loginFromCache()
         let token: String
@@ -145,6 +205,71 @@ struct LiftingLogApp: App {
             return
         }
         authenticateSyncOwner(ownerTokenIdentifier)
+    }
+
+    private func restoreCachedSyncOwnerForActiveClerkSessionIfAvailable() async -> Bool {
+        await waitUntilClerkIsLoaded()
+        guard !Task.isCancelled else { return true }
+        guard Clerk.shared.session?.status == .active else { return false }
+
+        activateOwnerForActiveClerkUserOrHideOwnerScopedData()
+        return true
+    }
+
+    @discardableResult
+    private func activateOwnerForActiveClerkUserOrHideOwnerScopedData() -> Bool {
+        if let activeClerkOwnerTokenIdentifier {
+            if syncScheduler.activateValidatedOwnerTokenIdentifier(activeClerkOwnerTokenIdentifier) {
+                return true
+            }
+
+            syncScheduler.currentOwnerTokenIdentifier = nil
+            return false
+        }
+
+        guard let expectedClerkOwnerTokenIdentifier else {
+            syncScheduler.currentOwnerTokenIdentifier = nil
+            return false
+        }
+
+        if !syncScheduler.activateValidatedOwnerTokenIdentifier(expectedClerkOwnerTokenIdentifier) {
+            syncScheduler.currentOwnerTokenIdentifier = nil
+            return false
+        }
+
+        return true
+    }
+
+    private var activeClerkUserID: String? {
+        Self.currentActiveClerkUserID
+    }
+
+    private var expectedClerkOwnerTokenIdentifier: String? {
+        Self.currentExpectedClerkOwnerTokenIdentifier
+    }
+
+    private static var currentActiveClerkUserID: String? {
+        Clerk.shared.user?.id ?? Clerk.shared.session?.publicUserData?.userId
+    }
+
+    private static var currentExpectedClerkOwnerTokenIdentifier: String? {
+        let activeClerkUserID = currentActiveClerkUserID
+        guard let activeClerkUserID,
+              let expectedClerkIssuer = ClerkJWTIdentityResolver.issuer(
+                  fromPublishableKey: ClerkConfiguration.publishableKey
+              ) else {
+            return nil
+        }
+
+        return "\(expectedClerkIssuer)|\(activeClerkUserID)"
+    }
+
+    private var activeClerkOwnerTokenIdentifier: String? {
+        guard let jwt = Clerk.shared.session?.lastActiveToken?.jwt else {
+            return nil
+        }
+
+        return ClerkJWTIdentityResolver.ownerTokenIdentifier(from: jwt)
     }
 
     private func waitUntilClerkIsLoaded() async {
