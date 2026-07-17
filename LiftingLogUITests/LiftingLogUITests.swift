@@ -780,6 +780,7 @@ final class LiftingLogUITests: XCTestCase {
             app.staticTexts["DeveloperDiagnosticsClerkDomain"].label,
             "webcredentials:glad-krill-22.clerk.accounts.dev"
         )
+        app.swipeUp()
         let syncSummary = app.staticTexts["DeveloperDiagnosticsSyncSummary"]
         XCTAssertTrue(syncSummary.waitForExistence(timeout: 3))
         XCTAssertTrue(syncSummary.label.contains("lastFailure: Convex function sync:fetchChanges failed for token issuer|ui_owner"))
