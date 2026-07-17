@@ -105,7 +105,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: LiftingLog/LiftingLog.entitlements
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: RJGJJ38RV9
-        APP_DISPLAY_NAME: Lifting Log Dev
+        APP_DISPLAY_NAME: Baros Dev
         LIFTING_LOG_ENVIRONMENT: Development
         CLERK_PUBLISHABLE_KEY: pk_test_Z2xhZC1rcmlsbC0yMi5jbGVyay5hY2NvdW50cy5kZXYk
         CLERK_ASSOCIATED_DOMAIN: webcredentials:glad-krill-22.clerk.accounts.dev
@@ -117,7 +117,7 @@ targets:
       configs:
         Release:
           PRODUCT_BUNDLE_IDENTIFIER: com.kevintatooles.LiftingLog
-          APP_DISPLAY_NAME: Lifting Log
+          APP_DISPLAY_NAME: Baros
           LIFTING_LOG_ENVIRONMENT: Production
           CLERK_PUBLISHABLE_KEY: pk_live_Y2xlcmsuYXV0aC5saWZ0aW5nbG9nLmFwcCQ
           CLERK_ASSOCIATED_DOMAIN: webcredentials:clerk.auth.liftinglog.app

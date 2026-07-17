@@ -6,7 +6,7 @@ final class ClerkConfigurationTests: XCTestCase {
         XCTAssertEqual(Bundle.main.bundleIdentifier, "com.kevintatooles.LiftingLog.dev")
         XCTAssertEqual(
             Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String,
-            "Lifting Log Dev"
+            "Baros Dev"
         )
     }
 
@@ -23,14 +23,14 @@ final class ClerkConfigurationTests: XCTestCase {
 
     func testAppBuildInfoFormatsVersionAndBuildFromInfoDictionary() {
         let buildInfo = AppBuildInfo(infoDictionary: [
-            "CFBundleDisplayName": "Lifting Log Dev",
+            "CFBundleDisplayName": "Baros Dev",
             "CFBundleIdentifier": "com.kevintatooles.LiftingLog.dev",
             "CFBundleShortVersionString": "1.2",
             "CFBundleVersion": "45",
             "LiftingLogEnvironment": "Development",
         ])
 
-        XCTAssertEqual(buildInfo.displayName, "Lifting Log Dev")
+        XCTAssertEqual(buildInfo.displayName, "Baros Dev")
         XCTAssertEqual(buildInfo.bundleIdentifier, "com.kevintatooles.LiftingLog.dev")
         XCTAssertEqual(buildInfo.version, "1.2")
         XCTAssertEqual(buildInfo.buildNumber, "45")
@@ -77,7 +77,7 @@ final class ClerkConfigurationTests: XCTestCase {
 
     func testAppBuildInfoSupportSummaryOmitsSensitiveBackendConfiguration() {
         let buildInfo = AppBuildInfo(infoDictionary: [
-            "CFBundleDisplayName": "Lifting Log",
+            "CFBundleDisplayName": "Baros",
             "CFBundleIdentifier": "com.kevintatooles.LiftingLog",
             "CFBundleShortVersionString": "1.0",
             "CFBundleVersion": "123",
@@ -95,7 +95,7 @@ final class ClerkConfigurationTests: XCTestCase {
             )
         )
 
-        XCTAssertTrue(summary.contains("App: Lifting Log"))
+        XCTAssertTrue(summary.contains("App: Baros"))
         XCTAssertTrue(summary.contains("Version: 1.0 (123)"))
         XCTAssertTrue(summary.contains("Environment: Production"))
         XCTAssertTrue(summary.contains("Bundle ID: com.kevintatooles.LiftingLog"))

@@ -23,7 +23,7 @@ struct WorkoutExportFileWriter {
         let year = components.year ?? 1970
         let month = components.month ?? 1
         let day = components.day ?? 1
-        return String(format: "lifting-log-workout-history-%04d-%02d-%02d.csv", year, month, day)
+        return String(format: "baros-workout-history-%04d-%02d-%02d.csv", year, month, day)
     }
 
     private static func makeCalendar() -> Calendar {

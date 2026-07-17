@@ -69,7 +69,7 @@ struct LiftingLogApp: App {
             #endif
             modelContainer = container
         } catch {
-            fatalError("Unable to initialize Lifting Log persistence: \(error)")
+            fatalError("Unable to initialize Baros persistence: \(error)")
         }
     }
 

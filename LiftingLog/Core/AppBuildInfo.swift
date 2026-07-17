@@ -32,7 +32,7 @@ struct AppBuildInfo: Equatable {
         self.displayName = Self.stringValue(
             forKey: "CFBundleDisplayName",
             in: infoDictionary,
-            fallback: "Lifting Log"
+            fallback: "Baros"
         )
         self.bundleIdentifier = Self.stringValue(
             forKey: "CFBundleIdentifier",

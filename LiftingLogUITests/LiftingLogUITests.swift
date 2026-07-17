@@ -144,7 +144,7 @@ final class LiftingLogUITests: XCTestCase {
         firstLaunch.launch()
 
         XCTAssertTrue(firstLaunch.staticTexts["LaunchExperienceTitle"].waitForExistence(timeout: 3))
-        XCTAssertTrue(firstLaunch.staticTexts["Welcome to the Lifting Log"].exists)
+        XCTAssertTrue(firstLaunch.staticTexts["Welcome to Baros"].exists)
         XCTAssertTrue(firstLaunch.staticTexts["Fast workout logging"].exists)
         XCTAssertTrue(firstLaunch.staticTexts["Your history stays put"].exists)
         XCTAssertTrue(firstLaunch.staticTexts["Optional cloud sync"].exists)
@@ -157,7 +157,7 @@ final class LiftingLogUITests: XCTestCase {
         let secondLaunch = makeDiskBackedApp(skipsFirstRunExperience: false)
         secondLaunch.launch()
 
-        XCTAssertFalse(secondLaunch.staticTexts["Welcome to the Lifting Log"].waitForExistence(timeout: 1))
+        XCTAssertFalse(secondLaunch.staticTexts["Welcome to Baros"].waitForExistence(timeout: 1))
         XCTAssertTrue(secondLaunch.staticTexts["StartWorkoutTitle"].waitForExistence(timeout: 3))
     }
 
@@ -180,7 +180,7 @@ final class LiftingLogUITests: XCTestCase {
         whatsNewButton.tap()
 
         XCTAssertTrue(app.staticTexts["LaunchExperienceTitle"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["What's new in the Lifting Log"].exists)
+        XCTAssertTrue(app.staticTexts["What's new in Baros"].exists)
         XCTAssertTrue(app.staticTexts["Cloud sync"].exists)
     }
 
@@ -890,7 +890,7 @@ final class LiftingLogUITests: XCTestCase {
         app.buttons["ProfileTab"].tap()
         XCTAssertTrue(app.staticTexts["ProfileTitle"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["ProfileAccountTitle"].waitForExistence(timeout: 3))
-        XCTAssertEqual(app.staticTexts["ProfileAccountTitle"].label, "Local lifting log")
+        XCTAssertEqual(app.staticTexts["ProfileAccountTitle"].label, "Local workout data")
         XCTAssertTrue(app.staticTexts["ProfileAccountSubtitle"].label.contains("workouts backed up"))
         XCTAssertTrue(app.buttons["ProfileSignInButton"].exists)
 

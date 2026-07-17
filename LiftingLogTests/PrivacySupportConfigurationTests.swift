@@ -2,21 +2,21 @@ import XCTest
 @testable import LiftingLog
 
 final class PrivacySupportConfigurationTests: XCTestCase {
-    func testReleaseLinksUseSupportSubdomain() throws {
+    func testReleaseLinksUseBarosDomain() throws {
         let configuration = PrivacySupportConfiguration.release
 
         let privacyPolicyURL = try XCTUnwrap(configuration.privacyPolicyURL)
         let supportURL = try XCTUnwrap(configuration.supportURL)
 
         XCTAssertEqual(privacyPolicyURL.scheme, "https")
-        XCTAssertEqual(privacyPolicyURL.host, "support.liftinglog.app")
+        XCTAssertEqual(privacyPolicyURL.host, "baros.fit")
         XCTAssertEqual(privacyPolicyURL.path, "/privacy")
-        XCTAssertEqual(privacyPolicyURL.absoluteString, "https://support.liftinglog.app/privacy")
+        XCTAssertEqual(privacyPolicyURL.absoluteString, "https://baros.fit/privacy")
 
         XCTAssertEqual(supportURL.scheme, "https")
-        XCTAssertEqual(supportURL.host, "support.liftinglog.app")
+        XCTAssertEqual(supportURL.host, "baros.fit")
         XCTAssertEqual(supportURL.path, "/")
-        XCTAssertEqual(supportURL.absoluteString, "https://support.liftinglog.app/")
+        XCTAssertEqual(supportURL.absoluteString, "https://baros.fit/")
     }
 
     func testUnavailableLinksRemainAvailableForPlaceholderStates() {

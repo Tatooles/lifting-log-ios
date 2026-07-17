@@ -7,7 +7,7 @@ struct AccountDisplayState: Equatable {
     let isSignedIn: Bool
 
     static let signedOut = AccountDisplayState(
-        title: "Local lifting log",
+        title: "Local workout data",
         subtitle: "Sign in to keep your workouts backed up.",
         actionTitle: "Sign in",
         isSignedIn: false

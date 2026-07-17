@@ -21,7 +21,7 @@ struct LaunchExperienceSheet: View {
     private var title: String {
         switch presentation {
         case .welcome:
-            "Welcome to the Lifting Log"
+            "Welcome to Baros"
         case .whatsNew(let release):
             release.title
         }

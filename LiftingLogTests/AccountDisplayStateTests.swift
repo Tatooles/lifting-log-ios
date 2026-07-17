@@ -5,7 +5,7 @@ final class AccountDisplayStateTests: XCTestCase {
     func testSignedOutStateUsesLocalModeCopy() {
         let state = AccountDisplayState.signedOut
 
-        XCTAssertEqual(state.title, "Local lifting log")
+        XCTAssertEqual(state.title, "Local workout data")
         XCTAssertEqual(state.subtitle, "Sign in to keep your workouts backed up.")
         XCTAssertEqual(state.actionTitle, "Sign in")
         XCTAssertFalse(state.isSignedIn)

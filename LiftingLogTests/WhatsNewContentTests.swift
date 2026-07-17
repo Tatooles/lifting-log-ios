@@ -4,7 +4,7 @@ import XCTest
 final class WhatsNewContentTests: XCTestCase {
     func testCurrentReleaseUsesMarketingVersionAsReleaseKey() {
         let buildInfo = AppBuildInfo(infoDictionary: [
-            "CFBundleDisplayName": "LiftingLog",
+            "CFBundleDisplayName": "Baros",
             "CFBundleIdentifier": "com.kevintatooles.LiftingLog",
             "CFBundleShortVersionString": "1.0",
             "CFBundleVersion": "42",
@@ -14,10 +14,10 @@ final class WhatsNewContentTests: XCTestCase {
         let release = WhatsNewContent.current(buildInfo: buildInfo)
 
         XCTAssertEqual(release.version, "1.0")
-        XCTAssertEqual(release.title, "What's new in the Lifting Log")
+        XCTAssertEqual(release.title, "What's new in Baros")
         XCTAssertEqual(
             release.summary,
-            "The first release of the Lifting Log: fast workout logging, a safe local history, and optional cloud sync."
+            "The first release of Baros: fast workout logging, a safe local history, and optional cloud sync."
         )
         XCTAssertTrue(release.shouldAutoShow)
     }

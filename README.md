@@ -1,6 +1,6 @@
-# Lifting Log
+# Baros
 
-Native SwiftUI workout logging app for iPhone with a SwiftData-backed offline workout log.
+Native SwiftUI workout tracker for iPhone with a SwiftData-backed offline workout log.
 
 ## Requirements
 
