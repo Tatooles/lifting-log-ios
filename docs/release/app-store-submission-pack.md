@@ -2,6 +2,8 @@
 
 This document is the operator source of truth for submitting Baros 1.0 to App Store Connect.
 
+Complete the [Baros authentication domain migration runbook](baros-auth-domain-migration-runbook.md) before producing the final App Store release candidate.
+
 ## App Metadata
 
 - App name: Baros: Workout Tracker
