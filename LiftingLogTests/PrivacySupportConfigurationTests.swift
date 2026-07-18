@@ -15,8 +15,8 @@ final class PrivacySupportConfigurationTests: XCTestCase {
 
         XCTAssertEqual(supportURL.scheme, "https")
         XCTAssertEqual(supportURL.host, "baros.fit")
-        XCTAssertEqual(supportURL.path, "/")
-        XCTAssertEqual(supportURL.absoluteString, "https://baros.fit/")
+        XCTAssertEqual(supportURL.path, "/support")
+        XCTAssertEqual(supportURL.absoluteString, "https://baros.fit/support")
     }
 
     func testUnavailableLinksRemainAvailableForPlaceholderStates() {

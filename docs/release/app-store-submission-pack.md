@@ -8,7 +8,7 @@ This document is the operator source of truth for submitting Baros 1.0 to App St
 - Subtitle: Simple workout logging
 - Primary category: Health & Fitness
 - Pricing: Free
-- Support URL: https://baros.fit/
+- Support URL: https://baros.fit/support
 - Privacy Policy URL: https://baros.fit/privacy
 - Support contact: support@tatooles.dev
 - Copyright: 2026 Kevin Tatooles
@@ -83,7 +83,7 @@ Capture final screenshots after UI stabilizes:
 
 ## Release Checklist
 
-- Support site is deployed at https://baros.fit/ and remains available at https://support.liftinglog.app/ during the transition.
+- Support site is deployed at https://baros.fit/support and remains available at https://support.liftinglog.app/support during the transition.
 - Privacy policy is deployed at https://baros.fit/privacy and remains available at https://support.liftinglog.app/privacy during the transition.
 - App Settings opens both URLs.
 - Release bundle identifier is com.kevintatooles.LiftingLog.

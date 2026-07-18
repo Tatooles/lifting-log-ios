@@ -7,7 +7,7 @@ struct PrivacySupportConfiguration: Equatable {
 
     static let release = PrivacySupportConfiguration(
         privacyPolicyURL: URL(string: "https://baros.fit/privacy"),
-        supportURL: URL(string: "https://baros.fit/"),
+        supportURL: URL(string: "https://baros.fit/support"),
         unavailableDetailText: "Available before release"
     )
 
