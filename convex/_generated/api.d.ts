@@ -10,6 +10,7 @@
 
 import type * as authSmoke from "../authSmoke.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as ownerIssuerMigration from "../ownerIssuerMigration.js";
 import type * as sync from "../sync.js";
 import type * as sync_validators from "../sync/validators.js";
 
@@ -22,6 +23,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   authSmoke: typeof authSmoke;
   "lib/auth": typeof lib_auth;
+  ownerIssuerMigration: typeof ownerIssuerMigration;
   sync: typeof sync;
   "sync/validators": typeof sync_validators;
 }>;
