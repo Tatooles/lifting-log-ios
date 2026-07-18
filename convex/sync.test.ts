@@ -246,6 +246,125 @@ describe("auth smoke", () => {
   });
 });
 
+describe("temporary owner issuer migration", () => {
+  const oldIssuer = "https://clerk.auth.liftinglog.app";
+  const newIssuer = "https://clerk.baros.fit";
+  const subject = "user_migration";
+  const oldIdentity = {
+    subject,
+    issuer: oldIssuer,
+    tokenIdentifier: `${oldIssuer}|${subject}`,
+  };
+  const newIdentity = {
+    subject,
+    issuer: newIssuer,
+    tokenIdentifier: `${newIssuer}|${subject}`,
+  };
+
+  async function seedOwnerTables(t: ReturnType<typeof testDb>) {
+    await t.withIdentity(oldIdentity).mutation(api.sync.upsertUserSettings, {
+      record: userSettingsRecord({ clientId: "migration-settings" }),
+    });
+    await t.withIdentity(oldIdentity).mutation(api.sync.upsertExercise, {
+      record: exerciseRecord({ clientId: "migration-exercise" }),
+    });
+    await t.withIdentity(oldIdentity).mutation(api.sync.upsertWorkoutSession, {
+      record: workoutSessionRecord({ clientId: "migration-session" }),
+    });
+    await t.withIdentity(oldIdentity).mutation(api.sync.upsertLoggedExercise, {
+      record: loggedExerciseRecord({
+        clientId: "migration-logged-exercise",
+        sessionClientId: "migration-session",
+        exerciseClientId: "migration-exercise",
+      }),
+    });
+    await t.withIdentity(oldIdentity).mutation(api.sync.upsertLoggedSet, {
+      record: loggedSetRecord({
+        clientId: "migration-logged-set",
+        loggedExerciseClientId: "migration-logged-exercise",
+      }),
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("accountDeletionMarkers", {
+        ownerTokenIdentifier: oldIdentity.tokenIdentifier,
+        cancellationToken: "migration-cancellation",
+        createdAt: 1,
+        phaseRaw: "deletionIncomplete",
+      });
+    });
+  }
+
+  test("dry-runs, then atomically moves each small owner table", async () => {
+    const t = testDb();
+    await seedOwnerTables(t);
+
+    await expect(
+      t.mutation(internal.ownerIssuerMigration.migrateOwnerTable, {
+        subject,
+        newIssuer,
+        table: "exercises",
+      }),
+    ).resolves.toMatchObject({ dryRun: true, matched: 1, migrated: 0 });
+
+    const tables = [
+      "accountDeletionMarkers",
+      "userSettings",
+      "exercises",
+      "workoutSessions",
+      "loggedExercises",
+      "loggedSets",
+    ] as const;
+    for (const table of tables) {
+      await expect(
+        t.mutation(internal.ownerIssuerMigration.migrateOwnerTable, {
+          subject,
+          newIssuer,
+          table,
+          dryRun: false,
+        }),
+      ).resolves.toMatchObject({ table, matched: 1, migrated: 1 });
+    }
+
+    const changes = await t
+      .withIdentity(newIdentity)
+      .query(api.sync.fetchChanges, { cursors: zeroCursors });
+    expect(changes.userSettings).toHaveLength(1);
+    expect(changes.exercises).toHaveLength(1);
+    expect(changes.workoutSessions).toHaveLength(1);
+    expect(changes.loggedExercises).toHaveLength(1);
+    expect(changes.loggedSets).toHaveLength(1);
+    await expect(
+      t.run(async (ctx) =>
+        ctx.db
+          .query("accountDeletionMarkers")
+          .withIndex("by_ownerTokenIdentifier", (q) =>
+            q.eq("ownerTokenIdentifier", newIdentity.tokenIdentifier),
+          )
+          .take(2),
+      ),
+    ).resolves.toHaveLength(1);
+  });
+
+  test("stops if the destination owner already has rows", async () => {
+    const t = testDb();
+    await t.withIdentity(oldIdentity).mutation(api.sync.upsertExercise, {
+      record: exerciseRecord({ clientId: "old-exercise" }),
+    });
+    await t.withIdentity(newIdentity).mutation(api.sync.upsertExercise, {
+      record: exerciseRecord({ clientId: "new-exercise" }),
+    });
+
+    await expect(
+      t.mutation(internal.ownerIssuerMigration.migrateOwnerTable, {
+        subject,
+        newIssuer,
+        table: "exercises",
+        dryRun: false,
+      }),
+    ).rejects.toThrow("Destination owner already has exercises rows");
+  });
+});
+
 describe("sync access control", () => {
   test("upsert rejects unauthenticated callers", async () => {
     const t = testDb();

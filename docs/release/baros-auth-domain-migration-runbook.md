@@ -1,225 +1,132 @@
 # Baros Authentication Domain Migration Runbook
 
-Status: Planned. Do not change the production Clerk domain until the server and client migrations described here are implemented and tested.
+Status: Small beta migration prepared locally. Nothing in this runbook has been deployed or run against production.
 
-This is the operator source of truth for moving production authentication from the Lifting Log Clerk domain to the Baros domain without losing beta tester data.
+This is a coordinated hard cutover for the handful of beta users whose Convex ownership keys still contain the Lifting Log Clerk issuer.
 
-## Decision
+## Scope And Decision
 
-- Use a coordinated hard cutover, not a permanent old/new issuer compatibility layer.
-- Preserve existing Clerk users and all local and Convex workout data.
-- Keep the Apple bundle identifiers and existing persistence key names unchanged.
-- Keep `issuer|subject` as the ownership key for this release. Do not re-key ownership on bare Clerk `subject` immediately before App Store submission; consider that broader identity refactor after launch.
+Production inspection on July 17, 2026 found:
 
-The current production issuer is:
+- Four owners with visible completed workouts: 23, 14, 5, and 5 workouts.
+- One additional owner with only a tombstoned workout.
+- One separate account-deletion marker that must be inspected before deciding whether it still needs migration.
+- Every current owner uses `https://clerk.auth.liftinglog.app`.
+- The largest owner/table pair contains 483 rows, safely below the migration mutation's 1,000-row limit.
+
+For this beta-sized migration:
+
+- Do not ship a permanent compatibility layer or client-side owner migration.
+- Coordinate directly with the four testers so all wanted data reaches Convex before the cutoff.
+- Rewrite Convex ownership one user and one table at a time with the temporary internal mutation.
+- Have existing testers clear the old local database by deleting and reinstalling the new TestFlight build after the server migration.
+- Remove the temporary mutation before the App Store 1.0 build.
+
+Deleting and reinstalling is intentional here. The current client refuses to merge a remote record into a matching local record owned by a different issuer. A clean install pulls the migrated cloud copy without shipping one-time migration machinery in 1.0.
+
+## Temporary Migration Tool
+
+`convex/ownerIssuerMigration.ts:migrateOwnerTable` moves one Clerk subject's rows in one table. It:
+
+- Hard-codes the exact legacy issuer.
+- Requires the exact new HTTPS issuer obtained from a post-flip Clerk token.
+- Defaults to dry-run mode.
+- Refuses to mix old-issuer rows into a table where that subject already has new-issuer rows.
+- Refuses owner/table pairs at or above 1,000 rows.
+- Updates the selected table atomically in one Convex mutation.
+
+The six table names are:
 
 ```text
-https://clerk.auth.liftinglog.app
+accountDeletionMarkers
+userSettings
+exercises
+workoutSessions
+loggedExercises
+loggedSets
 ```
 
-The new issuer must be copied exactly from the new production Clerk publishable key and a token minted after the domain change. Do not assume its hostname in advance.
+Dry-run command template:
 
-## Why A Migration Is Required
-
-Convex and the iOS app currently identify an owner as the JWT issuer and subject joined by `|`:
-
-```text
-https://clerk.auth.liftinglog.app|user_123
+```sh
+pnpm exec convex run ownerIssuerMigration:migrateOwnerTable \
+  '{"subject":"user_...","newIssuer":"https://NEW_ISSUER","table":"exercises"}' \
+  --prod
 ```
 
-Changing the Clerk production domain changes the issuer portion while the user's Clerk subject remains the same. Without a rewrite, the records still exist but the new build queries under a different owner key and they appear missing.
+Write command template; `dryRun: false` must be explicit:
 
-The migration replaces only the exact old issuer prefix. It must preserve the separator and subject byte-for-byte.
+```sh
+pnpm exec convex run ownerIssuerMigration:migrateOwnerTable \
+  '{"subject":"user_...","newIssuer":"https://NEW_ISSUER","table":"exercises","dryRun":false}' \
+  --prod
+```
 
-## Cutover Behavior
+Run both commands for every subject whose data is being retained and every table. Save the command output with the release notes. Stop immediately if a destination-owner or row-limit error appears.
 
-No tester-by-tester coordination or compatibility window is required. During the cutover:
+## Cutover Checklist
 
-- The Clerk domain flip automatically prevents old builds from minting or refreshing old-domain tokens. Testers do not need to coordinate a manual sync shutdown.
-- Once production Convex accepts only the new issuer, old builds cannot authenticate to Convex and are local-only.
-- Work recorded in an old build during that window remains in its local SwiftData store and sync outbox.
-- The new build rewrites those local owner values before its first sync, then uploads the preserved outbox entries normally.
-- Old and new builds do not need to sync simultaneously. The strict ordering constraint is: **finish and verify the server owner migration before any tester installs the new build**.
+### 1. Coordinate The Testers
 
-Fable's automatic cutoff is the expected behavior for minting new tokens. This runbook intentionally adds the Convex issuer deployment as the definitive write gate because an installation may still hold a previously minted token until it expires. That safeguard does not require tester coordination or an old/new compatibility layer.
+- [ ] Identify the four users with visible completed workouts in Clerk.
+- [ ] Identify the owner with only a tombstoned workout. Record its Clerk subject and either include it in the migration or explicitly approve discarding that tombstone before removing the tool.
+- [ ] Ask each tester to open the current build online and wait for Sync Status to show Up to date.
+- [ ] Ask them not to record new workouts after their sync is confirmed until they install the migration build.
+- [ ] Tell them in advance that the new build requires deleting and reinstalling the app; they must not delete it before sync is confirmed.
+- [ ] Record each tester's Clerk subject and expected visible completed-workout count.
 
-## Affected Ownership State
+### 2. Capture The Baseline
 
-The production Convex migration must cover all six owner-scoped tables:
+- [ ] Create a restorable production Convex backup.
+- [ ] Record per-owner counts for all six tables.
+- [ ] Inspect the separate account-deletion marker. Record its subject and either migrate it if the deletion flow is still active or explicitly approve leaving it behind.
+- [ ] Confirm there are no rows under the proposed new issuer.
+- [ ] Confirm no tester has pending local-only work.
 
-- `accountDeletionMarkers`
-- `userSettings`
-- `exercises`
-- `workoutSessions`
-- `loggedExercises`
-- `loggedSets`
+Stop if any tester cannot reach Up to date or the backup is unavailable.
 
-The iOS migration must cover all local state that contains or is keyed by an owner token identifier, including:
+### 3. Change Clerk And Auth Configuration
 
-- `UserSettings.syncOwnerTokenIdentifier`
-- `Exercise.syncOwnerTokenIdentifier`
-- `WorkoutSession.syncOwnerTokenIdentifier`
-- `SyncOutboxEntry.ownerTokenIdentifier`, without discarding pending operations
-- `SyncCursorState.ownerTokenIdentifier`
-- `LastKnownSyncOwnerTokenStore`
-- owner-scoped account-deletion cancellation-token storage
+- [ ] Change the production Clerk primary domain to the Baros domain.
+- [ ] Confirm Clerk's DNS and certificate status.
+- [ ] Mint a fresh token and record its exact `iss` value.
+- [ ] Confirm existing users retain the same Clerk `sub` values.
+- [ ] Update the Release Clerk publishable key and associated domain in `project.yml`.
+- [ ] Change production Convex `CLERK_JWT_ISSUER_DOMAIN` to the exact new issuer and deploy the updated auth configuration plus the temporary migration function.
+- [ ] Confirm new-issuer authentication works and old-issuer authentication is rejected.
 
-Logged exercises and sets inherit local ownership through their workout session, so their relationships must remain intact rather than being recreated.
+### 4. Rewrite The Small Production Dataset
 
-## Required Implementation Before The Cutover
+- [ ] Dry-run all six tables for the four active subjects and every tombstone or deletion-marker subject selected for retention.
+- [ ] Compare every `matched` result with the recorded baseline.
+- [ ] Run the real mutation for all six tables for the same subjects.
+- [ ] Verify no rows remain under the old issuer for those subjects.
+- [ ] Verify new-issuer per-owner/table counts equal the baseline.
 
-Codex prepares both migrations and their tests before Kevin changes anything in Clerk.
+Do not release the new TestFlight build until these counts match.
 
-### Server migration
+### 5. Move The Four Testers
 
-Create a private, batched, resumable Convex migration plus verification queries that:
+- [ ] Upload the new Baros TestFlight build.
+- [ ] For each tester: delete the old app, install the new build from TestFlight, and sign in again.
+- [ ] Confirm their expected completed workouts return from Convex.
+- [ ] Complete and sync one new workout.
+- [ ] Confirm Sync Status reaches Up to date after a cold launch.
 
-1. Accept or embed the exact old and new issuer values.
-2. Reject empty values, equal issuers, and malformed owner identifiers.
-3. Rewrite only rows whose owner starts with the exact old issuer plus `|`.
-4. Leave already-migrated rows unchanged so reruns are idempotent.
-5. Stop and report a conflict if both old-issuer and new-issuer records would occupy the same logical owner/client key.
-6. Report per-owner and per-table before, migrated, already-migrated, skipped, and conflict counts.
-7. Support a production dry run before any writes.
+Stop if a tester's expected workout count does not return. Do not create replacement workouts or delete cloud rows while investigating.
 
-Use the existing `convex/sync.test.ts` owner fixtures to cover the server rewrite, authorization boundary, idempotency, conflicts, and verification counts.
+### 6. Remove The Temporary Tool Before 1.0
 
-### Client migration
+- [ ] Confirm all four testers have completed the reinstall and validation.
+- [ ] Delete `convex/ownerIssuerMigration.ts` and its focused tests.
+- [ ] Deploy that removal.
+- [ ] Build the final App Store candidate without migration code.
+- [ ] Record the final Clerk issuer, Convex deployment, TestFlight build, and verified counts.
 
-Add a one-time, atomic local migration that runs after a new Clerk identity is available but before owner activation or the first sync. It must:
+## Rollback
 
-1. Confirm that the old and new owner identifiers have the same Clerk subject.
-2. Rewrite only state owned by that subject under the exact old issuer.
-3. Rewrite active outbox entries and return failed or in-flight entries to pending without deleting them.
-4. Recreate or reset the new owner's sync cursors so the first new-build sync performs a full reconciliation against the migrated server rows.
-5. Rewrite the last-known owner and any owner-scoped account-deletion key.
-6. Save the local changes as one transaction and be safe to run again.
-7. Refuse to guess when multiple local subjects are present or the active subject does not match.
+- Before the Convex rewrite: restore the old Clerk/Convex auth configuration.
+- After the rewrite but before testers reinstall: either reverse the owner prefix with a separately reviewed one-off mutation or fix forward. Do not alternate issuers repeatedly.
+- After testers reinstall: pause rollout and fix forward from the production backup and recorded counts.
 
-Add focused unit tests for every owner-bearing local model, preserved outbox operations, cursor reset, unrelated-owner isolation, idempotency, and rollback on failure.
-
-## Production Runbook
-
-### 1. Prepare And Rehearse
-
-Owner: Codex
-
-- [ ] Implement both migrations and all focused tests.
-- [ ] Run the complete Convex test suite and typecheck.
-- [ ] Run the affected iOS unit tests and the complete iOS unit target.
-- [ ] Rehearse the entire sequence against development data using two test users.
-- [ ] Build the Release configuration containing the client migration, but do not upload it to TestFlight yet.
-- [ ] Confirm the old TestFlight build, the migration build, and the current production backend versions are recorded.
-
-Stop if the client migration cannot preserve pending outbox entries or if the server migration is not idempotent.
-
-### 2. Capture The Pre-Flip Baseline
-
-Owners: Kevin and Codex
-
-- [ ] Pause account deletion operations for the cutover window.
-- [ ] Export or otherwise capture a restorable production Convex backup.
-- [ ] Record `authSmoke:me` for at least one existing tester, including `issuer`, `subject`, and `tokenIdentifier`.
-- [ ] Capture per-owner record counts for every affected Convex table.
-- [ ] Confirm there are no unexpected owners and no pre-existing rows under the proposed new issuer.
-- [ ] On the physical test phone, create one completed workout plus one deliberately un-synced local change for the post-update check.
-
-Stop if the backup is unavailable, counts cannot be reconciled, or an account-deletion marker is actively progressing.
-
-### 3. Flip Clerk To The Baros Domain
-
-Owner: Kevin, with Codex verifying values
-
-- [ ] Change the production primary domain in Clerk.
-- [ ] Add the exact DNS records Clerk provides and wait for Clerk to confirm the domain and certificate.
-- [ ] Copy the new production publishable key and decode or inspect its exact frontend host.
-- [ ] Mint a token and confirm its `iss` value. Record that exact value as the new issuer.
-- [ ] Confirm the test user's Clerk `sub` is unchanged from the pre-flip baseline.
-- [ ] Update Sign in with Apple, social-login redirect URLs, native application settings, and associated-domain configuration as required by Clerk.
-- [ ] Treat old builds as unable to mint or refresh production tokens from this point; no tester action is required to stop new authenticated sessions.
-
-Stop if the test user's subject changed. The automatic prefix rewrite is safe only when the same Clerk users are retained.
-
-### 4. Close Old-Build Sync
-
-Owner: Codex
-
-- [ ] Set production `CLERK_JWT_ISSUER_DOMAIN` to the exact new issuer.
-- [ ] Update the Release publishable key and associated-domain value in `project.yml`.
-- [ ] Deploy Convex auth configuration that accepts only the new issuer.
-- [ ] Confirm an old-issuer token is rejected by production Convex.
-- [ ] Confirm a new-issuer token can call `authSmoke:me` and returns the expected unchanged subject.
-
-At this point, old builds are intentionally local-only. Their unsynced local changes remain available for the client migration.
-
-### 5. Migrate And Verify Production Owners
-
-Owner: Codex
-
-- [ ] Deploy the production migration and verification functions.
-- [ ] Run the migration in dry-run mode and compare its proposed counts with the pre-flip baseline.
-- [ ] Stop if any malformed identifier, unexpected owner, or logical-key conflict is reported.
-- [ ] Run the production migration and monitor every batch to completion.
-- [ ] Verify every old-issuer row was migrated and no old-issuer rows remain.
-- [ ] Verify per-owner record counts match the pre-flip baseline in all six tables.
-- [ ] Verify account-deletion marker counts and phases separately.
-- [ ] Save the migration output and verification evidence with the release record.
-
-Do not upload the new TestFlight build until every server verification passes.
-
-### 6. Ship The Client Migration
-
-Owners: Codex uploads; Kevin releases to testers
-
-- [ ] Regenerate the Xcode project if configuration changed.
-- [ ] Archive and upload the Release build containing the client migration.
-- [ ] Confirm the archive contains the new Clerk publishable key and associated domain.
-- [ ] Release the build to the beta group only after server migration verification is complete.
-- [ ] Tell testers the old build is temporarily local-only and that they should update before expecting sync to resume. Do not tell them to delete the app.
-
-### 7. Validate On An Existing Installation
-
-Owners: Kevin and Codex
-
-- [ ] Update the physical test phone over the existing TestFlight installation; do not reinstall.
-- [ ] Reauthenticate if Clerk requires it.
-- [ ] Confirm the pre-flip workout remains visible.
-- [ ] Confirm the deliberately un-synced local change uploads after the update.
-- [ ] Confirm Sync Status reaches Up to date.
-- [ ] Compare the test owner's post-sync server counts with the pre-flip baseline plus the deliberate local change.
-- [ ] Complete and sync a new workout.
-- [ ] Sign out, sign back in, and confirm all workouts remain visible.
-- [ ] Cold-launch once online and once offline.
-- [ ] Verify account deletion can start and be cancelled or completed using the correctly migrated owner scope.
-- [ ] Confirm a newly created account syncs normally under the new issuer.
-
-Stop the rollout if any existing data appears missing, duplicates are created, another owner's data is visible, or an outbox entry is discarded.
-
-### 8. Close The Migration
-
-Owner: Codex
-
-- [ ] Confirm all active testers have moved to the new build or understand that old builds are local-only.
-- [ ] Update the README and App Store submission pack with the final Baros Clerk values.
-- [ ] Remove production migration entry points after the evidence and rollback window are complete.
-- [ ] Keep the local migration idempotent for upgrades from any remaining old beta installation.
-- [ ] Record the final production issuer, TestFlight build, Convex deployment, counts, and QA evidence.
-
-## Rollback Boundaries
-
-- Before the server owner migration runs, restore the old Clerk/Convex configuration and investigate. No data rewrite needs reversing.
-- After the server owner migration but before TestFlight release, either fix forward or run a tested reverse migration from the new issuer back to the old issuer. Restore the backup only if count verification cannot establish a safe reverse migration.
-- After testers install the new build, pause distribution and fix forward. Do not alternate issuers repeatedly or rerun migrations without first reconciling current per-owner counts.
-
-Never delete beta data as part of rollback unless Kevin explicitly chooses a beta reset after the backup and impact are reviewed.
-
-## Completion Criteria
-
-The migration is complete only when:
-
-- Production accepts only the new Baros Clerk issuer.
-- No production row remains under the old issuer.
-- Every pre-flip per-owner/table count is reconciled.
-- Existing installations preserve synced and previously un-synced workouts.
-- Sign-in, sync, offline launch, and account deletion pass on a physical TestFlight installation.
-- The final production values are reflected in repository documentation and release configuration.
+Never delete beta workout data as part of rollback without an explicit decision from Kevin.
