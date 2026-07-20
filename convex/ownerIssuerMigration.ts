@@ -6,7 +6,6 @@ const legacyIssuer = "https://clerk.auth.liftinglog.app";
 const maximumRowsPerOwnerTable = 1_000;
 
 type OwnerScopedTable =
-  | "accountDeletionMarkers"
   | "userSettings"
   | "exercises"
   | "workoutSessions"
@@ -14,7 +13,6 @@ type OwnerScopedTable =
   | "loggedSets";
 
 const tableValidator = v.union(
-  v.literal("accountDeletionMarkers"),
   v.literal("userSettings"),
   v.literal("exercises"),
   v.literal("workoutSessions"),
@@ -67,6 +65,18 @@ export const migrateOwnerTable = internalMutation({
     );
     const dryRun = args.dryRun ?? true;
 
+    const deletionMarkers = await ctx.db
+      .query("accountDeletionMarkers")
+      .withIndex("by_ownerTokenIdentifier", (q) =>
+        q.eq("ownerTokenIdentifier", oldOwner),
+      )
+      .take(1);
+    if (deletionMarkers.length > 0) {
+      throw new Error(
+        "Owner has an account deletion marker; resolve it separately before migration",
+      );
+    }
+
     const migrateRows = async (
       rows: Array<{ _id: Id<OwnerScopedTable> }>,
     ) => {
@@ -90,51 +100,22 @@ export const migrateOwnerTable = internalMutation({
       }
     };
 
-    let matched: number;
-    switch (args.table) {
-      case "accountDeletionMarkers": {
-        const rows = await ctx.db
-          .query("accountDeletionMarkers")
-          .withIndex("by_ownerTokenIdentifier", (q) =>
-            q.eq("ownerTokenIdentifier", oldOwner),
-          )
-          .take(maximumRowsPerOwnerTable);
-        if (rows.length > 0) {
-          const destination = await ctx.db
-            .query("accountDeletionMarkers")
-            .withIndex("by_ownerTokenIdentifier", (q) =>
-              q.eq("ownerTokenIdentifier", newOwner),
-            )
-            .take(1);
-          await assertDestinationIsEmpty(destination.length > 0);
-        }
-        matched = await migrateRows(rows);
-        break;
-      }
-      case "userSettings":
-      case "exercises":
-      case "workoutSessions":
-      case "loggedExercises":
-      case "loggedSets": {
-        const rows = await ctx.db
-          .query(args.table)
-          .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
-            q.eq("ownerTokenIdentifier", oldOwner),
-          )
-          .take(maximumRowsPerOwnerTable);
-        if (rows.length > 0) {
-          const destination = await ctx.db
-            .query(args.table)
-            .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
-              q.eq("ownerTokenIdentifier", newOwner),
-            )
-            .take(1);
-          await assertDestinationIsEmpty(destination.length > 0);
-        }
-        matched = await migrateRows(rows);
-        break;
-      }
+    const rows = await ctx.db
+      .query(args.table)
+      .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
+        q.eq("ownerTokenIdentifier", oldOwner),
+      )
+      .take(maximumRowsPerOwnerTable);
+    if (rows.length > 0) {
+      const destination = await ctx.db
+        .query(args.table)
+        .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
+          q.eq("ownerTokenIdentifier", newOwner),
+        )
+        .take(1);
+      await assertDestinationIsEmpty(destination.length > 0);
     }
+    const matched = await migrateRows(rows);
 
     return {
       table: args.table,

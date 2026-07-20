@@ -31,20 +31,22 @@ Deleting and reinstalling is intentional here. The current client refuses to mer
 - Hard-codes the exact legacy issuer.
 - Requires the exact new HTTPS issuer obtained from a post-flip Clerk token.
 - Defaults to dry-run mode.
+- Refuses to migrate retained data while the old owner has an account-deletion marker.
 - Refuses to mix old-issuer rows into a table where that subject already has new-issuer rows.
 - Refuses owner/table pairs at or above 1,000 rows.
 - Updates the selected table atomically in one Convex mutation.
 
-The six table names are:
+The five retained-data table names are:
 
 ```text
-accountDeletionMarkers
 userSettings
 exercises
 workoutSessions
 loggedExercises
 loggedSets
 ```
+
+Account-deletion markers are not migration targets. Inspect and resolve them separately before migrating any retained data for the same subject. A completed marker for an owner with no retained data can remain under the old issuer for its normal cleanup path.
 
 Dry-run command template:
 
@@ -78,8 +80,8 @@ Run both commands for every subject whose data is being retained and every table
 ### 2. Capture The Baseline
 
 - [ ] Create a restorable production Convex backup.
-- [ ] Record per-owner counts for all six tables.
-- [ ] Inspect the separate account-deletion marker. Record its subject and either migrate it if the deletion flow is still active or explicitly approve leaving it behind.
+- [ ] Record per-owner counts for all five retained-data tables.
+- [ ] Inspect every account-deletion marker. Resolve any active or incomplete deletion flow before migrating retained data for that subject. Do not rewrite marker ownership; a completed marker for an owner with no retained data can remain under the old issuer for normal cleanup.
 - [ ] Confirm there are no rows under the proposed new issuer.
 - [ ] Confirm no tester has pending local-only work.
 
@@ -99,9 +101,9 @@ Stop if any tester cannot reach Up to date or the backup is unavailable.
 
 ### 4. Rewrite The Small Production Dataset
 
-- [ ] Dry-run all six tables for the four active subjects and every tombstone or deletion-marker subject selected for retention.
+- [ ] Dry-run all five retained-data tables for the four active subjects and every tombstone subject selected for retention. Do not include deletion-marker-only subjects.
 - [ ] Compare every `matched` result with the recorded baseline.
-- [ ] Run the real mutation for all six tables for the same subjects.
+- [ ] Run the real mutation for all five retained-data tables for the same subjects.
 - [ ] Verify no rows remain under the old issuer for those subjects.
 - [ ] Verify new-issuer per-owner/table counts equal the baseline.
 

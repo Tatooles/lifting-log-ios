@@ -284,14 +284,6 @@ describe("temporary owner issuer migration", () => {
         loggedExerciseClientId: "migration-logged-exercise",
       }),
     });
-    await t.run(async (ctx) => {
-      await ctx.db.insert("accountDeletionMarkers", {
-        ownerTokenIdentifier: oldIdentity.tokenIdentifier,
-        cancellationToken: "migration-cancellation",
-        createdAt: 1,
-        phaseRaw: "deletionIncomplete",
-      });
-    });
   }
 
   test("dry-runs, then atomically moves each small owner table", async () => {
@@ -307,7 +299,6 @@ describe("temporary owner issuer migration", () => {
     ).resolves.toMatchObject({ dryRun: true, matched: 1, migrated: 0 });
 
     const tables = [
-      "accountDeletionMarkers",
       "userSettings",
       "exercises",
       "workoutSessions",
@@ -333,16 +324,53 @@ describe("temporary owner issuer migration", () => {
     expect(changes.workoutSessions).toHaveLength(1);
     expect(changes.loggedExercises).toHaveLength(1);
     expect(changes.loggedSets).toHaveLength(1);
+  });
+
+  test("refuses to migrate retained data while a deletion marker exists", async () => {
+    const t = testDb();
+    await t.withIdentity(oldIdentity).mutation(api.sync.upsertExercise, {
+      record: exerciseRecord({ clientId: "blocked-exercise" }),
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("accountDeletionMarkers", {
+        ownerTokenIdentifier: oldIdentity.tokenIdentifier,
+        cancellationToken: "migration-cancellation",
+        createdAt: 1,
+        phaseRaw: "deletionIncomplete",
+      });
+    });
+
+    await expect(
+      t.mutation(internal.ownerIssuerMigration.migrateOwnerTable, {
+        subject,
+        newIssuer,
+        table: "exercises",
+        dryRun: false,
+      }),
+    ).rejects.toThrow(
+      "Owner has an account deletion marker; resolve it separately before migration",
+    );
+
     await expect(
       t.run(async (ctx) =>
         ctx.db
-          .query("accountDeletionMarkers")
-          .withIndex("by_ownerTokenIdentifier", (q) =>
-            q.eq("ownerTokenIdentifier", newIdentity.tokenIdentifier),
+          .query("exercises")
+          .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
+            q.eq("ownerTokenIdentifier", oldIdentity.tokenIdentifier),
           )
           .take(2),
       ),
     ).resolves.toHaveLength(1);
+    await expect(
+      t.run(async (ctx) =>
+        ctx.db
+          .query("exercises")
+          .withIndex("by_ownerTokenIdentifier_and_serverUpdatedAt", (q) =>
+            q.eq("ownerTokenIdentifier", newIdentity.tokenIdentifier),
+          )
+          .take(2),
+      ),
+    ).resolves.toHaveLength(0);
   });
 
   test("stops if the destination owner already has rows", async () => {
