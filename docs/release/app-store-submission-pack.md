@@ -2,7 +2,7 @@
 
 This document is the operator source of truth for submitting Baros 1.0 to App Store Connect.
 
-Complete the [Baros authentication domain migration runbook](baros-auth-domain-migration-runbook.md) before producing the final App Store release candidate.
+The [Baros authentication domain migration record](baros-auth-domain-migration-runbook.md) documents the completed production cutover and its final configuration.
 
 ## App Metadata
 
@@ -70,7 +70,9 @@ Important review paths:
 
 Production services:
 
-- Clerk production associated domain: clerk.auth.liftinglog.app
+- Clerk production issuer: https://clerk.baros.fit
+- Clerk production associated domain: webcredentials:clerk.baros.fit
+- Clerk production publishable key: pk_live_Y2xlcmsuYmFyb3MuZml0JA
 - Convex production deployment URL: https://sensible-reindeer-16.convex.cloud
 
 ## Screenshot Plan
@@ -85,13 +87,13 @@ Capture final screenshots after UI stabilizes:
 
 ## Release Checklist
 
-- Support site is deployed at https://baros.fit/support and remains available at https://support.liftinglog.app/support during the transition.
-- Privacy policy is deployed at https://baros.fit/privacy and remains available at https://support.liftinglog.app/privacy during the transition.
+- Support site is deployed at https://baros.fit/support.
+- Privacy policy is deployed at https://baros.fit/privacy.
 - App Settings opens both URLs.
 - Release bundle identifier is com.kevintatooles.LiftingLog.
 - Release display name is Baros.
-- Release build uses production Clerk publishable key.
-- Release build uses webcredentials:clerk.auth.liftinglog.app.
+- Release build uses pk_live_Y2xlcmsuYmFyb3MuZml0JA.
+- Release build uses webcredentials:clerk.baros.fit.
 - Release build uses https://sensible-reindeer-16.convex.cloud.
 - [x] App target includes PrivacyInfo.xcprivacy with required-reason API declarations, including UserDefaults usage, and archive/upload validation passes before App Store submission.
 - Final app icon ticket is complete before submission.

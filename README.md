@@ -62,15 +62,14 @@ https://sensible-reindeer-16.convex.cloud
 
 Use this section when preparing an App Store release candidate or troubleshooting production auth/sync. Routine app changes do not require running the full production smoke every time.
 
-The production Clerk JWT template should be configured for Convex:
+The production Clerk JWT template is configured for Convex:
 
-- JWT issuer: `https://clerk.auth.liftinglog.app`
+- JWT issuer: `https://clerk.baros.fit`
 - JWT audience: `convex`
 
-Configure or verify the production Convex deployment with the matching issuer domain:
+Verify the production Convex deployment uses the matching issuer domain:
 
 ```sh
-pnpm exec convex env --prod set CLERK_JWT_ISSUER_DOMAIN 'https://clerk.auth.liftinglog.app'
 pnpm exec convex env --prod get CLERK_JWT_ISSUER_DOMAIN
 ```
 

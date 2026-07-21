@@ -3,11 +3,11 @@ import XCTest
 
 final class ClerkJWTIdentityResolverTests: XCTestCase {
     func testOwnerTokenIdentifierUsesIssuerAndSubjectClaims() {
-        let jwt = makeJWT(payload: #"{"iss":"https://clerk.auth.liftinglog.app","sub":"user_123"}"#)
+        let jwt = makeJWT(payload: #"{"iss":"https://clerk.baros.fit","sub":"user_123"}"#)
 
         XCTAssertEqual(
             ClerkJWTIdentityResolver.ownerTokenIdentifier(from: jwt),
-            "https://clerk.auth.liftinglog.app|user_123"
+            "https://clerk.baros.fit|user_123"
         )
     }
 
@@ -16,7 +16,7 @@ final class ClerkJWTIdentityResolverTests: XCTestCase {
     }
 
     func testOwnerTokenIdentifierRejectsMissingRequiredClaims() {
-        let jwt = makeJWT(payload: #"{"iss":"https://clerk.auth.liftinglog.app"}"#)
+        let jwt = makeJWT(payload: #"{"iss":"https://clerk.baros.fit"}"#)
 
         XCTAssertNil(ClerkJWTIdentityResolver.ownerTokenIdentifier(from: jwt))
     }
@@ -30,9 +30,9 @@ final class ClerkJWTIdentityResolverTests: XCTestCase {
         )
         XCTAssertEqual(
             ClerkJWTIdentityResolver.issuer(
-                fromPublishableKey: "pk_live_Y2xlcmsuYXV0aC5saWZ0aW5nbG9nLmFwcCQ"
+                fromPublishableKey: "pk_live_Y2xlcmsuYmFyb3MuZml0JA"
             ),
-            "https://clerk.auth.liftinglog.app"
+            "https://clerk.baros.fit"
         )
     }
 

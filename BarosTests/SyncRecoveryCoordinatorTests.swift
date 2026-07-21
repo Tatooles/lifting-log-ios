@@ -6,12 +6,12 @@ import XCTest
 @MainActor
 final class SyncRecoveryCoordinatorTests: XCTestCase {
     func testForegroundRecoveryAuthenticatesBeforeRequestingSync() async throws {
-        let ownerTokenIdentifier = "https://clerk.auth.liftinglog.app|user_123"
+        let ownerTokenIdentifier = "https://clerk.baros.fit|user_123"
         let harness = try makeConfiguredScheduler(ownerTokenIdentifier: ownerTokenIdentifier)
         let client = harness.client
         let scheduler = harness.scheduler
         let authenticationClient = StubSyncAuthenticationClient(
-            result: .success(makeJWT(issuer: "https://clerk.auth.liftinglog.app", subject: "user_123")),
+            result: .success(makeJWT(issuer: "https://clerk.baros.fit", subject: "user_123")),
             waitsForResume: true
         )
         let coordinator = makeCoordinator(
@@ -83,12 +83,12 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
     }
 
     func testManualRetryAuthenticatesBeforeRequestingSync() async throws {
-        let ownerTokenIdentifier = "https://clerk.auth.liftinglog.app|user_123"
+        let ownerTokenIdentifier = "https://clerk.baros.fit|user_123"
         let harness = try makeConfiguredScheduler(ownerTokenIdentifier: ownerTokenIdentifier)
         let client = harness.client
         let scheduler = harness.scheduler
         let authenticationClient = StubSyncAuthenticationClient(
-            result: .success(makeJWT(issuer: "https://clerk.auth.liftinglog.app", subject: "user_123")),
+            result: .success(makeJWT(issuer: "https://clerk.baros.fit", subject: "user_123")),
             waitsForResume: true
         )
         let coordinator = makeCoordinator(
@@ -115,7 +115,7 @@ final class SyncRecoveryCoordinatorTests: XCTestCase {
     func testAuthenticationFailurePreservesExistingFailureAndOutbox() async throws {
         struct AuthenticationError: Error {}
 
-        let ownerTokenIdentifier = "https://clerk.auth.liftinglog.app|user_123"
+        let ownerTokenIdentifier = "https://clerk.baros.fit|user_123"
         let container = try SwiftDataTestSupport.makeInMemoryContainer()
         let context = container.mainContext
         let workout = WorkoutSession(

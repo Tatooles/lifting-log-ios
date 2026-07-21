@@ -3,10 +3,11 @@ import Foundation
 @MainActor
 final class FirstRunExperienceStore {
     private enum Key {
-        // Preserve the existing defaults namespace so an in-place rebrand does not
-        // replay onboarding or What's New for current installations.
-        static let hasSeenWelcome = "LiftingLog.FirstRunExperience.hasSeenWelcome"
-        static let lastSeenWhatsNewVersion = "LiftingLog.FirstRunExperience.lastSeenWhatsNewVersion"
+        // The beta rebrand intentionally uses a new defaults namespace so current
+        // installations see the Baros welcome again. Completing it records the
+        // current What's New version.
+        static let hasSeenWelcome = "Baros.FirstRunExperience.hasSeenWelcome"
+        static let lastSeenWhatsNewVersion = "Baros.FirstRunExperience.lastSeenWhatsNewVersion"
     }
 
     private let defaults: UserDefaults

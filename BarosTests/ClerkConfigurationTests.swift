@@ -83,7 +83,7 @@ final class ClerkConfigurationTests: XCTestCase {
             "CFBundleVersion": "123",
             "BarosEnvironment": "Production",
             "ClerkPublishableKey": "pk_live_sensitive",
-            "ClerkAssociatedDomain": "webcredentials:clerk.auth.liftinglog.app",
+            "ClerkAssociatedDomain": "webcredentials:clerk.baros.fit",
             "ConvexDeploymentURL": "https://sensible-reindeer-16.convex.cloud",
         ])
 
@@ -102,7 +102,7 @@ final class ClerkConfigurationTests: XCTestCase {
         XCTAssertTrue(summary.contains("Device: iPhone"))
         XCTAssertTrue(summary.contains("OS: iOS 26.0"))
         XCTAssertFalse(summary.contains("pk_live_sensitive"))
-        XCTAssertFalse(summary.contains("clerk.auth.liftinglog.app"))
+        XCTAssertFalse(summary.contains("clerk.baros.fit"))
         XCTAssertFalse(summary.contains("sensible-reindeer-16.convex.cloud"))
     }
 
@@ -144,19 +144,19 @@ final class ClerkConfigurationTests: XCTestCase {
     func testProductionInfoDictionaryBuildsProductionConfiguration() {
         let configuration = AppEnvironmentConfiguration(infoDictionary: [
             "BarosEnvironment": "Production",
-            "ClerkPublishableKey": "pk_live_Y2xlcmsuYXV0aC5saWZ0aW5nbG9nLmFwcCQ",
-            "ClerkAssociatedDomain": "webcredentials:clerk.auth.liftinglog.app",
+            "ClerkPublishableKey": "pk_live_Y2xlcmsuYmFyb3MuZml0JA",
+            "ClerkAssociatedDomain": "webcredentials:clerk.baros.fit",
             "ConvexDeploymentURL": "https://sensible-reindeer-16.convex.cloud",
         ])
 
         XCTAssertEqual(configuration.environment, .production)
         XCTAssertEqual(
             configuration.clerkPublishableKey,
-            "pk_live_Y2xlcmsuYXV0aC5saWZ0aW5nbG9nLmFwcCQ"
+            "pk_live_Y2xlcmsuYmFyb3MuZml0JA"
         )
         XCTAssertEqual(
             configuration.clerkAssociatedDomain,
-            "webcredentials:clerk.auth.liftinglog.app"
+            "webcredentials:clerk.baros.fit"
         )
     }
 
