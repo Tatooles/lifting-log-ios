@@ -59,6 +59,57 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  ios-ui-smoke:
+    name: ios-ui-smoke
+    runs-on: macos-26
+    timeout-minutes: 20
+    env:
+      IOS_TEST_DESTINATION: platform=iOS Simulator,name=iPhone 17,OS=26.5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 26.5
+        run: sudo xcode-select -s /Applications/Xcode_26.5.app
+
+      - name: Show Xcode and simulator environment
+        run: |
+          xcodebuild -version
+          xcrun simctl list devices available | grep -E "iPhone 17" || true
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project Baros.xcodeproj \
+            -scheme Baros \
+            -derivedDataPath "${RUNNER_TEMP}/BarosUISmokeDerivedData"
+
+      - name: Run Baros UI smoke tests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Baros.xcodeproj \
+            -scheme Baros \
+            -destination "${IOS_TEST_DESTINATION}" \
+            -only-testing:BarosUITests/BarosUITests/testTabNavigationAndFinishSheetSmoke \
+            -only-testing:BarosUITests/BarosUITests/testSettingsEditRequestsSyncInUITestMode \
+            -only-testing:BarosUITests/BarosUITests/testDeleteLocalDataReturnsToProfileAfterReset \
+            -derivedDataPath "${RUNNER_TEMP}/BarosUISmokeDerivedData" \
+            -resultBundlePath "${RUNNER_TEMP}/BarosUISmoke.xcresult" \
+            2>&1 | tee "${RUNNER_TEMP}/BarosUISmoke.log"
+
+      - name: Upload UI smoke failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BarosUISmoke-xcresult
+          path: |
+            ${{ runner.temp }}/BarosUISmoke.xcresult
+            ${{ runner.temp }}/BarosUISmoke.log
+          if-no-files-found: warn
+          retention-days: 14
+
   convex-checks:
     name: convex-checks
     runs-on: ubuntu-latest
