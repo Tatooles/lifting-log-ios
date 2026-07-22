@@ -16,3 +16,17 @@ Convex agent skills for common tasks can be installed by running
 `npx convex ai-files install`.
 
 <!-- convex-ai-end -->
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for `Tatooles/lifting-log-ios`; external PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the default five-label triage vocabulary. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Use a single-context domain docs layout. See `docs/agents/domain.md`.
