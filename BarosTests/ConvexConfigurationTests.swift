@@ -22,8 +22,8 @@ final class ConvexConfigurationTests: XCTestCase {
     func testProductionInfoDictionaryBuildsProductionConvexURL() {
         let configuration = AppEnvironmentConfiguration(infoDictionary: [
             "BarosEnvironment": "Production",
-            "ClerkPublishableKey": "pk_live_Y2xlcmsuYXV0aC5saWZ0aW5nbG9nLmFwcCQ",
-            "ClerkAssociatedDomain": "webcredentials:clerk.auth.liftinglog.app",
+            "ClerkPublishableKey": "pk_live_Y2xlcmsuYmFyb3MuZml0JA",
+            "ClerkAssociatedDomain": "webcredentials:clerk.baros.fit",
             "ConvexDeploymentURL": "https://sensible-reindeer-16.convex.cloud",
         ])
 

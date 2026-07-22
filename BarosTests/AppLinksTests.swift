@@ -7,7 +7,7 @@ final class AppLinksTests: XCTestCase {
 
         XCTAssertEqual(url.scheme, "https")
         XCTAssertEqual(url.host, "github.com")
-        XCTAssertEqual(url.path, "/Tatooles/lifting-log-ios")
-        XCTAssertEqual(url.absoluteString, "https://github.com/Tatooles/lifting-log-ios")
+        XCTAssertEqual(url.path, "/Tatooles/baros")
+        XCTAssertEqual(url.absoluteString, "https://github.com/Tatooles/baros")
     }
 }
