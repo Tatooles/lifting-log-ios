@@ -226,6 +226,7 @@ private struct ExerciseNotesDraftField: View {
         .focused(focusedField, equals: focusTarget)
         .padding(14)
         .frame(minHeight: 88, alignment: .topLeading)
+        .workoutInputTapTarget(focusedField, equals: focusTarget)
         .background(
             AppTheme.fieldFill,
             in: RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)

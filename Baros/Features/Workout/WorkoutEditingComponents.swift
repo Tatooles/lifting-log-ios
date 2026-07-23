@@ -1,5 +1,20 @@
 import SwiftUI
 
+extension View {
+    func workoutInputTapTarget<Focus: Hashable>(
+        _ focusedField: FocusState<Focus?>.Binding,
+        equals focusTarget: Focus
+    ) -> some View {
+        contentShape(
+            RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
+        )
+        .onTapGesture {
+            guard focusedField.wrappedValue != focusTarget else { return }
+            focusedField.wrappedValue = focusTarget
+        }
+    }
+}
+
 struct WorkoutExerciseProgress {
     var completed: Int
     var total: Int
@@ -84,10 +99,7 @@ struct WorkoutTitleField<Focus: Hashable>: View {
             .padding(.trailing, 12)
             .padding(.vertical, 4)
             .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-            .contentShape(RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous))
-            .onTapGesture {
-                focusedField.wrappedValue = focusTarget
-            }
+            .workoutInputTapTarget(focusedField, equals: focusTarget)
             .background(
                 isFocused ? AnyShapeStyle(AppTheme.fieldFill) : AnyShapeStyle(Color.clear),
                 in: RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
@@ -152,10 +164,7 @@ struct LabeledWorkoutTitleField<Focus: Hashable>: View {
             .padding(.leading, 12)
             .padding(.vertical, 4)
             .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-            .contentShape(RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous))
-            .onTapGesture {
-                focusedField.wrappedValue = focusTarget
-            }
+            .workoutInputTapTarget(focusedField, equals: focusTarget)
             .background(
                 AppTheme.fieldFill,
                 in: RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
@@ -193,6 +202,7 @@ struct WorkoutNumericTextField<Focus: Hashable>: View {
             .focused(focusedField, equals: focusTarget)
             .padding(.vertical, verticalPadding)
             .frame(maxWidth: .infinity)
+            .workoutInputTapTarget(focusedField, equals: focusTarget)
             .background(
                 AppTheme.fieldFill,
                 in: RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
@@ -231,6 +241,7 @@ struct WorkoutNotesField<Focus: Hashable>: View {
                     .lineLimit(4...6)
                     .focused(focusedField, equals: focusTarget)
                     .padding(12)
+                    .workoutInputTapTarget(focusedField, equals: focusTarget)
                     .background(
                         AppTheme.fieldFill,
                         in: RoundedRectangle(cornerRadius: AppTheme.fieldCornerRadius, style: .continuous)
