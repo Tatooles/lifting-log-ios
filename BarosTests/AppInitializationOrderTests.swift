@@ -341,6 +341,7 @@ final class AppInitializationOrderTests: XCTestCase {
         var launchArguments = [
             "--uitest-reset-persistent-store",
             "--uitest-force-signed-out-auth",
+            "--uitest-reset-exercise-picker-sort",
         ]
 """),
             "Disk-backed reset launches should force signed-out auth so persisted tests cannot restore a real session."

@@ -36,6 +36,7 @@ struct BarosApp: App {
         let arguments = ProcessInfo.processInfo.arguments
         FirstRunExperienceStore.resetForUITestingIfRequested(arguments: arguments)
         FirstRunExperienceStore.markSeenForUITestingIfRequested(arguments: arguments)
+        ExercisePickerSortPreferenceStore.resetForUITestingIfRequested(arguments: arguments)
         uiTestForcesSignedOutAuth = arguments.contains("--uitest-force-signed-out-auth")
         uiTestRestoresCachedSyncOwner = arguments.contains("--uitest-restore-cached-sync-owner")
         let uiTestSyncOwnerIndex = arguments.firstIndex(of: "--uitest-sync-owner")
