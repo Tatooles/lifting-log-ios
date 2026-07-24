@@ -11,9 +11,7 @@ struct SetRowView: View {
     let weightUnit: MeasurementUnit
     let previous: PreviousSetPerformance?
     let onEditRPE: (LoggedSet) -> Void
-    @State private var weightInputText = WorkoutNumberInputText()
-    @State private var repsDraft: String?
-    @State private var rejectedInput = ActiveWorkoutRejectedInputState()
+    @State private var input = ActiveWorkoutSetInput()
 
     var body: some View {
         SwipeToDeleteRow(
@@ -76,31 +74,18 @@ struct SetRowView: View {
     /// writes them to the model and saves. Runs on focus leave, completion, and
     /// row disappearance — never per keystroke.
     @discardableResult
-    private func commitDraftsIfNeeded() -> Bool {
-        guard weightInputText.draftText != nil || repsDraft != nil else {
-            return rejectedInput.hasRejectedInput
-        }
+    private func commitDraftsIfNeeded() -> ActiveWorkoutSetInput.Commit {
+        let commit = input.commit(current: inputValues, weightUnit: weightUnit)
+        guard commit.shouldPersist else { return commit }
 
-        let weight: Double?
-        if let draft = weightInputText.draftText {
-            weight = WorkoutNumericInputPolicy.parseWeight(draft, unit: weightUnit)
-            rejectedInput.commitWeightDraft(draft, acceptedValue: weight)
-        } else {
-            weight = WorkoutNumericInputPolicy.validatedWeight(set.weight)
-        }
-
-        let reps: Int?
-        if let repsDraft {
-            reps = WorkoutNumericInputPolicy.parseReps(repsDraft)
-            rejectedInput.commitRepsDraft(repsDraft, acceptedValue: reps)
-        } else {
-            reps = WorkoutNumericInputPolicy.validatedReps(set.reps)
-        }
-
-        weightInputText.endEditing()
-        repsDraft = nil
-        try? engine.updateSet(set, weight: weight, reps: reps, rpe: set.rpe, context: modelContext)
-        return rejectedInput.hasRejectedInput
+        try? engine.updateSet(
+            set,
+            weight: commit.values.weight,
+            reps: commit.values.reps,
+            rpe: set.rpe,
+            context: modelContext
+        )
+        return commit
     }
 
     private var previousColumn: some View {
@@ -182,38 +167,26 @@ struct SetRowView: View {
 
     private var weightBinding: Binding<String> {
         Binding(
-            get: {
-                let validWeight = WorkoutNumericInputPolicy.validatedWeight(set.weight)
-                return weightInputText.displayText(
-                    for: weightUnit.displayWeight(fromCanonicalPounds: validWeight)
-                )
-            },
+            get: { input.text(for: .weight, values: inputValues, weightUnit: weightUnit) },
             set: { value in
-                if CompletionEmptyWriteGuard.shouldIgnoreEmptyWrite(
-                    value: value,
-                    isFieldFocused: focusedField.wrappedValue == .setWeight(set.id)
-                ) {
-                    weightInputText.endEditing()
-                    return
-                }
-
-                weightInputText.updateDraft(value)
+                input.update(
+                    value,
+                    for: .weight,
+                    isFocused: focusedField.wrappedValue == .setWeight(set.id)
+                )
             }
         )
     }
 
     private var repsBinding: Binding<String> {
         Binding(
-            get: { repsDraft ?? WorkoutNumericInputPolicy.validatedReps(set.reps).map(String.init) ?? "" },
+            get: { input.text(for: .reps, values: inputValues, weightUnit: weightUnit) },
             set: { value in
-                if CompletionEmptyWriteGuard.shouldIgnoreEmptyWrite(
-                    value: value,
-                    isFieldFocused: focusedField.wrappedValue == .setReps(set.id)
-                ) {
-                    return
-                }
-
-                repsDraft = value
+                input.update(
+                    value,
+                    for: .reps,
+                    isFocused: focusedField.wrappedValue == .setReps(set.id)
+                )
             }
         )
     }
@@ -221,14 +194,12 @@ struct SetRowView: View {
     private func completeButtonTapped() {
         // The fill policy below reads committed model values, so pending drafts
         // must land first (the focus-change commit only fires on a later update).
-        let hasRejectedInput = commitDraftsIfNeeded()
+        let commit = commitDraftsIfNeeded()
         clearFocusedFieldForThisSet()
-        if SetCompletionPreviousFillPolicy.shouldFillBeforeCompletion(
+        if input.shouldFillBeforeCompletion(
             isCompleted: set.isCompleted,
-            weight: WorkoutNumericInputPolicy.validatedWeight(set.weight),
-            reps: WorkoutNumericInputPolicy.validatedReps(set.reps),
-            previous: previous,
-            hasRejectedInput: hasRejectedInput
+            values: commit.values,
+            previous: previous
         ), let previous {
             fillFromPrevious(previous)
         }
@@ -242,7 +213,11 @@ struct SetRowView: View {
         // that are still nil, so a typed-but-uncommitted value must win.
         commitDraftsIfNeeded()
         try? engine.fillSetFromPrevious(set, previous: previous, context: modelContext)
-        rejectedInput.acceptPreviousFill(weight: set.weight, reps: set.reps)
+        input.clearRejectionsSatisfiedByPreviousFill(inputValues)
+    }
+
+    private var inputValues: ActiveWorkoutSetInput.Values {
+        ActiveWorkoutSetInput.Values(weight: set.weight, reps: set.reps)
     }
 
     private func clearFocusedFieldForThisSet() {
@@ -250,82 +225,5 @@ struct SetRowView: View {
             || focusedField.wrappedValue == .setReps(set.id) {
             focusedField.wrappedValue = nil
         }
-    }
-}
-
-enum SetCompletionPreviousFillPolicy {
-    static func shouldFillBeforeCompletion(
-        isCompleted: Bool,
-        weight: Double?,
-        reps: Int?,
-        previous: PreviousSetPerformance?,
-        hasRejectedInput: Bool = false
-    ) -> Bool {
-        !hasRejectedInput && !isCompleted && (weight == nil || reps == nil) && previous != nil
-    }
-}
-
-struct ActiveWorkoutRejectedInputState {
-    private(set) var rejectedWeight = false
-    private(set) var rejectedReps = false
-
-    var hasRejectedInput: Bool {
-        rejectedWeight || rejectedReps
-    }
-
-    mutating func commitWeightDraft(_ draft: String, acceptedValue: Double?) {
-        rejectedWeight = Self.isRejected(draft, acceptedValue: acceptedValue)
-    }
-
-    mutating func commitRepsDraft(_ draft: String, acceptedValue: Int?) {
-        rejectedReps = Self.isRejected(draft, acceptedValue: acceptedValue)
-    }
-
-    mutating func acceptPreviousFill(weight: Double?, reps: Int?) {
-        if weight != nil {
-            rejectedWeight = false
-        }
-        if reps != nil {
-            rejectedReps = false
-        }
-    }
-
-    private static func isRejected<T>(_ draft: String, acceptedValue: T?) -> Bool {
-        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && acceptedValue == nil
-    }
-}
-
-struct WorkoutNumberInputText {
-    private var draft: String?
-
-    var draftText: String? {
-        draft
-    }
-
-    mutating func updateDraft(_ value: String) {
-        draft = value
-    }
-
-    mutating func endEditing() {
-        draft = nil
-    }
-
-    func displayText(for value: Double?) -> String {
-        draft ?? value.map(WorkoutFormatters.number) ?? ""
-    }
-}
-
-enum CompletionEmptyWriteGuard {
-    /// A blank text write is only legitimate while the field is focused, i.e. the
-    /// user is actively clearing it. When the field is not focused, an empty write
-    /// is a spurious commit-on-resign — for example the keyboard dismissal that
-    /// follows auto-filling a blank set from Previous on completion — and must be
-    /// ignored, otherwise it would wipe the value that was just filled.
-    ///
-    /// This is deterministic: it keys off the live focus state rather than a timing
-    /// window, so it holds regardless of how late the resign write is delivered.
-    static func shouldIgnoreEmptyWrite(value: String, isFieldFocused: Bool) -> Bool {
-        value.isEmpty && !isFieldFocused
     }
 }
